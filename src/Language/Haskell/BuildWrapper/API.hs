@@ -179,7 +179,7 @@ withCabal srcOrTgt f=do
         r<-cabalInit srcOrTgt
         case r of
                 Left err-> do
-                        liftIO $ putStrLn (show err)
+                        --liftIO $ putStrLn (show err)
                         return $ Left err
                 Right lbi ->liftM Right (f lbi)
      
@@ -273,7 +273,7 @@ copyFromMain src=do
 copyFileFull :: FilePath -> FilePath -> IO()
 copyFileFull src tgt=do
         createDirectoryIfMissing True (takeDirectory tgt)
-        putStrLn tgt
+        --putStrLn tgt
         copyFile src tgt
 
 parseCabalMessages :: FilePath -> String -> [BWNote]
@@ -282,5 +282,11 @@ parseCabalMessages cf=catMaybes . (map parseCabalLine) . lines
                 parseCabalLine :: String -> Maybe BWNote
                 parseCabalLine s 
                         | isPrefixOf "Error:" s=Just $ BWNote BWError (dropWhile isSpace $ drop 6 s) "" (BWLocation cf 1 1)
+                        | isPrefixOf "cabal:" s=
+                                let 
+                                        s2=(dropWhile isSpace $ drop 6 s)
+                                        (loc,rest)=span (/= ':') s2
+                                        (line,msg)=span (/= ':') (tail rest)
+                                in Just $ BWNote BWError (dropWhile isSpace $ tail msg) "" (BWLocation loc (read line) 1)
                         | otherwise =Nothing
                 

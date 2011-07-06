@@ -44,6 +44,15 @@ testConfigureErrors = TestLabel "testConfigureErrors" (TestCase ( do
         let (nsError1:nsError2:[])=nsErrors1
         assertEqual "not proper error 1" (BWNote BWError "No 'name' field." "" (BWLocation cfn 1 1)) nsError1
         assertEqual "not proper error 2" (BWNote BWError "No executables and no library found. Nothing to do." "" (BWLocation cfn 1 1)) nsError2
+        writeFile cf $ unlines ["name: 4 P1",
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple"]
+        nsErrors2<-runAPI root configure
+        assertEqual "no errors on invalid name" 1 (length nsErrors2)
+        let (nsError3:[])=nsErrors2
+        assertEqual "not proper error 3" (BWNote BWError "Parse of field 'name' failed." "" (BWLocation cfn 1 1)) nsError3
+               
         ))
         
 runAPI::
