@@ -1,0 +1,26 @@
+name:           buildwrapper
+version:        0.1
+cabal-version:  >= 1.8
+build-type:     Simple
+
+library
+  hs-source-dirs:  src
+  build-depends:   base, filepath, mtl, directory, Cabal, process
+  ghc-options:     -O2 -Wall -fno-warn-unused-do-bind
+  exposed-modules: Language.Haskell.BuildWrapper.API, Language.Haskell.BuildWrapper.CMD
+  extensions:     CPP
+
+executable buildwrapper
+  hs-source-dirs:  src
+  main-is:         Main.hs
+  build-depends:   base, buildwrapper
+  ghc-options:     -O2 -Wall -fno-warn-unused-do-bind
+  other-modules:   Language.Haskell.BuildWrapper.CMD
+  
+test-suite buildwrapper-test
+  type:            exitcode-stdio-1.0
+  hs-source-dirs:  test
+  build-depends:   base, buildwrapper, HUnit, mtl, filepath, directory, Cabal
+  main-is:         Main.hs
+  ghc-options:     -Wall -fno-warn-unused-do-bind
+  other-modules:   Language.Haskell.BuildWrapper.APITest
