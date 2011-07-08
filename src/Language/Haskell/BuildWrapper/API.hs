@@ -277,16 +277,28 @@ copyFileFull src tgt=do
         copyFile src tgt
 
 parseCabalMessages :: FilePath -> String -> [BWNote]
-parseCabalMessages cf=catMaybes . (map parseCabalLine) . lines
+parseCabalMessages cf s=let
+        (m,ls)=foldl parseCabalLine (Nothing,[]) $ lines s
+        in case m of
+                Nothing -> ls
+                Just (bwn,msgs)->ls++[bwn{bwn_title=unlines $ reverse msgs}] 
         where 
-                parseCabalLine :: String -> Maybe BWNote
-                parseCabalLine s 
-                        | isPrefixOf "Error:" s=Just $ BWNote BWError (dropWhile isSpace $ drop 6 s) "" (BWLocation cf 1 1)
+                parseCabalLine :: (Maybe (BWNote,[String]),[BWNote]) -> String ->(Maybe (BWNote,[String]),[BWNote])
+                parseCabalLine (currentNote,ls) s 
+                        | isPrefixOf "Error:" s=(Nothing,ls++[BWNote BWError (dropWhile isSpace $ drop 6 s) "" (BWLocation cf 1 1)])
                         | isPrefixOf "cabal:" s=
                                 let 
                                         s2=(dropWhile isSpace $ drop 6 s)
-                                        (loc,rest)=span (/= ':') s2
-                                        (line,msg)=span (/= ':') (tail rest)
-                                in Just $ BWNote BWError (dropWhile isSpace $ tail msg) "" (BWLocation loc (read line) 1)
-                        | otherwise =Nothing
+                                in if isPrefixOf "At least the following" s2
+                                                then (Just $ (BWNote BWError "" "" (BWLocation cf 1 1),[s2]),ls)
+                                                else 
+                                                        let
+                                                                (loc,rest)=span (/= ':') s2
+                                                                (line,msg)=span (/= ':') (tail rest)
+                                                        in (Nothing,ls++[BWNote BWError (dropWhile isSpace $ tail msg) "" (BWLocation loc (read line) 1)])
+                        | Just (jcn,msgs)<-currentNote=
+                                if (not $ null s)
+                                        then (Just (jcn,s:msgs),ls)
+                                        else (Nothing,ls++[jcn])
+                        | otherwise =(Nothing,ls)
                 

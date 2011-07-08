@@ -52,7 +52,35 @@ testConfigureErrors = TestLabel "testConfigureErrors" (TestCase ( do
         assertEqual "no errors on invalid name" 1 (length nsErrors2)
         let (nsError3:[])=nsErrors2
         assertEqual "not proper error 3" (BWNote BWError "Parse of field 'name' failed." "" (BWLocation cfn 1 1)) nsError3
-               
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:   base, toto"]
+        nsErrors3<-runAPI root configure
+        assertEqual "no errors on unknown dependency" 1 (length nsErrors3)
+        let (nsError4:[])=nsErrors3
+        assertEqual "not proper error 4" (BWNote BWError "At least the following dependencies are missing:\ntoto -any\n" "" (BWLocation cfn 1 1)) nsError4
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:   base, toto, titi"]
+        nsErrors4<-runAPI root configure
+        assertEqual "no errors on unknown dependencies" 1 (length nsErrors4)
+        let (nsError5:[])=nsErrors4
+        assertEqual "not proper error 5" (BWNote BWError "At least the following dependencies are missing:\ntiti -any, toto -any\n" "" (BWLocation cfn 1 1)) nsError5
+                
         ))
         
 runAPI::
