@@ -69,9 +69,8 @@ cabalBuild = do
         liftIO $ do
                 cd<-getCurrentDirectory
                 setCurrentDirectory (takeDirectory cf)
-        
                 (ex,_,err)<-readProcessWithExitCode cp args ""
-                let ret=parseCabalMessages (takeFileName cf) err
+                let ret=parseBuildMessages (takeFileName cf) err
                 setCurrentDirectory cd
                 return (ex==ExitSuccess,ret)
 
@@ -100,7 +99,7 @@ cabalConfigure srcOrTgt= do
                 setCurrentDirectory (takeDirectory cf)
         
                 (ex,out,err)<-readProcessWithExitCode cp args ""
-                putStrLn err
+                --putStrLn err
                 let msgs=(parseCabalMessages (takeFileName cf) err) -- ++ (parseCabalMessages (takeFileName cf) out)
                 ret<-case ex of
                         ExitSuccess  -> do
@@ -179,7 +178,7 @@ parseCabalMessages cf s=let
         (m,ls)=foldl parseCabalLine (Nothing,[]) $ lines s
         in nub $ case m of
                 Nothing -> ls
-                Just (bwn,msgs)->ls++[bwn{bwn_title=unlines $ reverse msgs}] 
+                Just (bwn,msgs)->ls++[makeNote bwn msgs] 
         where 
                 parseCabalLine :: (Maybe (BWNote,[String]),[BWNote]) -> String ->(Maybe (BWNote,[String]),[BWNote])
                 parseCabalLine (currentNote,ls) l 
@@ -203,11 +202,39 @@ parseCabalMessages cf s=let
                         | Just (jcn,msgs)<-currentNote=
                                 if (not $ null l)
                                         then (Just (jcn,l:msgs),ls)
-                                        else (Nothing,ls++[jcn])
+                                        else (Nothing,ls++[makeNote jcn msgs])
                         | otherwise =(Nothing,ls)
                 extractLine el=let
                         (_,_,_,ls)=el =~ "\\(line ([0-9]*)\\)" :: (String,String,String,[String])
                         in if null ls
                                 then 0
                                 else (read $ head ls)
-                
+ 
+parseBuildMessages :: FilePath -> String -> [BWNote]
+parseBuildMessages cf s=let
+        (m,ls)=foldl parseBuildLine (Nothing,[]) $ lines s
+        in nub $ case m of
+                Nothing -> ls
+                Just (bwn,msgs)->ls++[makeNote bwn msgs] 
+        where 
+                parseBuildLine :: (Maybe (BWNote,[String]),[BWNote]) -> String ->(Maybe (BWNote,[String]),[BWNote])
+                parseBuildLine (currentNote,ls) l  
+                        | Just (jcn,msgs)<-currentNote=
+                                if (not $ null l)
+                                       then (Just (jcn,l:msgs),ls)
+                                       else (Nothing,ls++[makeNote jcn msgs])
+                        | Just n<-extractLocation l=(Just (n,[bwn_title n]),ls)
+                        | otherwise =(Nothing,ls)
+                extractLocation el=let
+                        (_,_,aft,ls)=el =~ "([^:]+):([0-9]+):([0-9]+):" :: (String,String,String,[String])   
+                        in case ls of
+                                (loc:line:col:[])-> (Just $ BWNote BWError (dropWhile isSpace aft) "" (BWLocation loc (read line) (read col)))
+                                _ -> Nothing
+
+makeNote :: BWNote  -> [String] ->BWNote
+makeNote bwn msgs=let
+        title=dropWhile isSpace $ unlines $ reverse msgs
+        in if isPrefixOf "Warning:" title
+                then bwn{bwn_title=dropWhile isSpace $ drop 8 title,bwn_status=BWWarning}    
+                else bwn{bwn_title=title}      
+             

@@ -5,7 +5,7 @@ import Language.Haskell.BuildWrapper.Base
 import Language.Haskell.BuildWrapper.API
 
 import qualified Distribution.Verbosity as V 
-                        ( silent,normal )
+                        ( normal )
 import Test.HUnit
 
 import System.Directory
@@ -15,7 +15,8 @@ import Control.Monad
 import Control.Monad.State
 
 apiTests::Test
-apiTests=TestList[testSynchronizeAll,testConfigureErrors,testConfigureWarnings]
+apiTests=TestList[testSynchronizeAll,testConfigureErrors,testConfigureWarnings
+        ,testBuildErrors,testBuildWarnings]
 
 testSynchronizeAll :: Test
 testSynchronizeAll = TestLabel "testSynchronizeAll" (TestCase ( do
@@ -105,10 +106,57 @@ testConfigureWarnings = TestLabel "testConfigureWarnings" (TestCase ( do
                 "  build-depends:   base"]
         (bool1,ns1)<-runAPI root configure
         assertBool ("returned false") bool1
-        putStrLn $ show ns1
         let (nsWarning1:[])=ns1
         assertEqual "not proper warning 1" (BWNote BWWarning "Unknown fields: field1 (line 5)" "" (BWLocation cfn 5 1)) nsWarning1
         ))   
+        
+testBuildErrors :: Test
+testBuildErrors = TestLabel "testBuildErrors" (TestCase ( do
+        root<-createTestProject
+        (boolOK,nsOK)<-runAPI root build
+        assertBool ("returned false") boolOK
+        assertBool ("errors or warnings:"++show nsOK) (null nsOK)
+        let srcF=root </> "src"
+        writeFile (srcF </> "A.hs") $ unlines ["module A where","import toto","fA=undefined"]
+        (bool1,nsErrors1)<-runAPI root build
+        assertBool ("returned true on bool1") (not bool1)
+        assertBool ("no errors or warnings on nsErrors") (not $ null nsErrors1)
+        let (nsError1:[])=nsErrors1
+        let rel="src"</>"A.hs"
+        assertEqual "not proper error 1" (BWNote BWError "parse error on input `toto'\n" "" (BWLocation rel 2 8)) nsError1
+        writeFile (srcF </> "A.hs") $ unlines ["module A where","import Toto","fA=undefined"]
+        (bool2,nsErrors2)<-runAPI root build
+        assertBool ("returned true on bool2") (not bool2)
+        assertBool ("no errors or warnings on nsErrors") (not $ null nsErrors2)
+        let (nsError2:[])=nsErrors2
+        assertEqual "not proper error 1" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" "" (BWLocation rel 2 8)) nsError2
+        ))        
+        
+testBuildWarnings :: Test
+testBuildWarnings = TestLabel "testBuildWarnings" (TestCase ( do
+        root<-createTestProject
+        let cf=testCabalFile root      
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  build-depends:   base",
+                "  ghc-options:     -Wall"]
+        let srcF=root </> "src"
+        writeFile (srcF </> "A.hs") $ unlines ["module A where","import Data.List","fA=undefined"] 
+        let rel="src"</>"A.hs"
+        (bool1,nsErrors1)<-runAPI root build
+        assertBool ("returned false on bool1") bool1
+        assertBool ("no errors or warnings on nsErrors1") (not $ null nsErrors1)
+        let (nsError1:nsError2:[])=nsErrors1
+        assertEqual "not proper error 1" (BWNote BWWarning "The import of `Data.List' is redundant\n               except perhaps to import instances from `Data.List'\n             To import instances alone, use: import Data.List()\n" "" (BWLocation rel 2 1)) nsError1
+        assertEqual "not proper error 2" (BWNote BWWarning "Top-level binding with no type signature:\n               fA :: forall a. a\n" "" (BWLocation rel 3 1)) nsError2
+        
+        )) 
         
 runAPI::
         Monad m =>
