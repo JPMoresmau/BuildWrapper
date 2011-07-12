@@ -5,17 +5,18 @@ build-type:     Simple
 
 library
   hs-source-dirs:  src
-  build-depends:   base, filepath, mtl, directory, Cabal, process
+  build-depends:   base, filepath, mtl, directory, Cabal, process, regex-tdfa
   ghc-options:     -O2 -Wall -fno-warn-unused-do-bind
-  exposed-modules: Language.Haskell.BuildWrapper.API, Language.Haskell.BuildWrapper.CMD
+  exposed-modules: Language.Haskell.BuildWrapper.API, Language.Haskell.BuildWrapper.CMD,Language.Haskell.BuildWrapper.Base
   extensions:     CPP
+  other-modules:   Language.Haskell.BuildWrapper.Cabal
 
 executable buildwrapper
   hs-source-dirs:  src
   main-is:         Main.hs
   build-depends:   base, buildwrapper
   ghc-options:     -O2 -Wall -fno-warn-unused-do-bind
-  other-modules:   Language.Haskell.BuildWrapper.CMD
+  other-modules:   Language.Haskell.BuildWrapper.CMD, Language.Haskell.BuildWrapper.Base, Language.Haskell.BuildWrapper.Cabal
   
 test-suite buildwrapper-test
   type:            exitcode-stdio-1.0
