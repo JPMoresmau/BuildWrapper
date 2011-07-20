@@ -98,4 +98,8 @@ copyFileFull src tgt=do
         createDirectoryIfMissing True (takeDirectory tgt)
         --putStrLn tgt
         copyFile src tgt
-        
+      
+fileToModule :: FilePath -> String
+fileToModule fp=map rep (dropExtension fp)
+        where   rep '/' = '.'
+                rep a = a  

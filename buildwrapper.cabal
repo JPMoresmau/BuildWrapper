@@ -5,23 +5,23 @@ build-type:     Simple
 
 library
   hs-source-dirs:  src
-  build-depends:   base, filepath, mtl, directory, Cabal, process, regex-tdfa
+  build-depends:   base, filepath, mtl, directory, Cabal, process, regex-tdfa, ghc, ghc-paths, syb, ghc-syb-utils, json, text, containers, vector, derive
   ghc-options:     -O2 -Wall -fno-warn-unused-do-bind
   exposed-modules: Language.Haskell.BuildWrapper.API, Language.Haskell.BuildWrapper.CMD,Language.Haskell.BuildWrapper.Base
   extensions:     CPP
-  other-modules:   Language.Haskell.BuildWrapper.Cabal
+  other-modules:   Language.Haskell.BuildWrapper.Cabal, Language.Haskell.BuildWrapper.GHC
 
 executable buildwrapper
   hs-source-dirs:  src
   main-is:         Main.hs
   build-depends:   base, buildwrapper
   ghc-options:     -O2 -Wall -fno-warn-unused-do-bind
-  other-modules:   Language.Haskell.BuildWrapper.CMD, Language.Haskell.BuildWrapper.Base, Language.Haskell.BuildWrapper.Cabal
+  other-modules:   Language.Haskell.BuildWrapper.CMD, Language.Haskell.BuildWrapper.Base, Language.Haskell.BuildWrapper.Cabal, Language.Haskell.BuildWrapper.GHC
   
 test-suite buildwrapper-test
   type:            exitcode-stdio-1.0
   hs-source-dirs:  test
-  build-depends:   base, buildwrapper, HUnit, mtl, filepath, directory, Cabal
+  build-depends:   base, buildwrapper, HUnit, mtl, filepath, directory, Cabal, json, derive
   main-is:         Main.hs
   ghc-options:     -Wall -fno-warn-unused-do-bind
   other-modules:   Language.Haskell.BuildWrapper.APITest

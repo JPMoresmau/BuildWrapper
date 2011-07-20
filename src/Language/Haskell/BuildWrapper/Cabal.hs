@@ -7,11 +7,14 @@ import Control.Monad.State
 
 import Data.Char
 import Data.List
+import Data.Maybe
 
 import Distribution.ModuleName
-import Distribution.PackageDescription (exposedModules, otherModules,library,executables,testSuites,Library,hsSourceDirs,libBuildInfo,Executable,modulePath,buildInfo,TestSuite,TestSuiteInterface(..),testInterface,testBuildInfo )
+import Distribution.PackageDescription (exposedModules, otherModules,library,executables,testSuites,Library,hsSourceDirs,libBuildInfo,Executable(..),exeName,modulePath,buildInfo,TestSuite(..),testName,TestSuiteInterface(..),testInterface,testBuildInfo,BuildInfo )
+import Distribution.Simple.GHC
 import Distribution.Simple.LocalBuildInfo                         
 import qualified Distribution.Simple.Configure as DSC
+
 
 import Text.Regex.TDFA
 
@@ -20,8 +23,17 @@ import System.Exit
 import System.FilePath
 import System.Process
 
-getFilesToCopy :: BuildWrapper(OpResult (Maybe [FilePath]))
-getFilesToCopy = withCabal True (\gpd->do
+getFilesToCopy :: BuildWrapper(OpResult [FilePath])
+getFilesToCopy =do
+       (mfps,bwns)<-withCabal True getAllFiles
+       return $ case mfps of
+                Just fps->(concat $ map (\(_,_,_,ls)->map snd ls) fps,bwns)
+                Nothing ->([],bwns); 
+
+
+--maybe (return []) (\f->concat $ (map (\(_,_,ls)->ls)) f) getAllFiles
+
+{--withCabal True (\gpd->do
                 let pd=localPkgDescr  gpd
                 let libs=maybe [] extractFromLib $ library pd
                 let exes=concatMap extractFromExe $ executables pd
@@ -51,8 +63,8 @@ getFilesToCopy = withCabal True (\gpd->do
         copyModules mods=copyFiles (concatMap (\m->[(toFilePath m) <.> "hs",(toFilePath m) <.> "lhs"]) mods)
         copyFiles :: [FilePath] -> [FilePath] -> [FilePath]
         copyFiles mods dirs=[d </> m  | m<-mods, d<-dirs]
-        
-        
+        --}
+    
 
 cabalBuild :: BuildWrapper(OpResult Bool)
 cabalBuild = do
@@ -238,3 +250,67 @@ makeNote bwn msgs=let
                 then bwn{bwn_title=dropWhile isSpace $ drop 8 title,bwn_status=BWWarning}    
                 else bwn{bwn_title=title}      
              
+fileGhcOptions :: FilePath -> BuildWrapper(OpResult (Maybe (ModuleName,[String])))
+fileGhcOptions fp=do
+        withCabal False (\lbi->do
+                fps<-getAllFiles lbi
+                let ok=filter (\(_,_,_,ls)->not $ null ls ) $
+                        map (\(n1,n2,n3,ls)->(n1,n2,n3,filter (\(_,b)->b==fp) ls) ) 
+                                fps
+                -- filter (\(_,_,_,ls)->elem fp ls ) fps
+                return $ if null ok
+                        then (fromString "",[])
+                        else let
+                                (bi,clbi,fp,ls)=head ok
+                              in (fst $ head ls,(ghcOptions lbi bi clbi fp))
+
+            -- libraries, executables, test suite: BuildInfo + all relevant modules
+            -- find if modules included correspond to a component            
+                        -- what about generated modules?
+              
+                -- libraryConfig :: Maybe ComponentLocalBuildInfo executableConfigs :: [(String, ComponentLocalBuildInfo)] testSuiteConfigs :: [(String, ComponentLocalBuildInfo)]
+    
+                        -- ghcOptions :: LocalBuildInfo -> BuildInfo -> ComponentLocalBuildInfo
+           -- -> FilePath -> [String]
+           -- ghcOptions lbi bi clbi odir
+                )
+       
+       
+getAllFiles :: LocalBuildInfo -> BuildWrapper([(BuildInfo,ComponentLocalBuildInfo,FilePath,[(ModuleName,FilePath)])])     
+getAllFiles lbi= do
+                let pd=localPkgDescr lbi
+                let libs=maybe [] extractFromLib $ library pd
+                let exes=map extractFromExe $ executables pd
+                let tests=map extractFromTest $ testSuites pd
+                return (libs ++ exes ++ tests)
+        where 
+        extractFromLib :: Library -> [(BuildInfo,ComponentLocalBuildInfo,FilePath,[(ModuleName,FilePath)])]
+        extractFromLib l=let
+                lib=libBuildInfo l
+                modules=(exposedModules l) ++ (otherModules lib)
+                in [(lib,fromJust $ libraryConfig lbi,buildDir lbi,copyModules modules (hsSourceDirs lib))]
+        extractFromExe :: Executable -> (BuildInfo,ComponentLocalBuildInfo,FilePath,[(ModuleName,FilePath)])
+        extractFromExe e@Executable{exeName=exeName'}=let
+                ebi=buildInfo e
+                targetDir = buildDir lbi </> exeName'
+                exeDir    = targetDir </> (exeName' ++ "-tmp")
+                modules= (otherModules ebi)
+                hsd=hsSourceDirs ebi
+                in (ebi,fromJust $ lookup exeName' $ executableConfigs lbi,exeDir, copyFiles [modulePath e] hsd++ (copyModules modules hsd)  ) 
+        extractFromTest :: TestSuite -> (BuildInfo,ComponentLocalBuildInfo,FilePath,[(ModuleName,FilePath)])
+        extractFromTest t@TestSuite {testName=testName'} =let
+                tbi=testBuildInfo t
+                modules= (otherModules tbi )
+                hsd=hsSourceDirs tbi
+                extras=case testInterface t of
+                       (TestSuiteExeV10 _ mp)->(copyFiles [mp] hsd)
+                       (TestSuiteLibV09 _ mn)->copyModules [mn] hsd
+                       _->[]
+                in (tbi,fromJust $ lookup testName' $ testSuiteConfigs lbi,buildDir lbi,extras++ (copyModules modules hsd))
+        copyModules :: [ModuleName] -> [FilePath] -> [(ModuleName,FilePath)]
+        copyModules mods=copyFiles (concatMap (\m->[(toFilePath m) <.> "hs",((toFilePath m) <.> "lhs")]) mods)
+        copyFiles :: [FilePath] -> [FilePath] -> [(ModuleName,FilePath)]
+        copyFiles mods dirs=[(fromString $ fileToModule m,d </> m)  | m<-mods, d<-dirs]
+        
+moduleToString :: ModuleName -> String
+moduleToString = concat . intersperse ['.'] . components

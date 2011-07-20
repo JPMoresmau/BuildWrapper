@@ -3,9 +3,11 @@ module Language.Haskell.BuildWrapper.API where
 
 import Language.Haskell.BuildWrapper.Base
 import Language.Haskell.BuildWrapper.Cabal
+import Language.Haskell.BuildWrapper.GHC
 
 import Control.Monad.State
 
+import Text.JSON
 import Data.Maybe
 
 
@@ -29,10 +31,10 @@ synchronize ::  BuildWrapper([FilePath])
 synchronize =do
         cf<-gets cabalFile
         m<-copyFromMain $ takeFileName cf
-        (motherFiles,_)<-getFilesToCopy
-        let fileList=case motherFiles of
-                Nothing ->[]
-                Just fps->fps
+        (fileList,_)<-getFilesToCopy
+        --let fileList=case motherFiles of
+        --       Nothing ->[]
+        --        Just fps->fps
         m1<-mapM copyFromMain (
                 "Setup.hs":
                 "Setup.lhs":
@@ -55,3 +57,17 @@ build = do
                 else
                         return (bool,bwns)
 
+getAST :: FilePath -> BuildWrapper (OpResult JSValue)
+getAST fp = do
+        (m,bwns)<-fileGhcOptions fp
+        case m of
+                Just(mod,opts)->do
+                        --liftIO $ putStrLn ("options:"++(show opts))
+                        let modS=moduleToString mod
+                        --liftIO $ putStrLn ("mod:"++modS)
+                        tgt<-getTargetPath fp
+                        --liftIO $ putStrLn ("file:"++tgt)
+        --(bool,bwns)<-build
+                        s<-liftIO $ getGHCAST tgt modS opts
+                        return (s,bwns)
+                Nothing-> return (JSNull,bwns)

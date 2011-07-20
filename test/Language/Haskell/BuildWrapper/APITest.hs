@@ -4,6 +4,8 @@ module Language.Haskell.BuildWrapper.APITest where
 import Language.Haskell.BuildWrapper.Base
 import Language.Haskell.BuildWrapper.API
 
+import Text.JSON
+
 import qualified Distribution.Verbosity as V 
                         ( normal )
 import Test.HUnit
@@ -15,8 +17,10 @@ import Control.Monad
 import Control.Monad.State
 
 apiTests::Test
-apiTests=TestList[testSynchronizeAll,testConfigureErrors,testConfigureWarnings
-        ,testBuildErrors,testBuildWarnings]
+apiTests=TestList[
+        --testSynchronizeAll,testConfigureErrors,testConfigureWarnings
+        --,testBuildErrors,testBuildWarnings
+        testAST]
 
 testSynchronizeAll :: Test
 testSynchronizeAll = TestLabel "testSynchronizeAll" (TestCase ( do
@@ -157,6 +161,19 @@ testBuildWarnings = TestLabel "testBuildWarnings" (TestCase ( do
         assertEqual "not proper error 2" (BWNote BWWarning "Top-level binding with no type signature:\n               fA :: forall a. a\n" "" (BWLocation rel 3 1)) nsError2
         
         )) 
+        
+        
+testAST :: Test
+testAST = TestLabel "testAST" (TestCase ( do
+        root<-createTestProject
+        (boolOK,nsOK)<-runAPI root build
+        assertBool ("returned false") boolOK
+        assertBool ("errors or warnings:"++show nsOK) (null nsOK)
+        (ast,nsOK2)<-runAPI root $ getAST ("src" </> "A.hs")
+        putStrLn $ show $ encode ast
+        assertBool ("empty ast") (JSNull /= ast)
+        ))
+        
         
 runAPI::
         Monad m =>
