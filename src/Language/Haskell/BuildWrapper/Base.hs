@@ -85,7 +85,7 @@ copyFromMain src=do
                                 else do
                                         modSrc<-liftIO $ getModificationTime fullSrc
                                         modTgt<-liftIO $ getModificationTime fullTgt
-                                        return (modSrc>modTgt)
+                                        return (modSrc>=modTgt)
                         if shouldCopy
                                 then do
                                         liftIO $ copyFileFull fullSrc fullTgt

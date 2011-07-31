@@ -1,0 +1,68 @@
+synchronize
+	create/synchronize sub folder (.dist-toolname) and ensure all files that have changed in base folder are present in folder
+	read cabal config
+		- all src fields
+			- all exposed/other modules
+		- all Main-Is
+		- all data files
+		- Setup.hs?
+	-> requires configure to have a flattened description!
+	can take a file name and only work on that
+	can take a reset flag that ensure all files are the same (remove generated files)
+
+configure
+	cabal API call
+		maybe a executable call + parse result is better (warnings and such will just be written to output, so we need to parse it anyway)
+	with additional flags (enable-tests)
+	parse errors and warnings
+
+build
+	require configure
+	cabal executable/API call?
+	parse errors and warnings
+
+getAST
+	maybe several files at once in one session for performance
+	requires build
+	use GHC API
+		like in scion now
+		no link
+		use cabal flags
+		target wanted module (avoid unwanted side effects with errors)
+		use copied file in temp folder (means we should be able to use generated files, etc)
+	store AST to disk
+		qualified names
+		source locations
+	GHC AST issues:
+		- complexity
+		- parsed AST (not typechecked) can caus panics (placeholder types)
+		- we do not need the typed AST for a lot of operations
+	or only use haskell-src-exts?? And rely on scion-browser to find the qualified names? What about preprocessed names, etc...	
+		- probably easier to use
+		- parseFileWithExts -> use extensions from all possible cabal components?
+			- determine cabal components from cabal files (file name -> module)
+
+thingAtPoint
+	requires getAST from GHC -> typechecked
+	load AST from disk and use current scion code
+		-> qualified name should allow us to find the location
+
+outline
+	requires getAST
+	load AST from disk and use current scion code
+	- use new code if using haskell-src-exts
+
+find available imports
+	lists all available symbols from modules (except modules after it in the dependency chain)
+	lists all available symbols from other packages
+	???
+
+writeFileContents
+	take file name and string contents
+	write into temp folder
+	-> build
+
+test
+	parse Cabal results...
+
+		

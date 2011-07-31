@@ -81,7 +81,10 @@ cabalBuild = do
         liftIO $ do
                 cd<-getCurrentDirectory
                 setCurrentDirectory (takeDirectory cf)
+                -- f<-readFile ((takeDirectory cf) </> "src" </> "A.hs")
+                -- putStrLn $ f
                 (ex,_,err)<-readProcessWithExitCode cp args ""
+                -- putStrLn err
                 let ret=parseBuildMessages (takeFileName cf) err
                 setCurrentDirectory cd
                 return (ex==ExitSuccess,ret)

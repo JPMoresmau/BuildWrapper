@@ -4,6 +4,7 @@ module Language.Haskell.BuildWrapper.API where
 import Language.Haskell.BuildWrapper.Base
 import Language.Haskell.BuildWrapper.Cabal
 import Language.Haskell.BuildWrapper.GHC
+import Language.Haskell.BuildWrapper.Src
 
 import Control.Monad.State
 
@@ -41,6 +42,12 @@ synchronize =do
                 fileList)
         return $ catMaybes (m:m1)
 
+
+synchronize1 ::  FilePath -> BuildWrapper(Maybe FilePath)
+synchronize1 fp = do
+        m1<-mapM copyFromMain [fp]
+        return $ head m1
+
 configure ::  BuildWrapper (OpResult Bool)
 configure = do
         synchronize
@@ -49,13 +56,14 @@ configure = do
 
 build :: BuildWrapper (OpResult Bool)
 build = do
-        (bool,bwns)<-configure
-        if bool
-                then do
-                        (ret,bwns2)<-cabalBuild
-                        return (ret,(bwns++bwns2))
-                else
-                        return (bool,bwns)
+        cabalBuild
+--        (bool,bwns)<-configure
+--        if bool
+--                then do
+--                        (ret,bwns2)<-cabalBuild
+--                        return (ret,(bwns++bwns2))
+--                else
+--                        return (bool,bwns)
 
 getAST :: FilePath -> BuildWrapper (OpResult JSValue)
 getAST fp = do
@@ -68,6 +76,6 @@ getAST fp = do
                         tgt<-getTargetPath fp
                         --liftIO $ putStrLn ("file:"++tgt)
         --(bool,bwns)<-build
-                        s<-liftIO $ getGHCAST tgt modS opts
+                        s<-liftIO $ getHSEAST tgt modS opts
                         return (s,bwns)
                 Nothing-> return (JSNull,bwns)

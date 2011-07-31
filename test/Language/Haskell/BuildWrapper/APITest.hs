@@ -4,6 +4,9 @@ module Language.Haskell.BuildWrapper.APITest where
 import Language.Haskell.BuildWrapper.Base
 import Language.Haskell.BuildWrapper.API
 
+import Data.Maybe
+
+
 import Text.JSON
 
 import qualified Distribution.Verbosity as V 
@@ -18,9 +21,11 @@ import Control.Monad.State
 
 apiTests::Test
 apiTests=TestList[
-        --testSynchronizeAll,testConfigureErrors,testConfigureWarnings
-        --,testBuildErrors,testBuildWarnings
-        testAST]
+        --testSynchronizeAll,testConfigureErrors,testConfigureWarnings,
+        --testBuildErrors
+        --,testBuildWarnings,
+        testAST
+        ]
 
 testSynchronizeAll :: Test
 testSynchronizeAll = TestLabel "testSynchronizeAll" (TestCase ( do
@@ -117,23 +122,30 @@ testConfigureWarnings = TestLabel "testConfigureWarnings" (TestCase ( do
 testBuildErrors :: Test
 testBuildErrors = TestLabel "testBuildErrors" (TestCase ( do
         root<-createTestProject
+        (boolOKc,nsOKc)<-runAPI root configure
+        assertBool ("returned false on configure") boolOKc
+        assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
         (boolOK,nsOK)<-runAPI root build
-        assertBool ("returned false") boolOK
-        assertBool ("errors or warnings:"++show nsOK) (null nsOK)
+        assertBool ("returned false on build") boolOK
+        assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
         let srcF=root </> "src"
+        let rel="src"</>"A.hs"
         writeFile (srcF </> "A.hs") $ unlines ["module A where","import toto","fA=undefined"]
+        mf1<-runAPI root $ synchronize1 rel
+        assertBool ("mf1 not just") (isJust mf1)
         (bool1,nsErrors1)<-runAPI root build
         assertBool ("returned true on bool1") (not bool1)
         assertBool ("no errors or warnings on nsErrors") (not $ null nsErrors1)
         let (nsError1:[])=nsErrors1
-        let rel="src"</>"A.hs"
         assertEqual "not proper error 1" (BWNote BWError "parse error on input `toto'\n" "" (BWLocation rel 2 8)) nsError1
         writeFile (srcF </> "A.hs") $ unlines ["module A where","import Toto","fA=undefined"]
+        mf2<-runAPI root $ synchronize1 rel
+        assertBool ("mf2 not just") (isJust mf2)
         (bool2,nsErrors2)<-runAPI root build
         assertBool ("returned true on bool2") (not bool2)
-        assertBool ("no errors or warnings on nsErrors") (not $ null nsErrors2)
+        assertBool ("no errors or warnings on nsErrors2") (not $ null nsErrors2)
         let (nsError2:[])=nsErrors2
-        assertEqual "not proper error 1" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" "" (BWLocation rel 2 8)) nsError2
+        assertEqual "not proper error 2" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" "" (BWLocation rel 2 8)) nsError2
         ))        
         
 testBuildWarnings :: Test
@@ -153,6 +165,9 @@ testBuildWarnings = TestLabel "testBuildWarnings" (TestCase ( do
         let srcF=root </> "src"
         writeFile (srcF </> "A.hs") $ unlines ["module A where","import Data.List","fA=undefined"] 
         let rel="src"</>"A.hs"
+        (boolOK,nsOK)<-runAPI root configure
+        assertBool ("returned false") boolOK
+        assertBool ("errors or warnings:"++show nsOK) (null nsOK)
         (bool1,nsErrors1)<-runAPI root build
         assertBool ("returned false on bool1") bool1
         assertBool ("no errors or warnings on nsErrors1") (not $ null nsErrors1)
@@ -166,9 +181,13 @@ testBuildWarnings = TestLabel "testBuildWarnings" (TestCase ( do
 testAST :: Test
 testAST = TestLabel "testAST" (TestCase ( do
         root<-createTestProject
+        (boolOKc,nsOKc)<-runAPI root configure
+        assertBool ("returned false on configure") boolOKc
+        assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
+        
         (boolOK,nsOK)<-runAPI root build
-        assertBool ("returned false") boolOK
-        assertBool ("errors or warnings:"++show nsOK) (null nsOK)
+        assertBool ("returned false on build") boolOK
+        assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
         (ast,nsOK2)<-runAPI root $ getAST ("src" </> "A.hs")
         putStrLn $ show $ encode ast
         assertBool ("empty ast") (JSNull /= ast)
