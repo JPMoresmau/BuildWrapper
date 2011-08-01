@@ -42,6 +42,9 @@ getAST
 		- parseFileWithExts -> use extensions from all possible cabal components?
 			- determine cabal components from cabal files (file name -> module)
 
+tokens
+	- current scion code, lexing synchronized file
+
 thingAtPoint
 	requires getAST from GHC -> typechecked
 	load AST from disk and use current scion code
@@ -51,6 +54,11 @@ outline
 	requires getAST
 	load AST from disk and use current scion code
 	- use new code if using haskell-src-exts
+	- done by client using JSON representation of AST
+	- may as well code a default implementation
+		- tested with rest of API
+		- much smaller size of JSON passed back
+		- can deal with haskell-src-exts data instead of JSON...
 
 find available imports
 	lists all available symbols from modules (except modules after it in the dependency chain)

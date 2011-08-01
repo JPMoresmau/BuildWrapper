@@ -21,9 +21,9 @@ import Control.Monad.State
 
 apiTests::Test
 apiTests=TestList[
-        --testSynchronizeAll,testConfigureErrors,testConfigureWarnings,
-        --testBuildErrors
-        --,testBuildWarnings,
+        testSynchronizeAll,testConfigureErrors,testConfigureWarnings,
+        testBuildErrors
+        ,testBuildWarnings,
         testAST
         ]
 
@@ -44,14 +44,16 @@ testSynchronizeAll = TestLabel "testSynchronizeAll" (TestCase ( do
 testConfigureErrors :: Test
 testConfigureErrors = TestLabel "testConfigureErrors" (TestCase ( do
         root<-createTestProject
-        (boolOK,nsOK)<-runAPI root configure
-        assertBool ("returned false") boolOK
+        runAPI root synchronize
+        (boolOK,nsOK)<-runAPI root $ configure Target
+        assertBool ("configure returned false") boolOK
         assertBool ("errors or warnings:"++show nsOK) (null nsOK)
         let cf=testCabalFile root
         let cfn=takeFileName cf
         writeFile cf $ unlines ["version:0.1",
                 "build-type:     Simple"]
-        (bool1,nsErrors1)<-runAPI root configure
+        runAPI root synchronize
+        (bool1,nsErrors1)<-runAPI root $ configure Target
         assertBool ("bool1 returned true") (not bool1)
         assertEqual "no errors on no name" 2 (length nsErrors1)
         let (nsError1:nsError2:[])=nsErrors1
@@ -60,7 +62,8 @@ testConfigureErrors = TestLabel "testConfigureErrors" (TestCase ( do
         writeFile cf $ unlines ["name: 4 P1",
                 "version:0.1",
                 "build-type:     Simple"]
-        (bool2,nsErrors2)<-runAPI root configure
+        runAPI root synchronize
+        (bool2,nsErrors2)<-runAPI root $ configure Target
         assertBool ("bool2 returned true") (not bool2)
         assertEqual "no errors on invalid name" 1 (length nsErrors2)
         let (nsError3:[])=nsErrors2
@@ -75,7 +78,8 @@ testConfigureErrors = TestLabel "testConfigureErrors" (TestCase ( do
                 "  exposed-modules: A",
                 "  other-modules:  B.C",
                 "  build-depends:   base, toto"]
-        (bool3,nsErrors3)<-runAPI root configure
+        runAPI root synchronize
+        (bool3,nsErrors3)<-runAPI root $ configure Target
         assertBool ("bool3 returned true") (not bool3)
         assertEqual "no errors on unknown dependency" 1 (length nsErrors3)
         let (nsError4:[])=nsErrors3
@@ -90,7 +94,8 @@ testConfigureErrors = TestLabel "testConfigureErrors" (TestCase ( do
                 "  exposed-modules: A",
                 "  other-modules:  B.C",
                 "  build-depends:   base, toto, titi"]
-        (bool4,nsErrors4)<-runAPI root configure
+        runAPI root synchronize
+        (bool4,nsErrors4)<-runAPI root $ configure Target
         assertBool ("bool4 returned true") (not bool4)
         assertEqual "no errors on unknown dependencies" 1 (length nsErrors4)
         let (nsError5:[])=nsErrors4
@@ -113,7 +118,8 @@ testConfigureWarnings = TestLabel "testConfigureWarnings" (TestCase ( do
                 "  exposed-modules: A",
                 "  other-modules:  B.C",
                 "  build-depends:   base"]
-        (bool1,ns1)<-runAPI root configure
+        runAPI root synchronize
+        (bool1,ns1)<-runAPI root $ configure Target
         assertBool ("returned false") bool1
         let (nsWarning1:[])=ns1
         assertEqual "not proper warning 1" (BWNote BWWarning "Unknown fields: field1 (line 5)" "" (BWLocation cfn 5 1)) nsWarning1
@@ -122,23 +128,27 @@ testConfigureWarnings = TestLabel "testConfigureWarnings" (TestCase ( do
 testBuildErrors :: Test
 testBuildErrors = TestLabel "testBuildErrors" (TestCase ( do
         root<-createTestProject
-        (boolOKc,nsOKc)<-runAPI root configure
+        runAPI root synchronize
+        (boolOKc,nsOKc)<-runAPI root $ configure Target
         assertBool ("returned false on configure") boolOKc
         assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
         (boolOK,nsOK)<-runAPI root build
         assertBool ("returned false on build") boolOK
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
-        let srcF=root </> "src"
+        --let srcF=root </> "src"
         let rel="src"</>"A.hs"
-        writeFile (srcF </> "A.hs") $ unlines ["module A where","import toto","fA=undefined"]
-        mf1<-runAPI root $ synchronize1 rel
-        assertBool ("mf1 not just") (isJust mf1)
+        -- use api to write temp file
+        runAPI root $ write rel $ unlines ["module A where","import toto","fA=undefined"]
+        --mf1<-runAPI root $ synchronize1 rel
+        --assertBool ("mf1 not just") (isJust mf1)
         (bool1,nsErrors1)<-runAPI root build
         assertBool ("returned true on bool1") (not bool1)
         assertBool ("no errors or warnings on nsErrors") (not $ null nsErrors1)
         let (nsError1:[])=nsErrors1
         assertEqual "not proper error 1" (BWNote BWError "parse error on input `toto'\n" "" (BWLocation rel 2 8)) nsError1
-        writeFile (srcF </> "A.hs") $ unlines ["module A where","import Toto","fA=undefined"]
+        -- write file and synchronize
+        writeFile (root </> "src"</>"A.hs")$ unlines ["module A where","import Toto","fA=undefined"]
+        --runAPI root $ write rel $ unlines ["module A where","import Toto","fA=undefined"]
         mf2<-runAPI root $ synchronize1 rel
         assertBool ("mf2 not just") (isJust mf2)
         (bool2,nsErrors2)<-runAPI root build
@@ -151,8 +161,9 @@ testBuildErrors = TestLabel "testBuildErrors" (TestCase ( do
 testBuildWarnings :: Test
 testBuildWarnings = TestLabel "testBuildWarnings" (TestCase ( do
         root<-createTestProject
-        let cf=testCabalFile root      
-        writeFile cf $ unlines ["name: "++testProjectName,
+        runAPI root synchronize
+        --let cf=testCabalFile root      
+        runAPI root $ write (testProjectName <.> ".cabal") $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.8",
                 "build-type:     Simple",
@@ -162,10 +173,10 @@ testBuildWarnings = TestLabel "testBuildWarnings" (TestCase ( do
                 "  exposed-modules: A",
                 "  build-depends:   base",
                 "  ghc-options:     -Wall"]
-        let srcF=root </> "src"
-        writeFile (srcF </> "A.hs") $ unlines ["module A where","import Data.List","fA=undefined"] 
+        --let srcF=root </> "src"
+        (boolOK,nsOK)<-runAPI root $ configure Target
         let rel="src"</>"A.hs"
-        (boolOK,nsOK)<-runAPI root configure
+        runAPI root $ write rel $ unlines ["module A where","import Data.List","fA=undefined"] 
         assertBool ("returned false") boolOK
         assertBool ("errors or warnings:"++show nsOK) (null nsOK)
         (bool1,nsErrors1)<-runAPI root build
@@ -181,7 +192,8 @@ testBuildWarnings = TestLabel "testBuildWarnings" (TestCase ( do
 testAST :: Test
 testAST = TestLabel "testAST" (TestCase ( do
         root<-createTestProject
-        (boolOKc,nsOKc)<-runAPI root configure
+        runAPI root synchronize
+        (boolOKc,nsOKc)<-runAPI root $ configure Target
         assertBool ("returned false on configure") boolOKc
         assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
         
@@ -189,6 +201,7 @@ testAST = TestLabel "testAST" (TestCase ( do
         assertBool ("returned false on build") boolOK
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
         (ast,nsOK2)<-runAPI root $ getAST ("src" </> "A.hs")
+        assertBool ("errors or warnings on getAST:"++show nsOK2) (null nsOK2)
         putStrLn $ show $ encode ast
         assertBool ("empty ast") (JSNull /= ast)
         ))

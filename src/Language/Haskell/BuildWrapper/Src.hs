@@ -3,6 +3,7 @@ module Language.Haskell.BuildWrapper.Src where
 
 import Language.Haskell.Exts
 import Language.Haskell.Exts.Extension
+import Language.Haskell.Exts.SrcLoc
 
 import Text.JSON
 import Data.DeriveTH
@@ -11,7 +12,8 @@ import Data.Derive.JSON
 getHSEAST :: FilePath -> String -> [String] -> IO JSValue
 getHSEAST fp mod options=do
         let exts=map classifyExtension options
-        pr<-parseFileWithExts exts fp
+        let mode=defaultParseMode {extensions=exts,ignoreLinePragmas=False} 
+        pr<-parseFileWithComments mode fp
         return $ makeObj  [("parse" , (showJSON $ pr))]
         
         
@@ -80,6 +82,8 @@ $( derive makeJSON ''RuleVar )
 $( derive makeJSON ''Safety )
 $( derive makeJSON ''Op )
 $( derive makeJSON ''Assoc )
+$( derive makeJSON ''Comment )
+$( derive makeJSON ''SrcSpan )
 
 instance JSON Rational
         where showJSON=JSRational False 

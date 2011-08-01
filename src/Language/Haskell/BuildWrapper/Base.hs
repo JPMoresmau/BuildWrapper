@@ -38,6 +38,24 @@ data BWNote=BWNote {
         
 type OpResult a=(a,[BWNote])
         
+data WhichCabal=Source | Target        
+        
+data OutlineDefType =
+                Class |
+                Data |
+                Family |
+                Function |
+                Pattern |
+                Syn |
+                Type |
+                Instance |
+                Field |
+                Constructor
+        deriving (Show,Read,Eq,Enum)
+ 
+data InFileLoc=InFileLoc {ifl_line::Int,ifl_column::Int}
+ 
+        
 --withCabal :: (GenericPackageDescription -> BuildWrapper a) -> BuildWrapper (Either BWNote a)
 --withCabal f =do
 --        cf<-gets cabalFile
@@ -63,8 +81,9 @@ getTargetPath src=do
         cf<-gets cabalFile
         temp<-gets tempFolder
         let dir=(takeDirectory cf)
-        liftIO $ createDirectoryIfMissing True (dir </> temp)
-        return $ (dir </> temp </> src)
+        let path=dir </> temp </> src
+        liftIO $ createDirectoryIfMissing True (takeDirectory path)
+        return path
 
 getFullSrc :: FilePath -> BuildWrapper(FilePath)
 getFullSrc src=do
@@ -95,7 +114,7 @@ copyFromMain src=do
 
 copyFileFull :: FilePath -> FilePath -> IO()
 copyFileFull src tgt=do
-        createDirectoryIfMissing True (takeDirectory tgt)
+        --createDirectoryIfMissing True (takeDirectory tgt)
         --putStrLn tgt
         copyFile src tgt
       

@@ -23,9 +23,11 @@ import System.Exit
 import System.FilePath
 import System.Process
 
+
+
 getFilesToCopy :: BuildWrapper(OpResult [FilePath])
 getFilesToCopy =do
-       (mfps,bwns)<-withCabal True getAllFiles
+       (mfps,bwns)<-withCabal Source getAllFiles
        return $ case mfps of
                 Just fps->(concat $ map (\(_,_,_,ls)->map snd ls) fps,bwns)
                 Nothing ->([],bwns); 
@@ -68,7 +70,7 @@ getFilesToCopy =do
 
 cabalBuild :: BuildWrapper(OpResult Bool)
 cabalBuild = do
-        cf<-getCabalFile False
+        cf<-getCabalFile Target
         cp<-gets cabalPath
         v<-gets cabalVerbosity
         dist_dir<-getDistDir
@@ -89,7 +91,7 @@ cabalBuild = do
                 setCurrentDirectory cd
                 return (ex==ExitSuccess,ret)
 
-cabalConfigure :: Bool-> BuildWrapper (OpResult (Maybe LocalBuildInfo))
+cabalConfigure :: WhichCabal-> BuildWrapper (OpResult (Maybe LocalBuildInfo))
 cabalConfigure srcOrTgt= do
         cf<-getCabalFile srcOrTgt
         cp<-gets cabalPath
@@ -148,13 +150,13 @@ cabalConfigure srcOrTgt= do
         return lbi --}
         -- cabal configure --buildir dist_dir -v=verbosity --user --enable-tests
 
-getCabalFile :: Bool -> BuildWrapper FilePath
-getCabalFile True= gets cabalFile
-getCabalFile False= gets cabalFile
+getCabalFile :: WhichCabal -> BuildWrapper FilePath
+getCabalFile Source= gets cabalFile
+getCabalFile Target= gets cabalFile
                          >>=return . takeFileName
                          >>=getTargetPath
 
-cabalInit :: Bool -> BuildWrapper (OpResult (Maybe LocalBuildInfo))
+cabalInit :: WhichCabal -> BuildWrapper (OpResult (Maybe LocalBuildInfo))
 cabalInit srcOrTgt= do
    cabal_file<-getCabalFile srcOrTgt
    dist_dir<-getDistDir
@@ -176,7 +178,7 @@ cabalInit srcOrTgt= do
                             return $ (Just _lbi,[])
 
 
-withCabal :: Bool -> (LocalBuildInfo -> BuildWrapper (a))-> BuildWrapper (OpResult (Maybe a))  
+withCabal :: WhichCabal -> (LocalBuildInfo -> BuildWrapper (a))-> BuildWrapper (OpResult (Maybe a))  
 withCabal srcOrTgt f=do
         (mlbi,notes)<-cabalInit srcOrTgt
         case mlbi of
@@ -255,7 +257,7 @@ makeNote bwn msgs=let
              
 fileGhcOptions :: FilePath -> BuildWrapper(OpResult (Maybe (ModuleName,[String])))
 fileGhcOptions fp=do
-        withCabal False (\lbi->do
+        withCabal Target (\lbi->do
                 fps<-getAllFiles lbi
                 let ok=filter (\(_,_,_,ls)->not $ null ls ) $
                         map (\(n1,n2,n3,ls)->(n1,n2,n3,filter (\(_,b)->b==fp) ls) ) 

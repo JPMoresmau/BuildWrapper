@@ -48,10 +48,15 @@ synchronize1 fp = do
         m1<-mapM copyFromMain [fp]
         return $ head m1
 
-configure ::  BuildWrapper (OpResult Bool)
-configure = do
-        synchronize
-        (mlbi,msgs)<-cabalConfigure False
+write ::  FilePath -> String -> BuildWrapper()
+write fp s= do
+        real<-getTargetPath fp
+        liftIO $ writeFile real s
+
+configure ::  WhichCabal -> BuildWrapper (OpResult Bool)
+configure which= do
+        --synchronize
+        (mlbi,msgs)<-cabalConfigure which
         return $ (isJust mlbi,msgs)
 
 build :: BuildWrapper (OpResult Bool)
