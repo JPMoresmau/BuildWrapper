@@ -24,7 +24,8 @@ apiTests=TestList[
         testSynchronizeAll,testConfigureErrors,testConfigureWarnings,
         testBuildErrors
         ,testBuildWarnings,
-        testAST
+        testAST,
+        testOutline
         ]
 
 testSynchronizeAll :: Test
@@ -100,6 +101,22 @@ testConfigureErrors = TestLabel "testConfigureErrors" (TestCase ( do
         assertEqual "no errors on unknown dependencies" 1 (length nsErrors4)
         let (nsError5:[])=nsErrors4
         assertEqual "not proper error 5" (BWNote BWError "At least the following dependencies are missing:\ntiti -any, toto -any\n" "" (BWLocation cfn 1 1)) nsError5
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "executable BWTest",
+                "  hs-source-dirs:  src",
+                "  other-modules:  B.D",
+                "  build-depends:  base"]
+        runAPI root synchronize
+        (bool5,nsErrors5)<-runAPI root $ configure Target
+        assertBool ("bool5 returned true") (not bool5)
+        assertEqual "no errors on no main" 1 (length nsErrors5)
+        let (nsError6:[])=nsErrors5
+        assertEqual "not proper error 6" (BWNote BWError "No 'Main-Is' field found for executable BWTest" "" (BWLocation cfn 1 1)) nsError6
+        
         ))
         
 testConfigureWarnings :: Test
@@ -200,11 +217,96 @@ testAST = TestLabel "testAST" (TestCase ( do
         (boolOK,nsOK)<-runAPI root build
         assertBool ("returned false on build") boolOK
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
-        (ast,nsOK2)<-runAPI root $ getAST ("src" </> "A.hs")
+        (mast,nsOK2)<-runAPI root $ getAST ("src" </> "A.hs")
         assertBool ("errors or warnings on getAST:"++show nsOK2) (null nsOK2)
-        putStrLn $ show $ encode ast
-        assertBool ("empty ast") (JSNull /= ast)
+        case mast of
+                Just ast->do
+                        let json=makeObj  [("parse" , (showJSON $ ast))]
+                        putStrLn $ show $ encode json
+                Nothing -> assertFailure "no ast"
         ))
+        
+testOutline :: Test
+testOutline = TestLabel "testOutline" (TestCase ( do
+        root<-createTestProject
+        runAPI root synchronize  
+        let rel="src"</>"A.hs"
+        -- use api to write temp file
+        runAPI root $ write rel $ unlines [
+                "{-# LANGUAGE RankNTypes, TypeSynonymInstances, TypeFamilies #-}",
+                "",
+                "module Module1 where",
+                "",
+                "import Data.Char",
+                "",
+                "-- Declare a list-like data family",
+                "data family XList a",
+                "",
+                "-- Declare a list-like instance for Char",
+                "data instance XList Char = XCons !Char !(XList Char) | XNil",
+                "",
+                "type family Elem c",
+                "",
+                "type instance Elem [e] = e",
+                "",
+                "testfunc1 :: [Char]",
+                "testfunc1=reverse \"test\"",
+                "",
+                "testfunc1bis :: String -> [Char]",
+                "testfunc1bis []=\"nothing\"",
+                "testfunc1bis s=reverse s",
+                "",
+                "testMethod :: forall a. (Num a) => a -> a -> a",
+                "testMethod a b=",
+                "    let e=a + (fromIntegral $ length testfunc1)",
+                "    in e * 2",
+                "",
+                "class ToString a where",
+                "    toString :: a -> String",
+                "",
+                "instance ToString String where",
+                "    toString = id",
+                "",    
+                "type Str=String",
+                "",
+                "data Type1=MkType1_1 Int",
+                "    | MkType1_2 {",
+                "        mkt2_s :: String,",
+                "        mkt2_i :: Int",
+                "        }" ]
+        (defs,nsErrors1)<-runAPI root $ getOutline rel
+        assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
+        let expected=[
+                OutlineDef "XList" [Data,Family] (InFileSpan (InFileLoc 8 1)(InFileLoc 8 20))  []
+                ,OutlineDef "XList Char" [Data,Instance] (InFileSpan (InFileLoc 11 1)(InFileLoc 11 60)) [
+                        OutlineDef "XCons" [Constructor] (InFileSpan (InFileLoc 11 28)(InFileLoc 11 53))  []
+                        ,OutlineDef "XNil" [Constructor] (InFileSpan (InFileLoc 11 56)(InFileLoc 11 60))  []
+                        ]
+                ,OutlineDef "Elem" [Type,Family] (InFileSpan (InFileLoc 13 1)(InFileLoc 13 19))  []
+                ,OutlineDef "Elem [e]" [Type,Instance] (InFileSpan (InFileLoc 15 1)(InFileLoc 15 27))  []
+                ,OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 18 1)(InFileLoc 18 25))  []
+                ,OutlineDef "testfunc1bis" [Function] (InFileSpan (InFileLoc 21 1)(InFileLoc 22 25))  []                  
+                ,OutlineDef "testMethod" [Function] (InFileSpan (InFileLoc 25 1)(InFileLoc 27 13))  []  
+                ,OutlineDef "ToString" [Class] (InFileSpan (InFileLoc 29 1)(InFileLoc 32 0))  [
+                        OutlineDef "toString" [Function] (InFileSpan (InFileLoc 30 5)(InFileLoc 30 28))  []
+                        ]          
+                ,OutlineDef "ToString String" [Instance] (InFileSpan (InFileLoc 32 1)(InFileLoc 35 0))  [
+                        OutlineDef "toString" [Function] (InFileSpan (InFileLoc 33 5)(InFileLoc 33 18))  []
+                        ]    
+                ,OutlineDef "Str" [Type] (InFileSpan (InFileLoc 35 1)(InFileLoc 35 16))  []                
+                ,OutlineDef "Type1" [Data] (InFileSpan (InFileLoc 37 1)(InFileLoc 41 10))  [
+                         OutlineDef "MkType1_1" [Constructor] (InFileSpan (InFileLoc 37 12)(InFileLoc 37 25)) []
+                        ,OutlineDef "MkType1_2" [Constructor] (InFileSpan (InFileLoc 38 7)(InFileLoc 41 10)) [
+                                OutlineDef "mkt2_s" [Field] (InFileSpan (InFileLoc 39 9)(InFileLoc 39 25)) []
+                                ,OutlineDef "mkt2_i" [Field] (InFileSpan (InFileLoc 40 9)(InFileLoc 40 22)) []
+                                
+                                ]
+                        
+                        ]
+                ]
+        assertEqual "length" (length expected) (length defs)
+        mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected defs)
+      ))   
         
         
 runAPI::

@@ -51,10 +51,21 @@ data OutlineDefType =
                 Instance |
                 Field |
                 Constructor
-        deriving (Show,Read,Eq,Enum)
+        deriving (Show,Read,Eq,Ord,Enum)
  
 data InFileLoc=InFileLoc {ifl_line::Int,ifl_column::Int}
- 
+        deriving (Show,Read,Eq,Ord)
+
+data InFileSpan=InFileSpan {ifs_start::InFileLoc,ifs_end::InFileLoc}
+        deriving (Show,Read,Eq,Ord)
+
+data OutlineDef = OutlineDef
+  { od_name       :: String,
+    od_type       :: [OutlineDefType],
+    od_loc        :: InFileSpan,
+    od_children   :: [OutlineDef]
+  }
+  deriving (Show,Read,Eq,Ord)
         
 --withCabal :: (GenericPackageDescription -> BuildWrapper a) -> BuildWrapper (Either BWNote a)
 --withCabal f =do

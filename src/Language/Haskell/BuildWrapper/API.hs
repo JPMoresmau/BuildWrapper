@@ -6,7 +6,13 @@ import Language.Haskell.BuildWrapper.Cabal
 import Language.Haskell.BuildWrapper.GHC
 import Language.Haskell.BuildWrapper.Src
 
+
+
 import Control.Monad.State
+
+import Language.Haskell.Exts.Annotated
+import Language.Haskell.Exts.Extension
+import Language.Haskell.Exts.SrcLoc
 
 import Text.JSON
 import Data.Maybe
@@ -70,7 +76,7 @@ build = do
 --                else
 --                        return (bool,bwns)
 
-getAST :: FilePath -> BuildWrapper (OpResult JSValue)
+getAST :: FilePath -> BuildWrapper (OpResult (Maybe (ParseResult (Module SrcSpanInfo, [Comment]))))
 getAST fp = do
         (m,bwns)<-fileGhcOptions fp
         case m of
@@ -81,6 +87,15 @@ getAST fp = do
                         tgt<-getTargetPath fp
                         --liftIO $ putStrLn ("file:"++tgt)
         --(bool,bwns)<-build
-                        s<-liftIO $ getHSEAST tgt modS opts
-                        return (s,bwns)
-                Nothing-> return (JSNull,bwns)
+                        pr<-liftIO $ getHSEAST tgt modS opts
+                        --let json=makeObj  [("parse" , (showJSON $ pr))]
+                        return (Just pr,bwns)
+                Nothing-> return (Nothing,bwns)
+
+getOutline :: FilePath -> BuildWrapper (OpResult [OutlineDef])
+getOutline fp=do
+       (mast,bwns)<-getAST fp
+       case mast of
+        Just (ParseOk ast)->return (getHSEOutline ast,bwns)
+        _ -> return ([],bwns)
+ 
