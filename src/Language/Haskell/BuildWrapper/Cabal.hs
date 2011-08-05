@@ -10,7 +10,7 @@ import Data.List
 import Data.Maybe
 
 import Distribution.ModuleName
-import Distribution.PackageDescription (exposedModules, otherModules,library,executables,testSuites,Library,hsSourceDirs,libBuildInfo,Executable(..),exeName,modulePath,buildInfo,TestSuite(..),testName,TestSuiteInterface(..),testInterface,testBuildInfo,BuildInfo )
+import Distribution.PackageDescription (exposedModules, otherModules,library,executables,testSuites,Library,hsSourceDirs,libBuildInfo,Executable(..),exeName,modulePath,buildInfo,TestSuite(..),testName,TestSuiteInterface(..),testInterface,testBuildInfo,BuildInfo,cppOptions,defaultExtensions,otherExtensions,oldExtensions )
 import Distribution.Simple.GHC
 import Distribution.Simple.LocalBuildInfo                         
 import qualified Distribution.Simple.Configure as DSC
@@ -255,19 +255,26 @@ makeNote bwn msgs=let
                 then bwn{bwn_title=dropWhile isSpace $ drop 8 title,bwn_status=BWWarning}    
                 else bwn{bwn_title=title}      
              
-fileGhcOptions :: FilePath -> BuildWrapper(OpResult (Maybe (ModuleName,[String])))
-fileGhcOptions fp=do
-        withCabal Target (\lbi->do
+type CabalBuildInfo=(BuildInfo,ComponentLocalBuildInfo,FilePath,[(ModuleName,FilePath)])             
+             
+getBuildInfo ::  FilePath  -> BuildWrapper (OpResult (Maybe (LocalBuildInfo,CabalBuildInfo)))
+getBuildInfo fp=do
+        (mmr,bwns)<-withCabal Target (\lbi->do
                 fps<-getAllFiles lbi
                 let ok=filter (\(_,_,_,ls)->not $ null ls ) $
                         map (\(n1,n2,n3,ls)->(n1,n2,n3,filter (\(_,b)->b==fp) ls) ) 
                                 fps
-                -- filter (\(_,_,_,ls)->elem fp ls ) fps
-                return $ if null ok
-                        then (fromString "",[])
-                        else let
-                                (bi,clbi,fp,ls)=head ok
-                              in (fst $ head ls,(ghcOptions lbi bi clbi fp))
+                return  $ if null ok
+                        then Nothing
+                        else Just $ (lbi,head ok))
+        return $ case mmr of
+                Nothing->(Nothing,bwns)
+                Just a->(a,bwns)
+             
+fileGhcOptions :: (LocalBuildInfo,CabalBuildInfo) -> (ModuleName,[String])
+fileGhcOptions (lbi,(bi,clbi,fp,ls))=(fst $ head ls,(ghcOptions lbi bi clbi fp))
+
+
 
             -- libraries, executables, test suite: BuildInfo + all relevant modules
             -- find if modules included correspond to a component            
@@ -278,10 +285,14 @@ fileGhcOptions fp=do
                         -- ghcOptions :: LocalBuildInfo -> BuildInfo -> ComponentLocalBuildInfo
            -- -> FilePath -> [String]
            -- ghcOptions lbi bi clbi odir
-                )
+
+fileCppOptions :: CabalBuildInfo -> [String]
+fileCppOptions (bi,_,_,_)=cppOptions bi      
+
+cabalExtensions :: CabalBuildInfo -> (ModuleName,[String])
+cabalExtensions (bi,_,_,ls)=(fst $ head ls,map show $ ((otherExtensions bi) ++ (defaultExtensions bi) ++ (oldExtensions bi)))      
        
-       
-getAllFiles :: LocalBuildInfo -> BuildWrapper([(BuildInfo,ComponentLocalBuildInfo,FilePath,[(ModuleName,FilePath)])])     
+getAllFiles :: LocalBuildInfo -> BuildWrapper [CabalBuildInfo]
 getAllFiles lbi= do
                 let pd=localPkgDescr lbi
                 let libs=maybe [] extractFromLib $ library pd

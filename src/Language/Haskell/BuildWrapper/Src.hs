@@ -15,11 +15,12 @@ import Text.JSON
 import Data.DeriveTH
 import Data.Derive.JSON
 
-getHSEAST :: FilePath -> String -> [String] -> IO (ParseResult (Module SrcSpanInfo, [Comment]))
-getHSEAST fp mod options=do
+getHSEAST :: String -> String -> [String] -> IO (ParseResult (Module SrcSpanInfo, [Comment]))
+getHSEAST input mod options=do
         let exts=map classifyExtension options
-        let mode=defaultParseMode {extensions=exts,ignoreLinePragmas=False} 
-        parseFileWithComments mode fp
+        -- putStrLn $ show exts
+        let mode=defaultParseMode {extensions=exts,ignoreLinePragmas=False,ignoreLanguagePragmas=False} 
+        return $ parseFileContentsWithComments mode input
         --return $ makeObj  [("parse" , (showJSON $ pr))]
         
 getHSEOutline :: (Module SrcSpanInfo, [Comment]) -> [OutlineDef]

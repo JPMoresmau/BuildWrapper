@@ -1,3 +1,7 @@
+we could have a server listening to requests and always on (one server for all projects) Without the GHC API it shouldn't take much memory. 
+Calls that use the GHC API should be run in a separate process (one process for each open file???) 
+
+
 synchronize
 	create/synchronize sub folder (.dist-toolname) and ensure all files that have changed in base folder are present in folder
 	read cabal config
@@ -44,6 +48,8 @@ getAST
 
 tokens
 	- current scion code, lexing synchronized file
+	- need to transform file to remove preprocessing
+	- reuse a scion server?
 
 thingAtPoint
 	requires getAST from GHC -> typechecked

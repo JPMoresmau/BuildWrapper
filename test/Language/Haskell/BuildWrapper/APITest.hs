@@ -25,7 +25,8 @@ apiTests=TestList[
         testBuildErrors
         ,testBuildWarnings,
         testAST,
-        testOutline
+        testOutline,
+        testOutlinePreproc
         ]
 
 testSynchronizeAll :: Test
@@ -308,6 +309,45 @@ testOutline = TestLabel "testOutline" (TestCase ( do
         mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected defs)
       ))   
         
+testOutlinePreproc :: Test
+testOutlinePreproc = TestLabel "testOutlinePreproc" (TestCase ( do
+        root<-createTestProject
+        runAPI root synchronize  
+        let rel="src"</>"A.hs"
+        runAPI root $ write (testProjectName <.> ".cabal") $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  build-depends:   base",
+                "  extensions:      CPP",
+                "  ghc-options:     -Wall",
+                "  cpp-options:     -DCABAL_VERSION=112"]
+        runAPI root $ configure Target        
+        -- use api to write temp file
+        runAPI root $ write rel $ unlines [
+                "{-# LANGUAGE CPP #-}",
+                "",
+                "module Module1 where",
+                "",
+                "#if CABAL_VERSION > 110",
+                "testfunc1=reverse \"test\"",
+                "#endif",
+                ""
+                 ]
+        (defs,nsErrors1)<-runAPI root $ getOutline rel
+        assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
+        let expected=[
+                OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25))  []
+                ]
+        assertEqual "length" (length expected) (length defs)
+        mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected defs)
+      ))      
+        
+ 
         
 runAPI::
         Monad m =>

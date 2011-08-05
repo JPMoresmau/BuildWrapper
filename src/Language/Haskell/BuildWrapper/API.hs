@@ -11,10 +11,10 @@ import Language.Haskell.BuildWrapper.Src
 import Control.Monad.State
 
 import Language.Haskell.Exts.Annotated
-import Language.Haskell.Exts.Extension
-import Language.Haskell.Exts.SrcLoc
 
-import Text.JSON
+import Language.Preprocessor.Cpphs
+
+
 import Data.Maybe
 
 
@@ -76,18 +76,37 @@ build = do
 --                else
 --                        return (bool,bwns)
 
+ppContents :: String -> String
+ppContents = unlines . (map f) . lines
+  where f ('#':_) = ""
+        f x = x     
+
 getAST :: FilePath -> BuildWrapper (OpResult (Maybe (ParseResult (Module SrcSpanInfo, [Comment]))))
 getAST fp = do
-        (m,bwns)<-fileGhcOptions fp
-        case m of
-                Just(mod,opts)->do
+
+        (mcbi,bwns)<-getBuildInfo fp
+        case mcbi of
+                Just(cbi)->do
+                        let (mod,opts)=cabalExtensions $ snd  cbi
+                        --let cppo=fileCppOptions $ snd cbi
+                        tgt<-getTargetPath fp
+                        inputOrig<-liftIO $ readFile tgt
+                        --liftIO $ putStrLn $ "cppo=" ++ (show cppo)
+                        --inputPreprocessed<-if not $ null cppo 
+                        --       then do
+                        --                let epo=parseOptions cppo
+                        --                case epo of
+                        --                        Right opts2->liftIO $ runCpphs opts2 tgt inputOrig
+                        --                        Left _->return inputOrig
+                        --        else return inputOrig
                         --liftIO $ putStrLn ("options:"++(show opts))
                         let modS=moduleToString mod
                         --liftIO $ putStrLn ("mod:"++modS)
-                        tgt<-getTargetPath fp
-                        --liftIO $ putStrLn ("file:"++tgt)
+                        
+                        -- liftIO $ putStrLn ("opts:"++(show opts))
         --(bool,bwns)<-build
-                        pr<-liftIO $ getHSEAST tgt modS opts
+        
+                        pr<- liftIO $  getHSEAST (ppContents inputOrig) modS opts
                         --let json=makeObj  [("parse" , (showJSON $ pr))]
                         return (Just pr,bwns)
                 Nothing-> return (Nothing,bwns)
@@ -95,7 +114,9 @@ getAST fp = do
 getOutline :: FilePath -> BuildWrapper (OpResult [OutlineDef])
 getOutline fp=do
        (mast,bwns)<-getAST fp
+       liftIO $ putStrLn $ show mast
        case mast of
-        Just (ParseOk ast)->return (getHSEOutline ast,bwns)
+        Just (ParseOk ast)->do
+                return (getHSEOutline ast,bwns)
         _ -> return ([],bwns)
  
