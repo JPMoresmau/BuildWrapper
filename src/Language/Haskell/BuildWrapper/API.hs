@@ -76,10 +76,24 @@ build = do
 --                else
 --                        return (bool,bwns)
 
-ppContents :: String -> String
-ppContents = unlines . (map f) . lines
-  where f ('#':_) = ""
-        f x = x     
+-- ppContents :: String -> String
+-- ppContents = unlines . (map f) . lines
+--  where f ('#':_) = ""
+--        f x = x     
+
+preproc :: CabalBuildInfo -> FilePath -> IO String
+preproc cbi tgt= do
+        inputOrig<-readFile tgt
+        let cppo=fileCppOptions cbi
+        --putStrLn $ "cppo=" ++ (show cppo)
+        if not $ null cppo 
+            then do
+                let epo=parseOptions cppo
+                case epo of
+                    Right opts2->liftIO $ runCpphs opts2 tgt inputOrig
+                    Left _->return inputOrig
+            else return inputOrig
+
 
 getAST :: FilePath -> BuildWrapper (OpResult (Maybe (ParseResult (Module SrcSpanInfo, [Comment]))))
 getAST fp = do
@@ -87,26 +101,11 @@ getAST fp = do
         (mcbi,bwns)<-getBuildInfo fp
         case mcbi of
                 Just(cbi)->do
-                        let (mod,opts)=cabalExtensions $ snd  cbi
-                        --let cppo=fileCppOptions $ snd cbi
+                        let (modName,opts)=cabalExtensions $ snd  cbi
                         tgt<-getTargetPath fp
-                        inputOrig<-liftIO $ readFile tgt
-                        --liftIO $ putStrLn $ "cppo=" ++ (show cppo)
-                        --inputPreprocessed<-if not $ null cppo 
-                        --       then do
-                        --                let epo=parseOptions cppo
-                        --                case epo of
-                        --                        Right opts2->liftIO $ runCpphs opts2 tgt inputOrig
-                        --                        Left _->return inputOrig
-                        --        else return inputOrig
-                        --liftIO $ putStrLn ("options:"++(show opts))
-                        let modS=moduleToString mod
-                        --liftIO $ putStrLn ("mod:"++modS)
-                        
-                        -- liftIO $ putStrLn ("opts:"++(show opts))
-        --(bool,bwns)<-build
-        
-                        pr<- liftIO $  getHSEAST (ppContents inputOrig) modS opts
+                        let modS=moduleToString modName
+                        input<-liftIO $ preproc (snd cbi) tgt
+                        pr<- liftIO $  getHSEAST input modS opts
                         --let json=makeObj  [("parse" , (showJSON $ pr))]
                         return (Just pr,bwns)
                 Nothing-> return (Nothing,bwns)
