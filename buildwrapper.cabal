@@ -5,7 +5,9 @@ build-type:     Simple
 
 library
   hs-source-dirs:  src
-  build-depends:   base, filepath, mtl, directory, Cabal, process, regex-tdfa, ghc, ghc-paths, syb, ghc-syb-utils, json, text, containers, vector, derive, haskell-src-exts, cpphs
+  build-depends:   base, filepath, mtl, directory, Cabal, process, regex-tdfa, ghc, ghc-paths, syb, ghc-syb-utils, json, 
+                   text, containers, vector, derive, haskell-src-exts, cpphs
+  --      old-time
   ghc-options:     -O2 -Wall -fno-warn-unused-do-bind
   exposed-modules: Language.Haskell.BuildWrapper.API, Language.Haskell.BuildWrapper.CMD,Language.Haskell.BuildWrapper.Base
   extensions:     CPP

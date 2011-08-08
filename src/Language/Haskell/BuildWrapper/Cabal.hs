@@ -22,7 +22,7 @@ import System.Directory
 import System.Exit
 import System.FilePath
 import System.Process
-
+-- import System.Time
 
 
 getFilesToCopy :: BuildWrapper(OpResult [FilePath])
@@ -78,15 +78,19 @@ cabalBuild = do
         let args=[
                 "build",
                 "--verbose="++(show $ fromEnum v),
-                "--builddir="++dist_dir
+                "--builddir="++dist_dir,
+                "--ghc-option=-c"
                 ]
         liftIO $ do
                 cd<-getCurrentDirectory
                 setCurrentDirectory (takeDirectory cf)
+                -- c1<-getClockTime
                 -- f<-readFile ((takeDirectory cf) </> "src" </> "A.hs")
-                -- putStrLn $ f
+                -- putStrLn "cabal build start"
                 (ex,_,err)<-readProcessWithExitCode cp args ""
                 -- putStrLn err
+                -- c2<-getClockTime
+                -- putStrLn ("cabal build end" ++ (timeDiffToString  $ diffClockTimes c2 c1))
                 let ret=parseBuildMessages (takeFileName cf) err
                 setCurrentDirectory cd
                 return (ex==ExitSuccess,ret)
@@ -114,8 +118,11 @@ cabalConfigure srcOrTgt= do
         liftIO $ do
                 cd<-getCurrentDirectory
                 setCurrentDirectory (takeDirectory cf)
-        
+                --c1<-getClockTime
+                --putStrLn "cabal configure start"
                 (ex,out,err)<-readProcessWithExitCode cp args ""
+                --c2<-getClockTime
+                --putStrLn ("cabal configure end" ++ (timeDiffToString  $ diffClockTimes c2 c1))
                 --putStrLn err
                 let msgs=(parseCabalMessages (takeFileName cf) err) -- ++ (parseCabalMessages (takeFileName cf) out)
                 ret<-case ex of
