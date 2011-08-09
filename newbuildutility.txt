@@ -51,6 +51,9 @@ tokens
 	- need to transform file to remove preprocessing
 	- reuse a scion server?
 
+occurences: use existing code
+	- or for performance, code in Eclipse (do not call executable)
+
 thingAtPoint
 	requires getAST from GHC -> typechecked
 	load AST from disk and use current scion code

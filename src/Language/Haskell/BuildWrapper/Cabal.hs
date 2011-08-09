@@ -91,7 +91,7 @@ cabalBuild = do
                 -- putStrLn err
                 -- c2<-getClockTime
                 -- putStrLn ("cabal build end" ++ (timeDiffToString  $ diffClockTimes c2 c1))
-                let ret=parseBuildMessages (takeFileName cf) err
+                let ret=parseBuildMessages err
                 setCurrentDirectory cd
                 return (ex==ExitSuccess,ret)
 
@@ -120,7 +120,7 @@ cabalConfigure srcOrTgt= do
                 setCurrentDirectory (takeDirectory cf)
                 --c1<-getClockTime
                 --putStrLn "cabal configure start"
-                (ex,out,err)<-readProcessWithExitCode cp args ""
+                (ex,_,err)<-readProcessWithExitCode cp args ""
                 --c2<-getClockTime
                 --putStrLn ("cabal configure end" ++ (timeDiffToString  $ diffClockTimes c2 c1))
                 --putStrLn err
@@ -221,8 +221,12 @@ parseCabalMessages cf s=let
                                                 else 
                                                         let
                                                                 (loc,rest)=span (/= ':') s2
-                                                                (line,msg)=span (/= ':') (tail rest)
-                                                        in (Nothing,ls++[BWNote BWError (dropWhile isSpace $ tail msg) "" (BWLocation loc (read line) 1)])
+                                                                (realloc,line,msg)=if null rest
+                                                                        then    ("","0",s2)
+                                                                        else 
+                                                                                let (line',msg')=span (/= ':') (tail rest)
+                                                                                in (loc,line',tail msg')
+                                                        in (Nothing,ls++[BWNote BWError (dropWhile isSpace msg) "" (BWLocation realloc (read line) 1)])
                         | Just (jcn,msgs)<-currentNote=
                                 if (not $ null l)
                                         then (Just (jcn,l:msgs),ls)
@@ -234,8 +238,8 @@ parseCabalMessages cf s=let
                                 then 0
                                 else (read $ head ls)
  
-parseBuildMessages :: FilePath -> String -> [BWNote]
-parseBuildMessages cf s=let
+parseBuildMessages :: String -> [BWNote]
+parseBuildMessages s=let
         (m,ls)=foldl parseBuildLine (Nothing,[]) $ lines s
         in nub $ case m of
                 Nothing -> ls

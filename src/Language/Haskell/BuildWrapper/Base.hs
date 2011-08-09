@@ -6,6 +6,8 @@ import qualified Distribution.Verbosity as V
 
 import Control.Monad.State
 
+import Text.JSON
+
 import System.Directory
 import System.FilePath
 
@@ -59,6 +61,9 @@ data InFileLoc=InFileLoc {ifl_line::Int,ifl_column::Int}
 data InFileSpan=InFileSpan {ifs_start::InFileLoc,ifs_end::InFileLoc}
         deriving (Show,Read,Eq,Ord)
 
+mkFileSpan :: Int -> Int -> Int -> Int -> InFileSpan
+mkFileSpan sr sc er ec=InFileSpan (InFileLoc sr sc) (InFileLoc er ec)
+
 data OutlineDef = OutlineDef
   { od_name       :: String,
     od_type       :: [OutlineDefType],
@@ -66,6 +71,17 @@ data OutlineDef = OutlineDef
     od_children   :: [OutlineDef]
   }
   deriving (Show,Read,Eq,Ord)
+     
+data TokenDef = TokenDef {
+        td_name :: String,
+        td_loc :: InFileSpan
+    }
+        deriving (Show,Eq)     
+    
+instance JSON TokenDef where
+  showJSON (TokenDef n (InFileSpan (InFileLoc sr sc) (InFileLoc er ec)))=
+    JSArray ((JSString $ toJSString n): (map showJSON [sr,sc,er,ec]))
+  
         
 --withCabal :: (GenericPackageDescription -> BuildWrapper a) -> BuildWrapper (Either BWNote a)
 --withCabal f =do

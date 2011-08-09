@@ -21,12 +21,11 @@ import Control.Monad.State
 
 apiTests::Test
 apiTests=TestList[
-        testSynchronizeAll,testConfigureErrors,testConfigureWarnings,
-        testBuildErrors
-        ,testBuildWarnings,
+        testSynchronizeAll,testConfigureWarnings,testConfigureErrors,
+        testBuildErrors,testBuildWarnings,
         testAST,
-        testOutline,
-        testOutlinePreproc
+        testOutline,testOutlinePreproc,
+        testPreviewTokenTypes
         ]
 
 testSynchronizeAll :: Test
@@ -46,6 +45,11 @@ testSynchronizeAll = TestLabel "testSynchronizeAll" (TestCase ( do
 testConfigureErrors :: Test
 testConfigureErrors = TestLabel "testConfigureErrors" (TestCase ( do
         root<-createTestProject
+        (boolNoCabal,nsNoCabal)<-runAPI root $ configure Target
+        assertBool ("configure returned true on no cabal") (not boolNoCabal)
+        assertEqual ("no errors or warnings on no cabal") 1 (length nsNoCabal)        
+        assertEqual ("wrong error on no cabal") (BWNote BWError "No cabal file found." "" (BWLocation "" 0 1)) (head nsNoCabal)   
+        
         runAPI root synchronize
         (boolOK,nsOK)<-runAPI root $ configure Target
         assertBool ("configure returned false") boolOK
@@ -347,7 +351,32 @@ testOutlinePreproc = TestLabel "testOutlinePreproc" (TestCase ( do
         mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected defs)
       ))      
         
- 
+testPreviewTokenTypes :: Test
+testPreviewTokenTypes = TestLabel "testPreviewTokenTypes" (TestCase ( do
+        root<-createTestProject
+        runAPI root synchronize  
+        runAPI root $ configure Target        
+        let rel="src"</>"Main.hs"
+        runAPI root $ write rel $ unlines [
+                "{-# LANGUAGE TemplateHaskell,CPP #-}",
+                "-- a comment",
+                "module Main where", 
+                "",
+                "main :: IO (Int)",
+                "main = do" ,
+                "        putStr ('h':\"ello Prefs!\")",
+                "        return (2 + 2)",
+                "",
+                "#if USE_TH",
+                "$( derive makeTypeable ''Extension )",
+                "#endif",
+                ""
+                ]
+        (tts,nsErrors1)<-runAPI root $ getTokenTypes rel
+        assertBool ("errors or warnings on getTokenTypes:"++show nsErrors1) (null nsErrors1)
+        let expectedS="[[\"D\",1,0,1,36],[\"D\",2,0,2,12],[\"K\",3,0,3,6],[\"IC\",3,7,3,11],[\"K\",3,12,3,17],[\"IV\",5,0,5,4],[\"S\",5,5,5,7],[\"IC\",5,8,5,10],[\"SS\",5,11,5,12],[\"IC\",5,12,5,15],[\"SS\",5,15,5,16],[\"IV\",6,0,6,4],[\"S\",6,5,6,6],[\"K\",6,7,6,9],[\"IV\",7,8,7,14],[\"SS\",7,15,7,16],[\"LC\",7,16,7,19],[\"S\",7,19,7,20],[\"LS\",7,20,7,33],[\"SS\",7,33,7,34],[\"IV\",8,8,8,14],[\"SS\",8,15,8,16],[\"LI\",8,16,8,17],[\"IV\",8,18,8,19],[\"LI\",8,20,8,21],[\"SS\",8,21,8,22],[\"PP\",10,0,10,10],[\"TH\",11,0,11,2],[\"IV\",11,3,11,9],[\"IV\",11,10,11,22],[\"TH\",11,23,11,25],[\"IC\",11,25,11,34],[\"SS\",11,35,11,36],[\"PP\",12,0,12,6]]"
+        assertEqual "" expectedS (encode $ showJSON tts)
+        ))
         
 runAPI::
         Monad m =>

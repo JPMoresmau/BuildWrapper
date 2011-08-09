@@ -105,7 +105,7 @@ getAST fp = do
                         tgt<-getTargetPath fp
                         let modS=moduleToString modName
                         input<-liftIO $ preproc (snd cbi) tgt
-                        pr<- liftIO $  getHSEAST input modS opts
+                        pr<- liftIO $ getHSEAST input modS opts
                         --let json=makeObj  [("parse" , (showJSON $ pr))]
                         return (Just pr,bwns)
                 Nothing-> return (Nothing,bwns)
@@ -113,9 +113,22 @@ getAST fp = do
 getOutline :: FilePath -> BuildWrapper (OpResult [OutlineDef])
 getOutline fp=do
        (mast,bwns)<-getAST fp
-       liftIO $ putStrLn $ show mast
+       -- liftIO $ putStrLn $ show mast
        case mast of
         Just (ParseOk ast)->do
                 return (getHSEOutline ast,bwns)
         _ -> return ([],bwns)
  
+getTokenTypes :: FilePath -> BuildWrapper (OpResult [TokenDef])
+getTokenTypes fp=do
+        (mcbi,bwns)<-getBuildInfo fp
+        case mcbi of
+                Just(cbi)->do
+                        let (_,opts)=cabalExtensions $ snd  cbi
+                        tgt<-getTargetPath fp
+                        input<-liftIO $ readFile tgt
+                        ett<-liftIO $ tokenTypesArbitrary tgt input (".lhs" == (takeExtension fp)) opts
+                        case ett of
+                                Right tt->return (tt,bwns)
+                                Left bw -> return ([],bw:bwns)
+                Nothing-> return ([],bwns)
