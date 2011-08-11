@@ -21,11 +21,13 @@ import Control.Monad.State
 
 apiTests::Test
 apiTests=TestList[
-        testSynchronizeAll,testConfigureWarnings,testConfigureErrors,
-        testBuildErrors,testBuildWarnings,
-        testAST,
-        testOutline,testOutlinePreproc,
-        testPreviewTokenTypes
+--        testSynchronizeAll,testConfigureWarnings,testConfigureErrors,
+--        testBuildErrors,testBuildWarnings,
+--        testAST,
+--        testOutline,testOutlinePreproc,
+--        testPreviewTokenTypes,
+--        testThingAtPoint,
+        testNamesInScope
         ]
 
 testSynchronizeAll :: Test
@@ -154,7 +156,7 @@ testBuildErrors = TestLabel "testBuildErrors" (TestCase ( do
         (boolOKc,nsOKc)<-runAPI root $ configure Target
         assertBool ("returned false on configure") boolOKc
         assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
-        (boolOK,nsOK)<-runAPI root build
+        (boolOK,nsOK)<-runAPI root $ build False
         assertBool ("returned false on build") boolOK
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
         --let srcF=root </> "src"
@@ -163,7 +165,7 @@ testBuildErrors = TestLabel "testBuildErrors" (TestCase ( do
         runAPI root $ write rel $ unlines ["module A where","import toto","fA=undefined"]
         --mf1<-runAPI root $ synchronize1 rel
         --assertBool ("mf1 not just") (isJust mf1)
-        (bool1,nsErrors1)<-runAPI root build
+        (bool1,nsErrors1)<-runAPI root $ build False
         assertBool ("returned true on bool1") (not bool1)
         assertBool ("no errors or warnings on nsErrors") (not $ null nsErrors1)
         let (nsError1:[])=nsErrors1
@@ -173,7 +175,7 @@ testBuildErrors = TestLabel "testBuildErrors" (TestCase ( do
         --runAPI root $ write rel $ unlines ["module A where","import Toto","fA=undefined"]
         mf2<-runAPI root $ synchronize1 rel
         assertBool ("mf2 not just") (isJust mf2)
-        (bool2,nsErrors2)<-runAPI root build
+        (bool2,nsErrors2)<-runAPI root $ build False
         assertBool ("returned true on bool2") (not bool2)
         assertBool ("no errors or warnings on nsErrors2") (not $ null nsErrors2)
         let (nsError2:[])=nsErrors2
@@ -201,7 +203,7 @@ testBuildWarnings = TestLabel "testBuildWarnings" (TestCase ( do
         runAPI root $ write rel $ unlines ["module A where","import Data.List","fA=undefined"] 
         assertBool ("returned false") boolOK
         assertBool ("errors or warnings:"++show nsOK) (null nsOK)
-        (bool1,nsErrors1)<-runAPI root build
+        (bool1,nsErrors1)<-runAPI root $ build False
         assertBool ("returned false on bool1") bool1
         assertBool ("no errors or warnings on nsErrors1") (not $ null nsErrors1)
         let (nsError1:nsError2:[])=nsErrors1
@@ -219,7 +221,7 @@ testAST = TestLabel "testAST" (TestCase ( do
         assertBool ("returned false on configure") boolOKc
         assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
         
-        (boolOK,nsOK)<-runAPI root build
+        (boolOK,nsOK)<-runAPI root $ build False
         assertBool ("returned false on build") boolOK
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
         (mast,nsOK2)<-runAPI root $ getAST ("src" </> "A.hs")
@@ -377,6 +379,43 @@ testPreviewTokenTypes = TestLabel "testPreviewTokenTypes" (TestCase ( do
         let expectedS="[[\"D\",1,0,1,36],[\"D\",2,0,2,12],[\"K\",3,0,3,6],[\"IC\",3,7,3,11],[\"K\",3,12,3,17],[\"IV\",5,0,5,4],[\"S\",5,5,5,7],[\"IC\",5,8,5,10],[\"SS\",5,11,5,12],[\"IC\",5,12,5,15],[\"SS\",5,15,5,16],[\"IV\",6,0,6,4],[\"S\",6,5,6,6],[\"K\",6,7,6,9],[\"IV\",7,8,7,14],[\"SS\",7,15,7,16],[\"LC\",7,16,7,19],[\"S\",7,19,7,20],[\"LS\",7,20,7,33],[\"SS\",7,33,7,34],[\"IV\",8,8,8,14],[\"SS\",8,15,8,16],[\"LI\",8,16,8,17],[\"IV\",8,18,8,19],[\"LI\",8,20,8,21],[\"SS\",8,21,8,22],[\"PP\",10,0,10,10],[\"TH\",11,0,11,2],[\"IV\",11,3,11,9],[\"IV\",11,10,11,22],[\"TH\",11,23,11,25],[\"IC\",11,25,11,34],[\"SS\",11,35,11,36],[\"PP\",12,0,12,6]]"
         assertEqual "" expectedS (encode $ showJSON tts)
         ))
+        
+testThingAtPoint :: Test
+testThingAtPoint = TestLabel "testThingAtPoint" (TestCase ( do
+        root<-createTestProject
+        runAPI root synchronize
+        runAPI root $ configure Target        
+        let rel="src"</>"Main.hs"
+        runAPI root $ write rel $ unlines [  
+                  "module Main where",
+                  "main=return $ map id \"toto\""
+                  ] 
+        (tts,nsErrors1)<-runAPI root $ getThingAtPoint rel 2 16
+        putStrLn $ show tts
+        assertBool ("errors or warnings on getThingAtPoint:"++show nsErrors1) (null nsErrors1)
+        
+        )) 
+
+testNamesInScope :: Test
+testNamesInScope = TestLabel "testNamesInScope" (TestCase ( do
+        root<-createTestProject
+        runAPI root synchronize
+        runAPI root $ configure Target        
+        let rel="src"</>"Main.hs"
+        runAPI root $ write rel $ unlines [  
+                  "module Main where",
+                  "import B.D",
+                  "main=return $ map id \"toto\""
+                  ] 
+        runAPI root $ build True
+        (mtts,nsErrors1)<-runAPI root $ getNamesInScope rel
+        assertBool ("errors or warnings on getNamesInScope:"++show nsErrors1) (null nsErrors1)
+        assertBool "getNamesInScope not just" (isJust mtts)
+        let tts=fromJust mtts
+        assertBool "does not contain Main.main" (elem "Main.main" tts)
+        assertBool "does not contain B.D.fD" (elem "B.D.fD" tts)
+        assertBool "does not contain GHC.Types.Char" (elem "GHC.Types.Char" tts)
+        )) 
         
 runAPI::
         Monad m =>

@@ -1,8 +1,9 @@
-{-# LANGUAGE CPP, OverloadedStrings, TemplateHaskell, TypeSynonymInstances,StandaloneDeriving,DeriveDataTypeable #-}
+{-# LANGUAGE CPP, OverloadedStrings, TemplateHaskell, TypeSynonymInstances,StandaloneDeriving,DeriveDataTypeable,ScopedTypeVariables,TypeFamilies,RankNTypes  #-}
 module Language.Haskell.BuildWrapper.GHC where
 
 import Language.Haskell.BuildWrapper.Base hiding (Target)
 
+import Control.Monad
 import Control.Monad.State
 
 import Text.JSON
@@ -10,6 +11,7 @@ import Data.DeriveTH
 import Data.Derive.JSON
 import Data.Generics hiding (Fixity)
 import qualified Data.Map as M (insert)
+import Data.Maybe
 --import Data.Text hiding (map,head,drop,filter,last,reverse,unlines)
 import Data.Vector (fromList)
 import qualified Data.List as List
@@ -21,6 +23,7 @@ import DynFlags
 import ErrUtils ( ErrMsg(..), WarnMsg, Messages,mkPlainErrMsg )
 import GHC
 import GHC.Paths ( libdir )
+import GHC.SYB.Utils
 import Outputable
 import FastString (FastString,unpackFS,concatFS,fsLit,mkFastString)
 import ForeignCall
@@ -38,26 +41,117 @@ import StringBuffer
 import System.FilePath
 
 
-getGHCAST :: FilePath -> String -> [String] -> IO JSValue
-getGHCAST fp mod options=do
+getAST :: FilePath -> String -> [String] -> IO TypecheckedSource
+getAST =withAST (return)
+   
+withAST ::  (TypecheckedSource -> Ghc a) -> FilePath -> String -> [String] -> IO a
+withAST f fp mod options=do
+    putStrLn $ show options
     let lflags=map noLoc options
     (_leftovers, _) <- parseStaticFlags lflags
-    (p,t)<-runGhc (Just libdir) $ do
+    runGhc (Just libdir) $ do
         flg <- getSessionDynFlags
         (flg', _, _) <- parseDynamicFlags flg _leftovers
-        setSessionDynFlags flg' { ghcLink = NoLink, ghcMode = OneShot }
-        addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = False, targetContents = Nothing }
+        setSessionDynFlags flg'  { ghcLink = LinkInMemory, ghcMode = OneShot }
+        addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }
         load LoadAllTargets
         modSum <- getModSummary $ mkModuleName mod
         p <- parseModule modSum
         --return $ showSDocDump $ ppr $ pm_mod_summary p
         t <- typecheckModule p
-        return (p,t)
+        d <- desugarModule t
+        l <- loadModule d
+        setContext [ms_mod modSum] []
+        f $ tm_typechecked_source t
         --return $ showSDocDump $ ppr $ pm_parsed_source p
         --return $ showSDocDump $ ppr $ tm_typechecked_source t
-    return  $ makeObj  [("parse" , (showJSON $ tm_typechecked_source t))]
-        
+    --return  $ makeObj  [("parse" , (showJSON $ tm_typechecked_source t))]
+    --return r
    
+getGhcNamesInScope  :: FilePath -> String -> [String] -> IO [String]
+getGhcNamesInScope=withAST (\_->do
+        names<-getNamesInScope
+        return $ map (showSDocDump . ppr ) names)
+   
+--data S a=S String    
+--    
+--instance Show (S a) where
+--        show (S s)=s    
+--   
+--data TestLoc=TestLoc Int Int
+--        deriving (Show,Data,Typeable)
+--data Test=Test [TestLoc]
+--        deriving (Show,Data,Typeable)
+--   
+--test1=Test [TestLoc 3 4,TestLoc 2 14,TestLoc 3 16]
+--
+--getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
+--getThingAtPoint ts line col= everything (++) ([] `mkQ` (\x -> p x )) test1
+--        -- synthesize [] toS (mkQ Nothing toS) test1
+--        where 
+--               p :: TestLoc -> [String]
+--               p t@(TestLoc a b)= if a==line || b==col
+--                        then [show t]
+--                        else []
+--               
+   
+--getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
+--getThingAtPoint ts line col= maybeToList  $ something (mkQ Nothing toS) test1
+--        where 
+--               toS :: TestLoc -> Maybe String
+--               toS t@(TestLoc a b)=if a==line || b==col
+--                        then Just $ show t
+--                        else Nothing
+
+
+--getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
+--getThingAtPoint ts line col=map show ((listify (mkQ False (isJust . toS)) test1)::[TestLoc])
+--        -- maybeToList  $ something (mkQ Nothing toS) test1
+--        where 
+--               toS :: TestLoc -> Maybe String
+--               toS t@(TestLoc a b)=if a==line || b==col
+--                        then Just $ show t
+--                        else Nothing
+
+getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
+getThingAtPoint ts line col= []
+--everything (++) ([] `mkQ` overlap) ts
+--   where 
+--        overlap :: forall b1 . (Outputable b1, Typeable b1) =>Located b1  -> [String]
+--        overlap (a::Located b1)= let
+--                (L loc o)=a
+--                st=srcSpanStart loc
+--                en=srcSpanEnd loc
+--                in if (isGoodSrcLoc st) && (isGoodSrcLoc en) && ((srcLocLine st) <= line) && ((srcLocCol st) <=col) && ((srcLocLine en) >= line) && ((srcLocCol en) >=col)
+--                        then [showSDocDump $ ppr o]
+--                        else []
+   
+
+--getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
+--getThingAtPoint ts line col= map pr lf
+--        --maybeToList  $ something (mkQ Nothing toS) ts -- listify (mkQ False overlap) ts
+--   where 
+--        lf :: forall b1 . (Outputable b1, Typeable b1) => [Located b1]
+--        lf=listify (mkQ False overlap) ts
+--        --find :: (Outputable a,Typeable a) => TypecheckedSource -> [Located a]
+--        --find = listify $ overlap
+--        toS :: forall b1 . (Outputable b1, Typeable b1) =>Located b1  -> Maybe String
+--        toS l= if overlap l
+--                then Just $ pr l
+--                else Nothing
+--        pr :: forall b1 . (Outputable b1) => Located b1 -> String
+--        pr=showSDocDump . ppr . unLoc
+--        --showData TypeChecker 4
+--        overlap :: forall b1 . (Outputable b1, Typeable b1) =>Located b1  -> Bool
+--        overlap (a::Located b1)= let
+--                (L loc _)=a
+--                st=srcSpanStart loc
+--                en=srcSpanEnd loc
+--                in (isGoodSrcLoc st) && (isGoodSrcLoc en) && ((srcLocLine st) <= line) && ((srcLocCol st) <=col) && ((srcLocLine en) >= line) && ((srcLocCol en) >=col)
+--                --        overlap _ =False
+--   
+--   
+
 ghcSpanToLocation :: FilePath -- ^ Base directory
                   -> GHC.SrcSpan
                   -> InFileSpan
@@ -175,6 +269,24 @@ tokenTypesArbitrary :: FilePath -> String -> Bool -> [String] -> IO (Either BWNo
 tokenTypesArbitrary projectRoot contents literate options = generateTokens projectRoot contents literate options convertTokens id
   where
     convertTokens = map (tokenToType projectRoot)        
+        
+-- | Extract occurrences based on lexing  
+occurrences :: FilePath     -- ^ Project root or base directory for absolute path conversion
+            -> String    -- ^ Contents to be parsed
+            -> String    -- ^ Token value to find
+            -> Bool      -- ^ Literate source flag (True = literate, False = ordinary)
+            -> [String]  -- ^ Options
+            -> IO (Either BWNote [TokenDef])
+occurrences projectRoot contents query literate options = 
+  let 
+      qualif = elem '.' query
+      -- Get the list of tokens matching the query for relevant token types
+      tokensMatching :: [TokenDef] -> [TokenDef]
+      tokensMatching = filter matchingVal
+      matchingVal :: TokenDef -> Bool
+      matchingVal (TokenDef v _)=query==v
+      mkTokenDef (L sp t)=TokenDef (tokenValue qualif t) (ghcSpanToLocation projectRoot sp)
+  in generateTokens projectRoot contents literate options (map mkTokenDef) tokensMatching        
         
 -- | Parse the current document, generating a TokenDef list, filtered by a function
 generateTokens :: FilePath                        -- ^ The project's root directory
@@ -474,231 +586,231 @@ tokenValue True (ITprefixqconsym (q,a)) = mkQualifiedTokenValue q a
 tokenValue _ _= ""                       
         
         
-instance JSON SrcLoc
-        where showJSON src 
-                | isGoodSrcLoc src =makeObj [((unpackFS $ srcLocFile src) , (JSArray  [showJSON $ srcLocLine src,showJSON $ srcLocCol src])) ]
-                | otherwise = JSNull
-        
-instance JSON SrcSpan
-        where showJSON src 
-                | isGoodSrcSpan src=makeObj [((unpackFS $ srcSpanFile src) , (JSArray  [showJSON $ srcSpanStartLine src,showJSON $ srcSpanStartCol src,showJSON $ srcSpanEndLine src,showJSON $ srcSpanEndCol src])) ]
-                | otherwise = JSNull     
-  
-instance JSON FastString
-        where showJSON=JSString . toJSString . unpackFS
-  
-instance JSON ModuleName
-        where showJSON=JSString . toJSString . moduleNameString
-        
-instance JSON OccName
-        where showJSON=JSString . toJSString . showSDocDump . ppr  
-
-instance JSON Type
-        where showJSON =JSString . toJSString . showSDocDump . ppr
-  
-instance JSON DataCon
-        where showJSON=JSString . toJSString . showSDocDump . ppr  
-
-instance JSON Unique
-        where showJSON=JSString . toJSString . showSDocDump . ppr  
-
-instance JSON Name
-        where showJSON=JSString . toJSString . showSDocDump . ppr  
-
-instance JSON EvBindsVar
-        where showJSON=JSString . toJSString . showSDocDump . ppr  
-
-instance JSON PackageId
-        where showJSON=JSString . toJSString . showSDocDump . ppr  
-        
-instance (JSON a)=> JSON (Bag a)
-        where showJSON=JSArray . map showJSON . bagToList
-
-instance (JSON a)=> JSON (UniqSet  a)
-        where showJSON=JSArray . map showJSON . uniqSetToList 
-
-instance JSON Rational
-        where showJSON=JSRational False 
-
-instance JSON Var
-        where showJSON v=makeObj [("Name",showJSON $ Var.varName v),("Unique",showJSON $ varUnique v),("Type",showJSON $ varType v)] 
-
-instance JSON RdrName
-        where 
-                showJSON (Unqual on) = JSArray [showJSON on]
-                showJSON (Qual mn on)  = JSArray [showJSON mn,showJSON on]  
-  
-instance(JSON a)=> JSON (Located a)
-        where showJSON (L s o)=case showJSON o of
-                JSObject o->let
-                        ass=fromJSObject o
-                        in JSObject $ toJSObject (("Loc",(showJSON s)):ass)
-                JSNull -> JSNull
-                v->makeObj [("Loc",(showJSON s)),("Object" ,v)]  
-  
-$( derive makeJSON ''HsModule )
-$( derive makeJSON ''ImportDecl )      
-$( derive makeJSON ''HsDocString )   
-$( derive makeJSON ''HsDecl)   
-$( derive makeJSON ''WarningTxt)   
-      
-
-$( derive makeJSON ''InstDecl )
--- $( derive makeJSON ''HsBind )
-$( derive makeJSON ''HsBindLR )
-$( derive makeJSON ''DefaultDecl )
-$( derive makeJSON ''WarnDecl )
-$( derive makeJSON ''RuleDecl )
-$( derive makeJSON ''DocDecl )
-$( derive makeJSON ''HsQuasiQuote )
-$( derive makeJSON ''SpliceDecl )
-$( derive makeJSON ''AnnDecl )
-$( derive makeJSON ''ForeignDecl )
-$( derive makeJSON ''Sig )
-$( derive makeJSON ''DerivDecl )
-$( derive makeJSON ''TyClDecl )
-      
-$( derive makeJSON ''NewOrData )
-$( derive makeJSON ''HsTyVarBndr )
-$( derive makeJSON ''HsPred )
-$( derive makeJSON ''HsType )
-$( derive makeJSON ''ConDecl )
-$( derive makeJSON ''FamilyFlavour )
-$( derive makeJSON ''ResType )
-$( derive makeJSON ''HsConDetails )
-$( derive makeJSON ''HsExplicitFlag )
-$( derive makeJSON ''ConDeclField )
-$( derive makeJSON ''Boxity )
-$( derive makeJSON ''HsSplice )
-$( derive makeJSON ''HsBang )
-$( derive makeJSON ''IPName )
-$( derive makeJSON ''HsExpr )
-  
-$( derive makeJSON ''HsLit)
-$( derive makeJSON ''MatchGroup)
-$( derive makeJSON ''HsStmtContext)
-$( derive makeJSON ''HsBracket)
-$( derive makeJSON ''Pat)
-$( derive makeJSON ''HsWrapper)
-$( derive makeJSON ''HsCmdTop)
-$( derive makeJSON ''Fixity)
-$( derive makeJSON ''HsArrAppType)
-$( derive makeJSON ''ArithSeqInfo)
-$( derive makeJSON ''HsRecFields )
-$( derive makeJSON ''HsRecField )
-$( derive makeJSON ''StmtLR )
-$( derive makeJSON ''HsLocalBindsLR )
-$( derive makeJSON ''HsTupArg )
-$( derive makeJSON ''HsOverLit )
-$( derive makeJSON ''OverLitVal )  
-$( derive makeJSON ''HsValBindsLR )
-$( derive makeJSON ''HsIPBinds )
-$( derive makeJSON ''IPBind ) 
-$( derive makeJSON ''FixitySig ) 
-$( derive makeJSON ''InlinePragma ) 
-$( derive makeJSON ''Match ) 
-$( derive makeJSON ''Activation )
-$( derive makeJSON ''RuleMatchInfo )
-$( derive makeJSON ''InlineSpec )
-$( derive makeJSON ''RecFlag )
-$( derive makeJSON ''GRHSs )
-$( derive makeJSON ''GRHS )
-$( derive makeJSON ''FixityDirection )
-$( derive makeJSON ''EvTerm )
-$( derive makeJSON ''TcEvBinds )
-$( derive makeJSON ''ForeignExport )
-$( derive makeJSON ''ForeignImport )
-$( derive makeJSON ''HsMatchContext )
-$( derive makeJSON ''HsGroup )
-$( derive makeJSON ''CExportSpec )
-$( derive makeJSON ''CImportSpec )
-$( derive makeJSON ''CCallConv )
-$( derive makeJSON ''CCallTarget )
-$( derive makeJSON ''EvBind )
-$( derive makeJSON ''Safety )
-$( derive makeJSON ''AnnProvenance )
-$( derive makeJSON ''RuleBndr )
-$( derive makeJSON ''TcSpecPrags )
-$( derive makeJSON ''TcSpecPrag )
-
-instance (JSON a)=> JSON (IE a)
-        where
-            showJSON= showJSON . ieName 
-      
- {--
-         p <- parseModule modSum
-        t <- typecheckModule p
-        d <- desugarModule t
-        l <- loadModule d
-        n <- getNamesInScope
-        c <- return $ coreModule d
- 
-        g <- getModuleGraph
-        mapM showModule g     
-        return $ (parsedSource d,"/n-----/n",  typecheckedSource d)
-        --} 
-        
-{--
-instance ToJSON SrcLoc
-        where toJSON src 
-                | isGoodSrcLoc src =object [(pack $ unpackFS $ srcLocFile src) .= (Array $ fromList [toJSON $ srcLocLine src,toJSON $ srcLocCol src]) ]
-                | otherwise = Null
-        
-instance ToJSON SrcSpan
-        where toJSON src 
-                | isGoodSrcSpan src=object [(pack $ unpackFS $ srcSpanFile src) .= (Array $ fromList [toJSON $ srcSpanStartLine src,toJSON $ srcSpanStartCol src,toJSON $ srcSpanEndLine src,toJSON $ srcSpanEndCol src]) ]
-                | otherwise = Null
-                        
-instance(ToJSON a)=> ToJSON (Located a)
-        where toJSON (L s o)=case toJSON o of
-                Object o->Object (M.insert "Loc" (toJSON s) o)
-                Null -> Null
-                v->object ["Loc" .= (toJSON s),"Object" .= v]
-
-instance (ToJSON a, OutputableBndr a)=> ToJSON (HsModule a)
-        where toJSON hsm=object ["ModName" .= (toJSON $ hsmodName hsm),
-                "Exports" .= (toJSON $ hsmodExports hsm),
-                "Imports" .= (toJSON $ hsmodImports hsm),
-                "Decls" .= (toJSON $  hsmodDecls hsm)
-                ]
-
-instance ToJSON FastString
-        where toJSON=toJSON . pack . unpackFS
-       
-instance ToJSON ModuleName
-        where toJSON=toJSON . moduleNameString
-        
-instance ToJSON OccName
-        where toJSON=toJSON . showSDocDump . ppr
-        
-instance ToJSON RdrName
-        where 
-                toJSON (Unqual on) = Array $ fromList [toJSON on]
-                toJSON (Qual mn on)  = Array $ fromList [toJSON mn,toJSON on]
-
-instance (ToJSON a)=> ToJSON (IE a)
-        where
-            toJSON= toJSON . ieName --}
-            {--toJSON (IEVar name)= object ["IEVar" .= toJSON name]      
-            toJSON (IEThingAbs name)=object ["IEThingAbs" .= toJSON name]      
-            toJSON (IEThingAll name)= object ["IEThingAll" .= toJSON name]      
-            toJSON (IEThingWith name ns)= object ["IEVar" .= toJSON name]      
-            toJSON (IEModuleContents mn)= object ["IEModuleContents" .= toJSON name]      
-            toJSON (IEGroup i hds)= object ["IEVar" .= toJSON hds]      
-            toJSON (IEDoc hds)=  object ["IEDoc" .= toJSON hds]      
-            toJSON (IEDocNamed s)= object ["IEDocNamed" .= toJSON s]      --}
-{-- 
-instance (ToJSON a)=> ToJSON (ImportDecl a)
-        where
-            toJSON imd=object ["ModName" .= toJSON (ideclName imd),
-                "PackageQualified" .= toJSON (ideclPkgQual imd),
-                "Source" .= toJSON (ideclSource imd),
-                "Qualified" .= toJSON (ideclQualified imd),
-                "As" .= toJSON (ideclAs imd),
-                "Hiding" .= toJSON (ideclHiding imd)
-                ]
-
-instance (ToJSON a, OutputableBndr a)=> ToJSON (HsDecl a)
-        where toJSON =toJSON . showSDocDump . ppr
-        
-        --}
+--instance JSON SrcLoc
+--        where showJSON src 
+--                | isGoodSrcLoc src =makeObj [((unpackFS $ srcLocFile src) , (JSArray  [showJSON $ srcLocLine src,showJSON $ srcLocCol src])) ]
+--                | otherwise = JSNull
+--        
+--instance JSON SrcSpan
+--        where showJSON src 
+--                | isGoodSrcSpan src=makeObj [((unpackFS $ srcSpanFile src) , (JSArray  [showJSON $ srcSpanStartLine src,showJSON $ srcSpanStartCol src,showJSON $ srcSpanEndLine src,showJSON $ srcSpanEndCol src])) ]
+--                | otherwise = JSNull     
+--  
+--instance JSON FastString
+--        where showJSON=JSString . toJSString . unpackFS
+--  
+--instance JSON ModuleName
+--        where showJSON=JSString . toJSString . moduleNameString
+--        
+--instance JSON OccName
+--        where showJSON=JSString . toJSString . showSDocDump . ppr  
+--
+--instance JSON Type
+--        where showJSON =JSString . toJSString . showSDocDump . ppr
+--  
+--instance JSON DataCon
+--        where showJSON=JSString . toJSString . showSDocDump . ppr  
+--
+--instance JSON Unique
+--        where showJSON=JSString . toJSString . showSDocDump . ppr  
+--
+--instance JSON Name
+--        where showJSON=JSString . toJSString . showSDocDump . ppr  
+--
+--instance JSON EvBindsVar
+--        where showJSON=JSString . toJSString . showSDocDump . ppr  
+--
+--instance JSON PackageId
+--        where showJSON=JSString . toJSString . showSDocDump . ppr  
+--        
+--instance (JSON a)=> JSON (Bag a)
+--        where showJSON=JSArray . map showJSON . bagToList
+--
+--instance (JSON a)=> JSON (UniqSet  a)
+--        where showJSON=JSArray . map showJSON . uniqSetToList 
+--
+--instance JSON Rational
+--        where showJSON=JSRational False 
+--
+--instance JSON Var
+--        where showJSON v=makeObj [("Name",showJSON $ Var.varName v),("Unique",showJSON $ varUnique v),("Type",showJSON $ varType v)] 
+--
+--instance JSON RdrName
+--        where 
+--                showJSON (Unqual on) = JSArray [showJSON on]
+--                showJSON (Qual mn on)  = JSArray [showJSON mn,showJSON on]  
+--  
+--instance(JSON a)=> JSON (Located a)
+--        where showJSON (L s o)=case showJSON o of
+--                JSObject o->let
+--                        ass=fromJSObject o
+--                        in JSObject $ toJSObject (("Loc",(showJSON s)):ass)
+--                JSNull -> JSNull
+--                v->makeObj [("Loc",(showJSON s)),("Object" ,v)]  
+--  
+-- $( derive makeJSON ''HsModule )
+-- $( derive makeJSON ''ImportDecl )      
+-- $( derive makeJSON ''HsDocString )   
+-- $( derive makeJSON ''HsDecl)   
+-- $( derive makeJSON ''WarningTxt)   
+--      
+--
+-- $( derive makeJSON ''InstDecl )
+---- $( derive makeJSON ''HsBind )
+-- $( derive makeJSON ''HsBindLR )
+-- $( derive makeJSON ''DefaultDecl )
+-- $( derive makeJSON ''WarnDecl )
+-- $( derive makeJSON ''RuleDecl )
+-- $( derive makeJSON ''DocDecl )
+-- $( derive makeJSON ''HsQuasiQuote )
+-- $( derive makeJSON ''SpliceDecl )
+-- $( derive makeJSON ''AnnDecl )
+-- $( derive makeJSON ''ForeignDecl )
+-- $( derive makeJSON ''Sig )
+-- $( derive makeJSON ''DerivDecl )
+-- $( derive makeJSON ''TyClDecl )
+--      
+-- $( derive makeJSON ''NewOrData )
+-- $( derive makeJSON ''HsTyVarBndr )
+-- $( derive makeJSON ''HsPred )
+-- $( derive makeJSON ''HsType )
+-- $( derive makeJSON ''ConDecl )
+-- $( derive makeJSON ''FamilyFlavour )
+-- $( derive makeJSON ''ResType )
+-- $( derive makeJSON ''HsConDetails )
+-- $( derive makeJSON ''HsExplicitFlag )
+-- $( derive makeJSON ''ConDeclField )
+-- $( derive makeJSON ''Boxity )
+-- $( derive makeJSON ''HsSplice )
+-- $( derive makeJSON ''HsBang )
+-- $( derive makeJSON ''IPName )
+-- $( derive makeJSON ''HsExpr )
+--  
+-- $( derive makeJSON ''HsLit)
+-- $( derive makeJSON ''MatchGroup)
+-- $( derive makeJSON ''HsStmtContext)
+-- $( derive makeJSON ''HsBracket)
+-- $( derive makeJSON ''Pat)
+-- $( derive makeJSON ''HsWrapper)
+-- $( derive makeJSON ''HsCmdTop)
+-- $( derive makeJSON ''Fixity)
+-- $( derive makeJSON ''HsArrAppType)
+-- $( derive makeJSON ''ArithSeqInfo)
+-- $( derive makeJSON ''HsRecFields )
+-- $( derive makeJSON ''HsRecField )
+-- $( derive makeJSON ''StmtLR )
+-- $( derive makeJSON ''HsLocalBindsLR )
+-- $( derive makeJSON ''HsTupArg )
+-- $( derive makeJSON ''HsOverLit )
+-- $( derive makeJSON ''OverLitVal )  
+-- $( derive makeJSON ''HsValBindsLR )
+-- $( derive makeJSON ''HsIPBinds )
+-- $( derive makeJSON ''IPBind ) 
+-- $( derive makeJSON ''FixitySig ) 
+-- $( derive makeJSON ''InlinePragma ) 
+-- $( derive makeJSON ''Match ) 
+-- $( derive makeJSON ''Activation )
+-- $( derive makeJSON ''RuleMatchInfo )
+-- $( derive makeJSON ''InlineSpec )
+-- $( derive makeJSON ''RecFlag )
+-- $( derive makeJSON ''GRHSs )
+-- $( derive makeJSON ''GRHS )
+-- $( derive makeJSON ''FixityDirection )
+-- $( derive makeJSON ''EvTerm )
+-- $( derive makeJSON ''TcEvBinds )
+-- $( derive makeJSON ''ForeignExport )
+-- $( derive makeJSON ''ForeignImport )
+-- $( derive makeJSON ''HsMatchContext )
+-- $( derive makeJSON ''HsGroup )
+-- $( derive makeJSON ''CExportSpec )
+-- $( derive makeJSON ''CImportSpec )
+-- $( derive makeJSON ''CCallConv )
+-- $( derive makeJSON ''CCallTarget )
+-- $( derive makeJSON ''EvBind )
+-- $( derive makeJSON ''Safety )
+-- $( derive makeJSON ''AnnProvenance )
+-- $( derive makeJSON ''RuleBndr )
+-- $( derive makeJSON ''TcSpecPrags )
+-- $( derive makeJSON ''TcSpecPrag )
+--
+--instance (JSON a)=> JSON (IE a)
+--        where
+--            showJSON= showJSON . ieName 
+--      
+-- {--
+--         p <- parseModule modSum
+--        t <- typecheckModule p
+--        d <- desugarModule t
+--        l <- loadModule d
+--        n <- getNamesInScope
+--        c <- return $ coreModule d
+-- 
+--        g <- getModuleGraph
+--        mapM showModule g     
+--        return $ (parsedSource d,"/n-----/n",  typecheckedSource d)
+--        --} 
+--        
+--{--
+--instance ToJSON SrcLoc
+--        where toJSON src 
+--                | isGoodSrcLoc src =object [(pack $ unpackFS $ srcLocFile src) .= (Array $ fromList [toJSON $ srcLocLine src,toJSON $ srcLocCol src]) ]
+--                | otherwise = Null
+--        
+--instance ToJSON SrcSpan
+--        where toJSON src 
+--                | isGoodSrcSpan src=object [(pack $ unpackFS $ srcSpanFile src) .= (Array $ fromList [toJSON $ srcSpanStartLine src,toJSON $ srcSpanStartCol src,toJSON $ srcSpanEndLine src,toJSON $ srcSpanEndCol src]) ]
+--                | otherwise = Null
+--                        
+--instance(ToJSON a)=> ToJSON (Located a)
+--        where toJSON (L s o)=case toJSON o of
+--                Object o->Object (M.insert "Loc" (toJSON s) o)
+--                Null -> Null
+--                v->object ["Loc" .= (toJSON s),"Object" .= v]
+--
+--instance (ToJSON a, OutputableBndr a)=> ToJSON (HsModule a)
+--        where toJSON hsm=object ["ModName" .= (toJSON $ hsmodName hsm),
+--                "Exports" .= (toJSON $ hsmodExports hsm),
+--                "Imports" .= (toJSON $ hsmodImports hsm),
+--                "Decls" .= (toJSON $  hsmodDecls hsm)
+--                ]
+--
+--instance ToJSON FastString
+--        where toJSON=toJSON . pack . unpackFS
+--       
+--instance ToJSON ModuleName
+--        where toJSON=toJSON . moduleNameString
+--        
+--instance ToJSON OccName
+--        where toJSON=toJSON . showSDocDump . ppr
+--        
+--instance ToJSON RdrName
+--        where 
+--                toJSON (Unqual on) = Array $ fromList [toJSON on]
+--                toJSON (Qual mn on)  = Array $ fromList [toJSON mn,toJSON on]
+--
+--instance (ToJSON a)=> ToJSON (IE a)
+--        where
+--            toJSON= toJSON . ieName --}
+--            {--toJSON (IEVar name)= object ["IEVar" .= toJSON name]      
+--            toJSON (IEThingAbs name)=object ["IEThingAbs" .= toJSON name]      
+--            toJSON (IEThingAll name)= object ["IEThingAll" .= toJSON name]      
+--            toJSON (IEThingWith name ns)= object ["IEVar" .= toJSON name]      
+--            toJSON (IEModuleContents mn)= object ["IEModuleContents" .= toJSON name]      
+--            toJSON (IEGroup i hds)= object ["IEVar" .= toJSON hds]      
+--            toJSON (IEDoc hds)=  object ["IEDoc" .= toJSON hds]      
+--            toJSON (IEDocNamed s)= object ["IEDocNamed" .= toJSON s]      --}
+--{-- 
+--instance (ToJSON a)=> ToJSON (ImportDecl a)
+--        where
+--            toJSON imd=object ["ModName" .= toJSON (ideclName imd),
+--                "PackageQualified" .= toJSON (ideclPkgQual imd),
+--                "Source" .= toJSON (ideclSource imd),
+--                "Qualified" .= toJSON (ideclQualified imd),
+--                "As" .= toJSON (ideclAs imd),
+--                "Hiding" .= toJSON (ideclHiding imd)
+--                ]
+--
+--instance (ToJSON a, OutputableBndr a)=> ToJSON (HsDecl a)
+--        where toJSON =toJSON . showSDocDump . ppr
+--        
+--        --}

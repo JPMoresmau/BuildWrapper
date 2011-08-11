@@ -53,6 +53,8 @@ tokens
 
 occurences: use existing code
 	- or for performance, code in Eclipse (do not call executable)
+		beware the differences between token types and tokens! We do not get the token contents with just toekn types
+		
 
 thingAtPoint
 	requires getAST from GHC -> typechecked
@@ -69,6 +71,8 @@ outline
 		- much smaller size of JSON passed back
 		- can deal with haskell-src-exts data instead of JSON...
 
+namesInScope?
+
 find available imports
 	lists all available symbols from modules (except modules after it in the dependency chain)
 	lists all available symbols from other packages
@@ -78,6 +82,9 @@ writeFileContents
 	take file name and string contents
 	write into temp folder
 	-> build
+	*** Of course in Eclipse we can just write the file ourselves (expose getTargetPath?) so we don't have to pass the file contents to executable
+			Just write the file in target, then call build/outline/tokens (even in parallel, by the way)
+	
 
 test
 	parse Cabal results...

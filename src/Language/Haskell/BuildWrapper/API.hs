@@ -3,25 +3,16 @@ module Language.Haskell.BuildWrapper.API where
 
 import Language.Haskell.BuildWrapper.Base
 import Language.Haskell.BuildWrapper.Cabal
-import Language.Haskell.BuildWrapper.GHC
+import qualified Language.Haskell.BuildWrapper.GHC as BwGHC
 import Language.Haskell.BuildWrapper.Src
 
-
-
 import Control.Monad.State
-
 import Language.Haskell.Exts.Annotated
-
 import Language.Preprocessor.Cpphs
-
-
 import Data.Maybe
-
-
 import System.FilePath
-
-
-
+import GHC (TypecheckedSource)
+import Outputable
 
 --class ToBWNote a where
 --        toBWNote :: a -> BWNote
@@ -65,9 +56,8 @@ configure which= do
         (mlbi,msgs)<-cabalConfigure which
         return $ (isJust mlbi,msgs)
 
-build :: BuildWrapper (OpResult Bool)
-build = do
-        cabalBuild
+build :: Bool -> BuildWrapper (OpResult Bool)
+build = cabalBuild
 --        (bool,bwns)<-configure
 --        if bool
 --                then do
@@ -97,7 +87,6 @@ preproc cbi tgt= do
 
 getAST :: FilePath -> BuildWrapper (OpResult (Maybe (ParseResult (Module SrcSpanInfo, [Comment]))))
 getAST fp = do
-
         (mcbi,bwns)<-getBuildInfo fp
         case mcbi of
                 Just(cbi)->do
@@ -107,6 +96,32 @@ getAST fp = do
                         input<-liftIO $ preproc (snd cbi) tgt
                         pr<- liftIO $ getHSEAST input modS opts
                         --let json=makeObj  [("parse" , (showJSON $ pr))]
+                        return (Just pr,bwns)
+                Nothing-> return (Nothing,bwns)
+
+getGHCAST :: FilePath -> BuildWrapper (OpResult (Maybe TypecheckedSource))
+getGHCAST fp = do
+        (mcbi,bwns)<-getBuildInfo fp
+        case mcbi of
+                Just(cbi)->do
+                        let (modName,opts)=cabalExtensions $ snd  cbi
+                        let (_,opts2)=fileGhcOptions cbi
+                        tgt<-getTargetPath fp
+                        let modS=moduleToString modName
+                        pr<- liftIO $ BwGHC.getAST tgt modS (opts++opts2)
+                        return (Just pr,bwns)
+                Nothing-> return (Nothing,bwns)
+
+withGHCAST :: FilePath -> (FilePath -> String -> [String] -> IO a) -> BuildWrapper (OpResult (Maybe a))
+withGHCAST fp f= do
+        (mcbi,bwns)<-getBuildInfo fp
+        case mcbi of
+                Just(cbi)->do
+                        let (modName,opts)=cabalExtensions $ snd  cbi
+                        let (_,opts2)=fileGhcOptions cbi
+                        tgt<-getTargetPath fp
+                        let modS=moduleToString modName
+                        pr<- liftIO $ f tgt modS (opts++opts2)
                         return (Just pr,bwns)
                 Nothing-> return (Nothing,bwns)
 
@@ -127,8 +142,36 @@ getTokenTypes fp=do
                         let (_,opts)=cabalExtensions $ snd  cbi
                         tgt<-getTargetPath fp
                         input<-liftIO $ readFile tgt
-                        ett<-liftIO $ tokenTypesArbitrary tgt input (".lhs" == (takeExtension fp)) opts
+                        ett<-liftIO $ BwGHC.tokenTypesArbitrary tgt input (".lhs" == (takeExtension fp)) opts
                         case ett of
                                 Right tt->return (tt,bwns)
                                 Left bw -> return ([],bw:bwns)
                 Nothing-> return ([],bwns)
+                
+getOccurrences :: FilePath -> String -> BuildWrapper (OpResult [TokenDef])
+getOccurrences fp query=do
+        (mcbi,bwns)<-getBuildInfo fp
+        case mcbi of
+                Just(cbi)->do
+                        let (_,opts)=cabalExtensions $ snd  cbi
+                        tgt<-getTargetPath fp
+                        input<-liftIO $ readFile tgt
+                        ett<-liftIO $ BwGHC.occurrences tgt input query (".lhs" == (takeExtension fp)) opts
+                        case ett of
+                                Right tt->return (tt,bwns)
+                                Left bw -> return ([],bw:bwns)
+                Nothing-> return ([],bwns)
+
+getThingAtPoint :: FilePath -> Int -> Int -> BuildWrapper (OpResult [String])
+getThingAtPoint fp line col=do
+        (mts,bwns)<-getGHCAST fp
+        case mts of
+                Just ts->do
+                        liftIO $ putStrLn "ghc ast ok"
+                        let ls=BwGHC.getThingAtPoint ts line col
+                        liftIO $ putStrLn $ show $ length ls
+                        return (ls ,bwns)
+                _ -> return ([],bwns)
+                
+getNamesInScope :: FilePath-> BuildWrapper (OpResult (Maybe [String]))
+getNamesInScope fp=withGHCAST fp BwGHC.getGhcNamesInScope

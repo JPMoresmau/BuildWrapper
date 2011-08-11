@@ -68,8 +68,8 @@ getFilesToCopy =do
         --}
     
 
-cabalBuild :: BuildWrapper(OpResult Bool)
-cabalBuild = do
+cabalBuild :: Bool -> BuildWrapper(OpResult Bool)
+cabalBuild output= do
         cf<-getCabalFile Target
         cp<-gets cabalPath
         v<-gets cabalVerbosity
@@ -78,9 +78,12 @@ cabalBuild = do
         let args=[
                 "build",
                 "--verbose="++(show $ fromEnum v),
-                "--builddir="++dist_dir,
-                "--ghc-option=-c"
-                ]
+                "--builddir="++dist_dir
+                
+                ] ++ (if output 
+                        then ["--ghc-option=-c"]
+                        else [])
+                
         liftIO $ do
                 cd<-getCurrentDirectory
                 setCurrentDirectory (takeDirectory cf)
