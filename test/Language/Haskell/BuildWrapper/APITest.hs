@@ -19,6 +19,8 @@ import System.FilePath
 import Control.Monad
 import Control.Monad.State
 
+import System.Time
+
 apiTests::Test
 apiTests=TestList[
 --        testSynchronizeAll,testConfigureWarnings,testConfigureErrors,
@@ -26,8 +28,8 @@ apiTests=TestList[
 --        testAST,
 --        testOutline,testOutlinePreproc,
 --        testPreviewTokenTypes,
---        testThingAtPoint,
-        testNamesInScope
+        testThingAtPoint --,
+--        testNamesInScope
         ]
 
 testSynchronizeAll :: Test
@@ -390,9 +392,19 @@ testThingAtPoint = TestLabel "testThingAtPoint" (TestCase ( do
                   "module Main where",
                   "main=return $ map id \"toto\""
                   ] 
-        (tts,nsErrors1)<-runAPI root $ getThingAtPoint rel 2 16
-        putStrLn $ show tts
-        assertBool ("errors or warnings on getThingAtPoint:"++show nsErrors1) (null nsErrors1)
+        --(tap1,nsErrors1)<-runAPI root $ getThingAtPoint rel 2 16 True True
+        --assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors1) (null nsErrors1)
+        --assertEqual "not just typed qualified" (Just "GHC.Base.map :: forall a b.\n                (a -> b) -> [a] -> [b] GHC.Types.Char GHC.Types.Char") tap1
+        --(tap2,nsErrors2)<-runAPI root $ getThingAtPoint rel 2 16 False True
+        --assertBool ("errors or warnings on getThingAtPoint2:"++show nsErrors2) (null nsErrors2)
+        --assertEqual "not just typed unqualified" (Just "map :: forall a b. (a -> b) -> [a] -> [b] Char Char") tap2
+        (tap3,nsErrors3)<-runAPI root $ getThingAtPoint rel 2 16 True False
+        assertBool ("errors or warnings on getThingAtPoint3:"++show nsErrors3) (null nsErrors3)
+        assertEqual "not just untyped qualified" (Just "GHC.Base.map v") tap3
+       
+        --(tap4,nsErrors4)<-runAPI root $ getThingAtPoint rel 2 16 False False
+        --assertBool ("errors or warnings on getThingAtPoint4:"++show nsErrors4) (null nsErrors4)
+        --assertEqual "not just untyped unqualified" (Just "map v") tap4
         
         )) 
 
@@ -408,7 +420,10 @@ testNamesInScope = TestLabel "testNamesInScope" (TestCase ( do
                   "main=return $ map id \"toto\""
                   ] 
         runAPI root $ build True
+        c1<-getClockTime
         (mtts,nsErrors1)<-runAPI root $ getNamesInScope rel
+        c2<-getClockTime
+        putStrLn ("testNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
         assertBool ("errors or warnings on getNamesInScope:"++show nsErrors1) (null nsErrors1)
         assertBool "getNamesInScope not just" (isJust mtts)
         let tts=fromJust mtts

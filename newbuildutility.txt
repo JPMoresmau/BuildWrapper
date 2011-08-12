@@ -46,7 +46,7 @@ getAST
 		- parseFileWithExts -> use extensions from all possible cabal components?
 			- determine cabal components from cabal files (file name -> module)
 
-tokens
+tokenTypes
 	- current scion code, lexing synchronized file
 	- need to transform file to remove preprocessing
 	- reuse a scion server?
@@ -72,11 +72,21 @@ outline
 		- can deal with haskell-src-exts data instead of JSON...
 
 namesInScope?
+	GHC API names in scope -> requires typechecked module
+		- provide correct module with only imports -> always correct, only to get names?
+			- we could add a loop: generate module with only imports, if error then get line and remove imports
+	Use haskell-src-exts to get top level declarations 
+		- use outline
+	Then we could just ignore GHC and use outline for declarations and scion-browser for other imports?
+		- but scion-browser doesn't know about our own project declarations 
+
+tokens (preceding,etc): still needed? 
 
 find available imports
 	lists all available symbols from modules (except modules after it in the dependency chain)
 	lists all available symbols from other packages
 	???
+	scion-browser gives us that
 
 writeFileContents
 	take file name and string contents
@@ -89,4 +99,23 @@ writeFileContents
 test
 	parse Cabal results...
 
-		
+	
+
+architecture:
+synchronize, configure, build, tokens, occurences, outline: single invocation of process: buildwrapper <command> <cabalfile> <filepath> <options>
+thingAtPoint, namesInScope: start a buildwrapper server  (IF PERF IS NOT GOOD ENOUGH VIA SINGLE INVOCATION) 
+		buildwrapper start <cabalfile>
+			load <filepath>
+			getNamesInScope
+			getThingAtPoint <line> <col>
+	- one server per opened editor file
+	- reload module when synchronized
+	- stop and restart server when cabal file changes	
+	- what about dependent modules?? can we find when they're modified and reload?
+	
+when an editor is saved:
+	- save contents to temp file in distbuildwrapper folder or call synchronize <filepath>
+	- call build False
+	- reload corresponding buildwrapper server
+	- call a reload on dependent buildwrapper servers
+		the "load" method of the buildwrapper server returns modules we depend on? -> "when one of them changes, reload me!"

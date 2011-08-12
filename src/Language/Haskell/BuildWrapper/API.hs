@@ -162,16 +162,17 @@ getOccurrences fp query=do
                                 Left bw -> return ([],bw:bwns)
                 Nothing-> return ([],bwns)
 
-getThingAtPoint :: FilePath -> Int -> Int -> BuildWrapper (OpResult [String])
-getThingAtPoint fp line col=do
-        (mts,bwns)<-getGHCAST fp
-        case mts of
-                Just ts->do
-                        liftIO $ putStrLn "ghc ast ok"
-                        let ls=BwGHC.getThingAtPoint ts line col
-                        liftIO $ putStrLn $ show $ length ls
-                        return (ls ,bwns)
-                _ -> return ([],bwns)
+getThingAtPoint :: FilePath -> Int -> Int -> Bool -> Bool -> BuildWrapper (OpResult (Maybe String))
+getThingAtPoint fp line col qual typed=do
+        withGHCAST fp $ BwGHC.getThingAtPoint line col qual typed
+--        (mts,bwns)<-getGHCAST fp
+--        case mts of
+--                Just ts->do
+--                        liftIO $ putStrLn "ghc ast ok"
+--                        let ls=BwGHC.getThingAtPoint ts line col
+--                        liftIO $ putStrLn $ show $ length ls
+--                        return (ls ,bwns)
+--                _ -> return ([],bwns)
                 
 getNamesInScope :: FilePath-> BuildWrapper (OpResult (Maybe [String]))
 getNamesInScope fp=withGHCAST fp BwGHC.getGhcNamesInScope

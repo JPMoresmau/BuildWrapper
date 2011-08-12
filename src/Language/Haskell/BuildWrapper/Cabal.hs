@@ -22,7 +22,7 @@ import System.Directory
 import System.Exit
 import System.FilePath
 import System.Process
--- import System.Time
+import System.Time
 
 
 getFilesToCopy :: BuildWrapper(OpResult [FilePath])
@@ -121,11 +121,11 @@ cabalConfigure srcOrTgt= do
         liftIO $ do
                 cd<-getCurrentDirectory
                 setCurrentDirectory (takeDirectory cf)
-                --c1<-getClockTime
+                c1<-getClockTime
                 --putStrLn "cabal configure start"
                 (ex,_,err)<-readProcessWithExitCode cp args ""
-                --c2<-getClockTime
-                --putStrLn ("cabal configure end" ++ (timeDiffToString  $ diffClockTimes c2 c1))
+                c2<-getClockTime
+                putStrLn ("cabal configure end: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
                 --putStrLn err
                 let msgs=(parseCabalMessages (takeFileName cf) err) -- ++ (parseCabalMessages (takeFileName cf) out)
                 ret<-case ex of
@@ -173,16 +173,21 @@ cabalInit srcOrTgt= do
    let setup_config = DSC.localBuildInfoFile dist_dir
    conf'd <- liftIO $ doesFileExist setup_config
    if not conf'd 
-        then cabalConfigure srcOrTgt
+        then do
+                liftIO $ putStrLn "configuring because setup_config not present"
+                cabalConfigure srcOrTgt
         else do
              cabal_time <- liftIO $ getModificationTime cabal_file
              conf_time <- liftIO $ getModificationTime setup_config
-             if cabal_time >= conf_time 
-                then cabalConfigure srcOrTgt
+             if cabal_time > conf_time 
+                then do
+                        liftIO $ putStrLn "configuring because setup_config too old"
+                        cabalConfigure srcOrTgt
                 else do
-                        mb_lbi <- liftIO $ DSC.maybeGetPersistBuildConfig setup_config
+                        mb_lbi <- liftIO $ DSC.maybeGetPersistBuildConfig dist_dir
                         case mb_lbi of
                           Nothing -> do
+                            liftIO $ putStrLn "configuring because persist build config not present"
                             cabalConfigure srcOrTgt
                           Just _lbi -> do
                             return $ (Just _lbi,[])

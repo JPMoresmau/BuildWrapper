@@ -1,7 +1,8 @@
-{-# LANGUAGE CPP, OverloadedStrings, TemplateHaskell, TypeSynonymInstances,StandaloneDeriving,DeriveDataTypeable,ScopedTypeVariables,TypeFamilies,RankNTypes  #-}
+{-# LANGUAGE CPP, OverloadedStrings, TemplateHaskell, TypeSynonymInstances,StandaloneDeriving,DeriveDataTypeable,ScopedTypeVariables,TypeFamilies,RankNTypes, FlexibleContexts  #-}
 module Language.Haskell.BuildWrapper.GHC where
 
 import Language.Haskell.BuildWrapper.Base hiding (Target)
+import Language.Haskell.BuildWrapper.Find
 
 import Control.Monad
 import Control.Monad.State
@@ -9,7 +10,7 @@ import Control.Monad.State
 import Text.JSON
 import Data.DeriveTH
 import Data.Derive.JSON
-import Data.Generics hiding (Fixity)
+import Data.Generics hiding (Fixity, typeOf)
 import qualified Data.Map as M (insert)
 import Data.Maybe
 --import Data.Text hiding (map,head,drop,filter,last,reverse,unlines)
@@ -28,6 +29,8 @@ import Outputable
 import FastString (FastString,unpackFS,concatFS,fsLit,mkFastString)
 import ForeignCall
 import Lexer
+import Name
+import PprTyThing ( pprTypeForUser )
 import UniqFM
 import UniqSet
 import OccName
@@ -39,12 +42,17 @@ import StringBuffer
 #endif
 
 import System.FilePath
+import System.Time
+--import Unsafe.Coerce
 
+import qualified MonadUtils as GMU
 
 getAST :: FilePath -> String -> [String] -> IO TypecheckedSource
-getAST =withAST (return)
+getAST =withAST (\t -> do
+        return $ tm_typechecked_source t
+        )
    
-withAST ::  (TypecheckedSource -> Ghc a) -> FilePath -> String -> [String] -> IO a
+withAST ::  (TypecheckedModule -> Ghc a) -> FilePath -> String -> [String] -> IO a
 withAST f fp mod options=do
     putStrLn $ show options
     let lflags=map noLoc options
@@ -54,15 +62,21 @@ withAST f fp mod options=do
         (flg', _, _) <- parseDynamicFlags flg _leftovers
         setSessionDynFlags flg'  { ghcLink = LinkInMemory, ghcMode = OneShot }
         addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }
+        c1<-GMU.liftIO getClockTime
         load LoadAllTargets
+        c2<-GMU.liftIO getClockTime
+        GMU.liftIO $ putStrLn ("load all targets: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
         modSum <- getModSummary $ mkModuleName mod
         p <- parseModule modSum
         --return $ showSDocDump $ ppr $ pm_mod_summary p
         t <- typecheckModule p
-        d <- desugarModule t
-        l <- loadModule d
+        --d <- desugarModule t
+        l <- loadModule t
+        c3<-GMU.liftIO getClockTime
         setContext [ms_mod modSum] []
-        f $ tm_typechecked_source t
+        GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
+        f l
+        --f $ tm_typechecked_source t
         --return $ showSDocDump $ ppr $ pm_parsed_source p
         --return $ showSDocDump $ ppr $ tm_typechecked_source t
     --return  $ makeObj  [("parse" , (showJSON $ tm_typechecked_source t))]
@@ -70,8 +84,56 @@ withAST f fp mod options=do
    
 getGhcNamesInScope  :: FilePath -> String -> [String] -> IO [String]
 getGhcNamesInScope=withAST (\_->do
+        c1<-GMU.liftIO getClockTime
         names<-getNamesInScope
+        c2<-GMU.liftIO getClockTime
+        GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
         return $ map (showSDocDump . ppr ) names)
+   
+getThingAtPoint :: Int -> Int -> Bool -> Bool -> FilePath -> String -> [String] -> IO String
+getThingAtPoint line col qual typed fp = withAST (\tcm->do
+      let loc = srcLocSpan $ mkSrcLoc (fsLit fp) line (scionColToGhcCol col)
+      uq<-unqualifiedForModule tcm
+      let f=(if typed then (doThingAtPointTyped $ typecheckedSource tcm) else (doThingAtPointUntyped $ renamedSource tcm))
+      --tap<- doThingAtPoint loc qual typed tcm (if typed then (typecheckedSource tcm) else (renamedSource tcm))
+      let tap=f loc qual tcm uq
+      --(if typed then (doThingAtPointTyped $ typecheckedSource tcm)
+      -- else doThingAtPointTyped (renamedSource tcm) loc qual tcm
+      return tap) fp
+      where
+            doThingAtPointTyped :: TypecheckedSource -> SrcSpan -> Bool -> TypecheckedModule -> PrintUnqualified -> String
+            doThingAtPointTyped src loc qual tcm uq=let
+                    in_range = overlaps loc
+                    r = searchBindBag in_range noSrcSpan src
+                    unqual = if qual
+                        then alwaysQualify
+                        else uq
+                    --liftIO $ putStrLn $ showData TypeChecker 2 src
+                    in case pathToDeepest r of
+                      Nothing -> "no info"
+                      Just (x,xs) ->
+                        case typeOf (x,xs) of
+                          Just t ->
+                              showSDocForUser unqual
+                                (prettyResult x <+> dcolon <+>
+                                  pprTypeForUser True t)
+                          _ -> showSDocForUser unqual (prettyResult x) --(Just (showSDocDebug (ppr x $$ ppr xs )))
+            doThingAtPointUntyped :: (Search id a, OutputableBndr id) => a -> SrcSpan -> Bool -> TypecheckedModule  -> PrintUnqualified -> String
+            doThingAtPointUntyped src loc qual tcm uq=let
+                    in_range = overlaps loc
+                    r = findHsThing in_range src
+                    unqual = if qual
+                        then neverQualify
+                        else uq
+                    in case pathToDeepest r of
+                      Nothing -> "no info"
+                      Just (x,_) ->
+                        if qual
+                                then showSDocForUser unqual ((qualifiedResult x) <+> (text $ haddockType x))
+                                else showSDocForUser unqual ((prettyResult x) <+> (text $ haddockType x))   
+   
+unqualifiedForModule :: TypecheckedMod m => m -> Ghc PrintUnqualified
+unqualifiedForModule tcm =fromMaybe alwaysQualify `fmap` mkPrintUnqualifiedForModule (moduleInfo tcm)   
    
 --data S a=S String    
 --    
@@ -113,19 +175,36 @@ getGhcNamesInScope=withAST (\_->do
 --                        then Just $ show t
 --                        else Nothing
 
-getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
-getThingAtPoint ts line col= []
---everything (++) ([] `mkQ` overlap) ts
+--newtype C a = C a deriving (Data,Typeable)
+--
+----getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
+--
+--coerce :: a -> C a
+--coerce = unsafeCoerce
+--uncoerce :: C a -> a
+--uncoerce = unsafeCoerce
+--
+--fmapData :: forall t a b. (Typeable a, Data (t (C a)), Data (t a)) =>
+--    (a -> b) -> t a -> t b
+--fmapData f input = uc . everything (++) ([] `mkQ` (\(x::C a) -> [coerce (f (uncoerce x))]))
+--                    $ (coerce input)
+--    where uc = unsafeCoerce
+--
+--getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
+--getThingAtPoint ts line col= --map unLoc $ filter (\(L _ o)->not $ null o) $ fmapData overlap (bagToList ts)
+--        map unLoc $ filter (\(L _ o)->not $ null o) $  everything (++) ([] `mkQ` overlap) (bagToList ts)
 --   where 
---        overlap :: forall b1 . (Outputable b1, Typeable b1) =>Located b1  -> [String]
---        overlap (a::Located b1)= let
---                (L loc o)=a
+--        --overlap :: forall b1 . (Outputable b1, Typeable b1) =>Located b1  -> Located String
+--        overlap :: Located (HsBindLR Id Id)  -> [Located String]
+--        overlap (L loc o)= let
 --                st=srcSpanStart loc
 --                en=srcSpanEnd loc
 --                in if (isGoodSrcLoc st) && (isGoodSrcLoc en) && ((srcLocLine st) <= line) && ((srcLocCol st) <=col) && ((srcLocLine en) >= line) && ((srcLocCol en) >=col)
---                        then [showSDocDump $ ppr o]
+--                        then [L loc $ showSDocDump $ ppr o]
 --                        else []
-   
+--   
+-- [showData TypeChecker 4 ts]
+
 
 --getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
 --getThingAtPoint ts line col= map pr lf
