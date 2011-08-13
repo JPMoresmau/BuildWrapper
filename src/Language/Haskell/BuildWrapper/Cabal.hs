@@ -5,17 +5,18 @@ import Language.Haskell.BuildWrapper.Base
 
 import Control.Monad.State
 
+
 import Data.Char
 import Data.List
 import Data.Maybe
+
 
 import Distribution.ModuleName
 import Distribution.PackageDescription (exposedModules, otherModules,library,executables,testSuites,Library,hsSourceDirs,libBuildInfo,Executable(..),exeName,modulePath,buildInfo,TestSuite(..),testName,TestSuiteInterface(..),testInterface,testBuildInfo,BuildInfo,cppOptions,defaultExtensions,otherExtensions,oldExtensions )
 import Distribution.Simple.GHC
 import Distribution.Simple.LocalBuildInfo                         
 import qualified Distribution.Simple.Configure as DSC
-
-
+import qualified Distribution.Verbosity as V
 import Text.Regex.TDFA
 
 import System.Directory
@@ -67,12 +68,21 @@ getFilesToCopy =do
         copyFiles mods dirs=[d </> m  | m<-mods, d<-dirs]
         --}
     
+cabalV :: BuildWrapper (V.Verbosity)
+cabalV =do
+        v<-gets verbosity
+        return $ toCabalV v
+        where 
+                toCabalV Silent =V.silent
+                toCabalV Normal =V.normal
+                toCabalV Verbose =V.verbose
+                toCabalV Deafening =V.deafening
 
 cabalBuild :: Bool -> BuildWrapper(OpResult Bool)
 cabalBuild output= do
         cf<-getCabalFile Target
         cp<-gets cabalPath
-        v<-gets cabalVerbosity
+        v<-cabalV
         dist_dir<-getDistDir
        
         let args=[
@@ -102,7 +112,7 @@ cabalConfigure :: WhichCabal-> BuildWrapper (OpResult (Maybe LocalBuildInfo))
 cabalConfigure srcOrTgt= do
         cf<-getCabalFile srcOrTgt
         cp<-gets cabalPath
-        v<-gets cabalVerbosity
+        v<-cabalV
         dist_dir<-getDistDir
        
         let args=[
@@ -214,18 +224,18 @@ parseCabalMessages cf s=let
         where 
                 parseCabalLine :: (Maybe (BWNote,[String]),[BWNote]) -> String ->(Maybe (BWNote,[String]),[BWNote])
                 parseCabalLine (currentNote,ls) l 
-                        | isPrefixOf "Error:" l=(Nothing,ls++[BWNote BWError (dropWhile isSpace $ drop 6 l) "" (BWLocation cf 1 1)])
+                        | isPrefixOf "Error:" l=(Nothing,ls++[BWNote BWError (dropWhile isSpace $ drop 6 l) (BWLocation cf 1 1)])
                         | isPrefixOf "Warning:" l=let
                                 msg=(dropWhile isSpace $ drop 8 l)
                                 msg2=if isPrefixOf cf msg
                                         then dropWhile isSpace $ drop ((length cf) + 1) msg
                                         else msg
-                                in (Nothing,ls++[BWNote BWWarning msg2 "" (BWLocation cf (extractLine  msg2) 1)])
+                                in (Nothing,ls++[BWNote BWWarning msg2 (BWLocation cf (extractLine  msg2) 1)])
                         | isPrefixOf "cabal:" l=
                                 let 
                                         s2=(dropWhile isSpace $ drop 6 l)
                                 in if isPrefixOf "At least the following" s2
-                                                then (Just $ (BWNote BWError "" "" (BWLocation cf 1 1),[s2]),ls)
+                                                then (Just $ (BWNote BWError "" (BWLocation cf 1 1),[s2]),ls)
                                                 else 
                                                         let
                                                                 (loc,rest)=span (/= ':') s2
@@ -234,7 +244,7 @@ parseCabalMessages cf s=let
                                                                         else 
                                                                                 let (line',msg')=span (/= ':') (tail rest)
                                                                                 in (loc,line',tail msg')
-                                                        in (Nothing,ls++[BWNote BWError (dropWhile isSpace msg) "" (BWLocation realloc (read line) 1)])
+                                                        in (Nothing,ls++[BWNote BWError (dropWhile isSpace msg) (BWLocation realloc (read line) 1)])
                         | Just (jcn,msgs)<-currentNote=
                                 if (not $ null l)
                                         then (Just (jcn,l:msgs),ls)
@@ -264,7 +274,7 @@ parseBuildMessages s=let
                 extractLocation el=let
                         (_,_,aft,ls)=el =~ "([^:]+):([0-9]+):([0-9]+):" :: (String,String,String,[String])   
                         in case ls of
-                                (loc:line:col:[])-> (Just $ BWNote BWError (dropWhile isSpace aft) "" (BWLocation loc (read line) (read col)))
+                                (loc:line:col:[])-> (Just $ BWNote BWError (dropWhile isSpace aft) (BWLocation loc (read line) (read col)))
                                 _ -> Nothing
 
 makeNote :: BWNote  -> [String] ->BWNote
@@ -349,3 +359,15 @@ getAllFiles lbi= do
         
 moduleToString :: ModuleName -> String
 moduleToString = concat . intersperse ['.'] . components
+
+
+
+--class ToBWNote a where
+--        toBWNote :: a -> BWNote
+
+--peErrorToBWNote :: FilePath -> PError -> BWNote
+--peErrorToBWNote cf (AmbigousParse t ln)= BWNote BWError "AmbigousParse" t (BWLocation cf ln 1)
+--peErrorToBWNote cf (NoParse t ln)      = BWNote BWError "NoParse" t (BWLocation cf ln 1)
+--peErrorToBWNote cf (TabsError ln)      = BWNote BWError "TabsError" "" (BWLocation cf ln 1)    
+--peErrorToBWNote cf (FromString t mln)  = BWNote BWError "FromString" t (BWLocation cf (fromMaybe 1 mln) 1)    
+

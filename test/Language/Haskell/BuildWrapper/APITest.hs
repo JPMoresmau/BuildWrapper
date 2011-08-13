@@ -1,16 +1,12 @@
-
+{-# LANGUAGE OverloadedStrings #-}
 module Language.Haskell.BuildWrapper.APITest where
 
 import Language.Haskell.BuildWrapper.Base
 import Language.Haskell.BuildWrapper.API
 
 import Data.Maybe
+import Data.Aeson
 
-
-import Text.JSON
-
-import qualified Distribution.Verbosity as V 
-                        ( normal )
 import Test.HUnit
 
 import System.Directory
@@ -23,13 +19,13 @@ import System.Time
 
 apiTests::Test
 apiTests=TestList[
---        testSynchronizeAll,testConfigureWarnings,testConfigureErrors,
---        testBuildErrors,testBuildWarnings,
+        testSynchronizeAll,testConfigureWarnings,testConfigureErrors,
+        testBuildErrors,testBuildWarnings,
 --        testAST,
---        testOutline,testOutlinePreproc,
---        testPreviewTokenTypes,
-        testThingAtPoint --,
---        testNamesInScope
+        testOutline,testOutlinePreproc,
+        testPreviewTokenTypes,
+        testThingAtPoint,
+        testNamesInScope
         ]
 
 testSynchronizeAll :: Test
@@ -52,7 +48,7 @@ testConfigureErrors = TestLabel "testConfigureErrors" (TestCase ( do
         (boolNoCabal,nsNoCabal)<-runAPI root $ configure Target
         assertBool ("configure returned true on no cabal") (not boolNoCabal)
         assertEqual ("no errors or warnings on no cabal") 1 (length nsNoCabal)        
-        assertEqual ("wrong error on no cabal") (BWNote BWError "No cabal file found." "" (BWLocation "" 0 1)) (head nsNoCabal)   
+        assertEqual ("wrong error on no cabal") (BWNote BWError "No cabal file found." (BWLocation "" 0 1)) (head nsNoCabal)   
         
         runAPI root synchronize
         (boolOK,nsOK)<-runAPI root $ configure Target
@@ -67,8 +63,8 @@ testConfigureErrors = TestLabel "testConfigureErrors" (TestCase ( do
         assertBool ("bool1 returned true") (not bool1)
         assertEqual "no errors on no name" 2 (length nsErrors1)
         let (nsError1:nsError2:[])=nsErrors1
-        assertEqual "not proper error 1" (BWNote BWError "No 'name' field." "" (BWLocation cfn 1 1)) nsError1
-        assertEqual "not proper error 2" (BWNote BWError "No executables and no library found. Nothing to do." "" (BWLocation cfn 1 1)) nsError2
+        assertEqual "not proper error 1" (BWNote BWError "No 'name' field." (BWLocation cfn 1 1)) nsError1
+        assertEqual "not proper error 2" (BWNote BWError "No executables and no library found. Nothing to do." (BWLocation cfn 1 1)) nsError2
         writeFile cf $ unlines ["name: 4 P1",
                 "version:0.1",
                 "build-type:     Simple"]
@@ -77,7 +73,7 @@ testConfigureErrors = TestLabel "testConfigureErrors" (TestCase ( do
         assertBool ("bool2 returned true") (not bool2)
         assertEqual "no errors on invalid name" 1 (length nsErrors2)
         let (nsError3:[])=nsErrors2
-        assertEqual "not proper error 3" (BWNote BWError "Parse of field 'name' failed." "" (BWLocation cfn 1 1)) nsError3
+        assertEqual "not proper error 3" (BWNote BWError "Parse of field 'name' failed." (BWLocation cfn 1 1)) nsError3
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.8",
@@ -93,7 +89,7 @@ testConfigureErrors = TestLabel "testConfigureErrors" (TestCase ( do
         assertBool ("bool3 returned true") (not bool3)
         assertEqual "no errors on unknown dependency" 1 (length nsErrors3)
         let (nsError4:[])=nsErrors3
-        assertEqual "not proper error 4" (BWNote BWError "At least the following dependencies are missing:\ntoto -any\n" "" (BWLocation cfn 1 1)) nsError4
+        assertEqual "not proper error 4" (BWNote BWError "At least the following dependencies are missing:\ntoto -any\n" (BWLocation cfn 1 1)) nsError4
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.8",
@@ -109,7 +105,7 @@ testConfigureErrors = TestLabel "testConfigureErrors" (TestCase ( do
         assertBool ("bool4 returned true") (not bool4)
         assertEqual "no errors on unknown dependencies" 1 (length nsErrors4)
         let (nsError5:[])=nsErrors4
-        assertEqual "not proper error 5" (BWNote BWError "At least the following dependencies are missing:\ntiti -any, toto -any\n" "" (BWLocation cfn 1 1)) nsError5
+        assertEqual "not proper error 5" (BWNote BWError "At least the following dependencies are missing:\ntiti -any, toto -any\n" (BWLocation cfn 1 1)) nsError5
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.8",
@@ -124,7 +120,7 @@ testConfigureErrors = TestLabel "testConfigureErrors" (TestCase ( do
         assertBool ("bool5 returned true") (not bool5)
         assertEqual "no errors on no main" 1 (length nsErrors5)
         let (nsError6:[])=nsErrors5
-        assertEqual "not proper error 6" (BWNote BWError "No 'Main-Is' field found for executable BWTest" "" (BWLocation cfn 1 1)) nsError6
+        assertEqual "not proper error 6" (BWNote BWError "No 'Main-Is' field found for executable BWTest" (BWLocation cfn 1 1)) nsError6
         
         ))
         
@@ -148,7 +144,7 @@ testConfigureWarnings = TestLabel "testConfigureWarnings" (TestCase ( do
         (bool1,ns1)<-runAPI root $ configure Target
         assertBool ("returned false") bool1
         let (nsWarning1:[])=ns1
-        assertEqual "not proper warning 1" (BWNote BWWarning "Unknown fields: field1 (line 5)" "" (BWLocation cfn 5 1)) nsWarning1
+        assertEqual "not proper warning 1" (BWNote BWWarning "Unknown fields: field1 (line 5)" (BWLocation cfn 5 1)) nsWarning1
         ))   
         
 testBuildErrors :: Test
@@ -171,7 +167,7 @@ testBuildErrors = TestLabel "testBuildErrors" (TestCase ( do
         assertBool ("returned true on bool1") (not bool1)
         assertBool ("no errors or warnings on nsErrors") (not $ null nsErrors1)
         let (nsError1:[])=nsErrors1
-        assertEqual "not proper error 1" (BWNote BWError "parse error on input `toto'\n" "" (BWLocation rel 2 8)) nsError1
+        assertEqual "not proper error 1" (BWNote BWError "parse error on input `toto'\n" (BWLocation rel 2 8)) nsError1
         -- write file and synchronize
         writeFile (root </> "src"</>"A.hs")$ unlines ["module A where","import Toto","fA=undefined"]
         --runAPI root $ write rel $ unlines ["module A where","import Toto","fA=undefined"]
@@ -181,7 +177,7 @@ testBuildErrors = TestLabel "testBuildErrors" (TestCase ( do
         assertBool ("returned true on bool2") (not bool2)
         assertBool ("no errors or warnings on nsErrors2") (not $ null nsErrors2)
         let (nsError2:[])=nsErrors2
-        assertEqual "not proper error 2" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" "" (BWLocation rel 2 8)) nsError2
+        assertEqual "not proper error 2" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" (BWLocation rel 2 8)) nsError2
         ))        
         
 testBuildWarnings :: Test
@@ -209,31 +205,31 @@ testBuildWarnings = TestLabel "testBuildWarnings" (TestCase ( do
         assertBool ("returned false on bool1") bool1
         assertBool ("no errors or warnings on nsErrors1") (not $ null nsErrors1)
         let (nsError1:nsError2:[])=nsErrors1
-        assertEqual "not proper error 1" (BWNote BWWarning "The import of `Data.List' is redundant\n               except perhaps to import instances from `Data.List'\n             To import instances alone, use: import Data.List()\n" "" (BWLocation rel 2 1)) nsError1
-        assertEqual "not proper error 2" (BWNote BWWarning "Top-level binding with no type signature:\n               fA :: forall a. a\n" "" (BWLocation rel 3 1)) nsError2
+        assertEqual "not proper error 1" (BWNote BWWarning "The import of `Data.List' is redundant\n               except perhaps to import instances from `Data.List'\n             To import instances alone, use: import Data.List()\n" (BWLocation rel 2 1)) nsError1
+        assertEqual "not proper error 2" (BWNote BWWarning "Top-level binding with no type signature:\n               fA :: forall a. a\n" (BWLocation rel 3 1)) nsError2
         
         )) 
         
         
-testAST :: Test
-testAST = TestLabel "testAST" (TestCase ( do
-        root<-createTestProject
-        runAPI root synchronize
-        (boolOKc,nsOKc)<-runAPI root $ configure Target
-        assertBool ("returned false on configure") boolOKc
-        assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
-        
-        (boolOK,nsOK)<-runAPI root $ build False
-        assertBool ("returned false on build") boolOK
-        assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
-        (mast,nsOK2)<-runAPI root $ getAST ("src" </> "A.hs")
-        assertBool ("errors or warnings on getAST:"++show nsOK2) (null nsOK2)
-        case mast of
-                Just ast->do
-                        let json=makeObj  [("parse" , (showJSON $ ast))]
-                        putStrLn $ show $ encode json
-                Nothing -> assertFailure "no ast"
-        ))
+--testAST :: Test
+--testAST = TestLabel "testAST" (TestCase ( do
+--        root<-createTestProject
+--        runAPI root synchronize
+--        (boolOKc,nsOKc)<-runAPI root $ configure Target
+--        assertBool ("returned false on configure") boolOKc
+--        assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
+--        
+--        (boolOK,nsOK)<-runAPI root $ build False
+--        assertBool ("returned false on build") boolOK
+--        assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
+--        (mast,nsOK2)<-runAPI root $ getAST ("src" </> "A.hs")
+--        assertBool ("errors or warnings on getAST:"++show nsOK2) (null nsOK2)
+--        case mast of
+--                Just ast->do
+--                        let json=makeObj  [("parse" , (showJSON $ ast))]
+--                        putStrLn $ show $ encode json
+--                Nothing -> assertFailure "no ast"
+--        ))
         
 testOutline :: Test
 testOutline = TestLabel "testOutline" (TestCase ( do
@@ -379,7 +375,7 @@ testPreviewTokenTypes = TestLabel "testPreviewTokenTypes" (TestCase ( do
         (tts,nsErrors1)<-runAPI root $ getTokenTypes rel
         assertBool ("errors or warnings on getTokenTypes:"++show nsErrors1) (null nsErrors1)
         let expectedS="[[\"D\",1,0,1,36],[\"D\",2,0,2,12],[\"K\",3,0,3,6],[\"IC\",3,7,3,11],[\"K\",3,12,3,17],[\"IV\",5,0,5,4],[\"S\",5,5,5,7],[\"IC\",5,8,5,10],[\"SS\",5,11,5,12],[\"IC\",5,12,5,15],[\"SS\",5,15,5,16],[\"IV\",6,0,6,4],[\"S\",6,5,6,6],[\"K\",6,7,6,9],[\"IV\",7,8,7,14],[\"SS\",7,15,7,16],[\"LC\",7,16,7,19],[\"S\",7,19,7,20],[\"LS\",7,20,7,33],[\"SS\",7,33,7,34],[\"IV\",8,8,8,14],[\"SS\",8,15,8,16],[\"LI\",8,16,8,17],[\"IV\",8,18,8,19],[\"LI\",8,20,8,21],[\"SS\",8,21,8,22],[\"PP\",10,0,10,10],[\"TH\",11,0,11,2],[\"IV\",11,3,11,9],[\"IV\",11,10,11,22],[\"TH\",11,23,11,25],[\"IC\",11,25,11,34],[\"SS\",11,35,11,36],[\"PP\",12,0,12,6]]"
-        assertEqual "" expectedS (encode $ showJSON tts)
+        assertEqual "" expectedS (encode $ toJSON tts)
         ))
         
 testThingAtPoint :: Test
@@ -436,7 +432,7 @@ runAPI::
         Monad m =>
         FilePath -> StateT BuildWrapperState m a -> m a
 runAPI root f= do
-        evalStateT f (BuildWrapperState ".dist-buildwrapper" "cabal" (testCabalFile root) V.normal)
+        evalStateT f (BuildWrapperState ".dist-buildwrapper" "cabal" (testCabalFile root) Normal)
         
 testProjectName :: String
 testProjectName="BWTest"         

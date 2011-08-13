@@ -1,12 +1,11 @@
-
+{-# LANGUAGE DeriveDataTypeable,OverloadedStrings #-}
 module Language.Haskell.BuildWrapper.Base where
 
-import qualified Distribution.Verbosity as V 
-                        ( Verbosity )
 
 import Control.Monad.State
-
-import Text.JSON
+import Data.Data
+import Data.Aeson
+import qualified Data.Text as T
 
 import System.Directory
 import System.FilePath
@@ -17,11 +16,14 @@ data BuildWrapperState=BuildWrapperState{
         tempFolder::String,
         cabalPath::FilePath,
         cabalFile::FilePath,
-        cabalVerbosity::V.Verbosity
+        verbosity::Verbosity
         }
 
 data BWNoteStatus=BWError | BWWarning
         deriving (Show,Read,Eq)
+ 
+instance ToJSON BWNoteStatus  where
+    toJSON = toJSON . drop 2 . show 
  
 data BWLocation=BWLocation {
         bwl_src::FilePath,
@@ -30,17 +32,23 @@ data BWLocation=BWLocation {
         }
         deriving (Show,Read,Eq)
 
+instance ToJSON BWLocation  where
+    toJSON (BWLocation s l c)=object ["f" .= s, "l" .= l , "c" .= c] 
+
 data BWNote=BWNote {
         bwn_status :: BWNoteStatus,
         bwn_title :: String,
-        bwn_description :: String,
         bwn_location :: BWLocation
         }
         deriving (Show,Read,Eq)
         
+instance ToJSON BWNote  where
+    toJSON (BWNote s t l)= object ["s" .= s, "t" .= t, "l" .= l]       
+        
 type OpResult a=(a,[BWNote])
         
-data WhichCabal=Source | Target        
+data WhichCabal=Source | Target
+        deriving (Show,Read,Eq,Enum,Data,Typeable)        
         
 data OutlineDefType =
                 Class |
@@ -55,32 +63,41 @@ data OutlineDefType =
                 Constructor
         deriving (Show,Read,Eq,Ord,Enum)
  
+instance ToJSON OutlineDefType  where
+    toJSON = toJSON . show
+ 
 data InFileLoc=InFileLoc {ifl_line::Int,ifl_column::Int}
         deriving (Show,Read,Eq,Ord)
 
 data InFileSpan=InFileSpan {ifs_start::InFileLoc,ifs_end::InFileLoc}
         deriving (Show,Read,Eq,Ord)
 
+instance ToJSON InFileSpan  where
+    toJSON  (InFileSpan (InFileLoc sr sc) (InFileLoc er ec))=toJSON $ map toJSON [sr,sc,er,ec]   
+
 mkFileSpan :: Int -> Int -> Int -> Int -> InFileSpan
 mkFileSpan sr sc er ec=InFileSpan (InFileLoc sr sc) (InFileLoc er ec)
 
 data OutlineDef = OutlineDef
-  { od_name       :: String,
+  { od_name       :: T.Text,
     od_type       :: [OutlineDefType],
     od_loc        :: InFileSpan,
     od_children   :: [OutlineDef]
   }
   deriving (Show,Read,Eq,Ord)
      
+instance ToJSON OutlineDef where
+        toJSON (OutlineDef n tps l c)=  object ["n" .= n , "t" .= map toJSON tps, "l" .= l, "c" .= map toJSON c]
+     
 data TokenDef = TokenDef {
-        td_name :: String,
+        td_name :: T.Text,
         td_loc :: InFileSpan
     }
         deriving (Show,Eq)     
     
-instance JSON TokenDef where
-  showJSON (TokenDef n (InFileSpan (InFileLoc sr sc) (InFileLoc er ec)))=
-    JSArray ((JSString $ toJSString n): (map showJSON [sr,sc,er,ec]))
+instance ToJSON TokenDef where
+  toJSON  (TokenDef n s)=
+    object [n .= s]
   
         
 --withCabal :: (GenericPackageDescription -> BuildWrapper a) -> BuildWrapper (Either BWNote a)
@@ -149,3 +166,6 @@ fileToModule :: FilePath -> String
 fileToModule fp=map rep (dropExtension fp)
         where   rep '/' = '.'
                 rep a = a  
+                
+data Verbosity = Silent | Normal | Verbose | Deafening
+    deriving (Show, Read, Eq, Ord, Enum, Bounded,Data,Typeable)                

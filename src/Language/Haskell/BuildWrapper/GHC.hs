@@ -1,15 +1,15 @@
-{-# LANGUAGE CPP, OverloadedStrings, TemplateHaskell, TypeSynonymInstances,StandaloneDeriving,DeriveDataTypeable,ScopedTypeVariables,TypeFamilies,RankNTypes, FlexibleContexts  #-}
+{-# LANGUAGE CPP, OverloadedStrings, TypeSynonymInstances,StandaloneDeriving,DeriveDataTypeable,ScopedTypeVariables,TypeFamilies,RankNTypes, FlexibleContexts  #-}
+{-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.BuildWrapper.GHC where
-
 import Language.Haskell.BuildWrapper.Base hiding (Target)
 import Language.Haskell.BuildWrapper.Find
 
 import Control.Monad
 import Control.Monad.State
 
-import Text.JSON
-import Data.DeriveTH
-import Data.Derive.JSON
+-- import Text.JSON
+-- import Data.DeriveTH
+-- import Data.Derive.JSON
 import Data.Generics hiding (Fixity, typeOf)
 import qualified Data.Map as M (insert)
 import Data.Maybe
@@ -17,6 +17,7 @@ import Data.Maybe
 import Data.Vector (fromList)
 import qualified Data.List as List
 import Data.Ord (comparing)
+import qualified Data.Text as T
 
 import Bag
 import BasicTypes
@@ -352,13 +353,13 @@ tokenTypesArbitrary projectRoot contents literate options = generateTokens proje
 -- | Extract occurrences based on lexing  
 occurrences :: FilePath     -- ^ Project root or base directory for absolute path conversion
             -> String    -- ^ Contents to be parsed
-            -> String    -- ^ Token value to find
+            -> T.Text    -- ^ Token value to find
             -> Bool      -- ^ Literate source flag (True = literate, False = ordinary)
             -> [String]  -- ^ Options
             -> IO (Either BWNote [TokenDef])
 occurrences projectRoot contents query literate options = 
   let 
-      qualif = elem '.' query
+      qualif = isJust $ T.find (=='.') query
       -- Get the list of tokens matching the query for relevant token types
       tokensMatching :: [TokenDef] -> [TokenDef]
       tokensMatching = filter matchingVal
@@ -412,7 +413,7 @@ preprocessSource contents literate=
                         | f = (ts2,l:l2,True)
                         | ('>':lCode)<-l=(ts2,(' ':lCode):l2,f)
                         | otherwise =addPPToken "DL" (l,c) (ts2,l2,f)  
-                addPPToken :: String -> (String,Int) -> ([TokenDef],[String],Bool) -> ([TokenDef],[String],Bool)
+                addPPToken :: T.Text -> (String,Int) -> ([TokenDef],[String],Bool) -> ([TokenDef],[String],Bool)
                 addPPToken name (l,c) (ts2,l2,f) =((TokenDef name (mkFileSpan c 0 c (length l))):ts2,"":l2,f)
 
 ghcErrMsgToNote :: FilePath -> ErrMsg -> BWNote
@@ -429,7 +430,6 @@ ghcMsgToNote note_kind base_dir msg =
     BWNote { bwn_location = ghcSpanToBWLocation base_dir loc
          , bwn_status = note_kind
          , bwn_title = show_msg (errMsgShortDoc msg)
-         , bwn_description = ""
          }
   where
     loc | (s:_) <- errMsgSpans msg = s
@@ -444,21 +444,21 @@ deriving instance Data StringBuffer
 #endif
 
 mkUnqualTokenValue :: FastString
-                   -> String
-mkUnqualTokenValue a = unpackFS a
+                   -> T.Text
+mkUnqualTokenValue = T.pack . unpackFS
 
 
 mkQualifiedTokenValue :: FastString
                       -> FastString
-                      -> String
-mkQualifiedTokenValue q a = (unpackFS . concatFS) [q, dotFS, a]
+                      -> T.Text
+mkQualifiedTokenValue q a = (T.pack . unpackFS . concatFS) [q, dotFS, a]
 
 -- | Make a token definition from its source location and Lexer.hs token type.
 mkTokenDef :: FilePath -> Located Token -> TokenDef
 mkTokenDef base_dir (L sp t) = TokenDef (mkTokenName t) (ghcSpanToLocation base_dir sp)
 
-mkTokenName :: Token -> String
-mkTokenName t = showConstr $ toConstr t
+mkTokenName :: Token -> T.Text
+mkTokenName = T.pack . showConstr . toConstr
 
 deriving instance Typeable Token
 deriving instance Data Token
@@ -469,7 +469,7 @@ deriving instance Data StringBuffer
 #endif
 
 
-tokenType :: Token -> String
+tokenType :: Token -> T.Text
 tokenType  ITas = "K"                         -- Haskell keywords
 tokenType  ITcase = "K"
 tokenType  ITclass = "K"
@@ -644,8 +644,8 @@ tokenType  (ITblockComment {})="D"     -- comment in {- -}
 dotFS :: FastString
 dotFS = fsLit "."
 
-tokenValue :: Bool -> Token -> String
-tokenValue _ t | elem (tokenType t) ["K","EK"] = drop 2 $ mkTokenName t
+tokenValue :: Bool -> Token -> T.Text
+tokenValue _ t | elem (tokenType t) ["K","EK"] = T.drop 2 $ mkTokenName t
 tokenValue _ (ITvarid a) = mkUnqualTokenValue a
 tokenValue _ (ITconid a) = mkUnqualTokenValue a
 tokenValue _ (ITvarsym a) = mkUnqualTokenValue a

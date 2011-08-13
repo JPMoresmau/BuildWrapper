@@ -5,25 +5,25 @@ build-type:     Simple
 
 library
   hs-source-dirs:  src
-  build-depends:   base, filepath, mtl, directory, Cabal, process, regex-tdfa, ghc, ghc-paths, syb, ghc-syb-utils, json, 
-                   text, containers, vector, derive, haskell-src-exts, cpphs, old-time
-  --      
+  build-depends:   base, filepath, mtl, directory, Cabal, process, regex-tdfa, ghc, ghc-paths, syb, ghc-syb-utils, 
+                   text, containers, vector, haskell-src-exts, cpphs, old-time, aeson
   ghc-options:     -O2 -Wall -fno-warn-unused-do-bind
-  exposed-modules: Language.Haskell.BuildWrapper.API, Language.Haskell.BuildWrapper.CMD,Language.Haskell.BuildWrapper.Base
-  extensions:     CPP
+  exposed-modules: Language.Haskell.BuildWrapper.API,Language.Haskell.BuildWrapper.Base
+  extensions:      CPP
   other-modules:   Language.Haskell.BuildWrapper.Cabal, Language.Haskell.BuildWrapper.GHC, Language.Haskell.BuildWrapper.Src, Language.Haskell.BuildWrapper.Find
 
 executable buildwrapper
   hs-source-dirs:  src
   main-is:         Main.hs
-  build-depends:   base, buildwrapper
+  build-depends:   base, buildwrapper, cmdargs, filepath, Cabal, directory, mtl, ghc, cpphs,haskell-src-exts, old-time, ghc-syb-utils, ghc-paths
+                   ,vector, containers, syb, process, regex-tdfa, text, aeson, bytestring
   ghc-options:     -O2 -Wall -fno-warn-unused-do-bind
-  other-modules:   Language.Haskell.BuildWrapper.CMD, Language.Haskell.BuildWrapper.Base, Language.Haskell.BuildWrapper.Cabal, Language.Haskell.BuildWrapper.GHC, Language.Haskell.BuildWrapper.Src
+  other-modules:   Language.Haskell.BuildWrapper.CMD
   
 test-suite buildwrapper-test
   type:            exitcode-stdio-1.0
   hs-source-dirs:  test
-  build-depends:   base, buildwrapper, HUnit, mtl, filepath, directory, Cabal, json, derive, old-time
+  build-depends:   base, buildwrapper, HUnit, mtl, filepath, directory, Cabal, old-time, aeson, text
   main-is:         Main.hs
   ghc-options:     -Wall -fno-warn-unused-do-bind
   other-modules:   Language.Haskell.BuildWrapper.APITest

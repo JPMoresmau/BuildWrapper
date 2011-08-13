@@ -6,24 +6,14 @@ import Language.Haskell.BuildWrapper.Cabal
 import qualified Language.Haskell.BuildWrapper.GHC as BwGHC
 import Language.Haskell.BuildWrapper.Src
 
+import qualified Data.Text as T
+
 import Control.Monad.State
 import Language.Haskell.Exts.Annotated
 import Language.Preprocessor.Cpphs
 import Data.Maybe
 import System.FilePath
 import GHC (TypecheckedSource)
-import Outputable
-
---class ToBWNote a where
---        toBWNote :: a -> BWNote
-
---peErrorToBWNote :: FilePath -> PError -> BWNote
---peErrorToBWNote cf (AmbigousParse t ln)= BWNote BWError "AmbigousParse" t (BWLocation cf ln 1)
---peErrorToBWNote cf (NoParse t ln)      = BWNote BWError "NoParse" t (BWLocation cf ln 1)
---peErrorToBWNote cf (TabsError ln)      = BWNote BWError "TabsError" "" (BWLocation cf ln 1)    
---peErrorToBWNote cf (FromString t mln)  = BWNote BWError "FromString" t (BWLocation cf (fromMaybe 1 mln) 1)    
-
-
 
 synchronize ::  BuildWrapper([FilePath])
 synchronize =do
@@ -156,23 +146,14 @@ getOccurrences fp query=do
                         let (_,opts)=cabalExtensions $ snd  cbi
                         tgt<-getTargetPath fp
                         input<-liftIO $ readFile tgt
-                        ett<-liftIO $ BwGHC.occurrences tgt input query (".lhs" == (takeExtension fp)) opts
+                        ett<-liftIO $ BwGHC.occurrences tgt input (T.pack query) (".lhs" == (takeExtension fp)) opts
                         case ett of
                                 Right tt->return (tt,bwns)
                                 Left bw -> return ([],bw:bwns)
                 Nothing-> return ([],bwns)
 
 getThingAtPoint :: FilePath -> Int -> Int -> Bool -> Bool -> BuildWrapper (OpResult (Maybe String))
-getThingAtPoint fp line col qual typed=do
-        withGHCAST fp $ BwGHC.getThingAtPoint line col qual typed
---        (mts,bwns)<-getGHCAST fp
---        case mts of
---                Just ts->do
---                        liftIO $ putStrLn "ghc ast ok"
---                        let ls=BwGHC.getThingAtPoint ts line col
---                        liftIO $ putStrLn $ show $ length ls
---                        return (ls ,bwns)
---                _ -> return ([],bwns)
+getThingAtPoint fp line col qual typed=withGHCAST fp $ BwGHC.getThingAtPoint line col qual typed
                 
 getNamesInScope :: FilePath-> BuildWrapper (OpResult (Maybe [String]))
 getNamesInScope fp=withGHCAST fp BwGHC.getGhcNamesInScope
