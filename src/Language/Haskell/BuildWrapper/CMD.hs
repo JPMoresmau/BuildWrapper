@@ -18,7 +18,8 @@ type CabalPath = FilePath
 type TempFolder = FilePath
 
 data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile}
-        | Synchronize1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, file:: FilePath} 
+        | Synchronize1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, file:: FilePath}
+        | Write {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, file:: FilePath, contents::String}  
         | Configure {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile,verbosity::Verbosity,cabalTarget::WhichCabal}
         | Build {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile,verbosity::Verbosity,output::Bool}
         | Outline {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, file:: FilePath} 
@@ -34,12 +35,13 @@ cp="cabal" &= typFile &= help "location of cabal executable"
 cf=def &= typFile &= help "cabal file" 
 fp=def &= typFile &= help "relative path of file to process"
  
-v=Silent &= help "verbosity"
+v=Normal &= help "verbosity"
 wc=Target &= help "which cabal file to use: original or temporary"
 
 msynchronize = Synchronize tf cp cf
 msynchronize1 = Synchronize1 tf cp cf fp
 mconfigure = Configure tf cp cf v wc
+mwrite= Write tf cp cf fp (def &= help "file contents")
 mbuild = Build tf cp cf v (def &= help "output compilation and linking result")
 moutline = Outline tf cp cf fp
 mtokenTypes= TokenTypes tf cp cf fp
@@ -52,7 +54,7 @@ mthingAtPoint=ThingAtPoint tf cp cf fp
 mnamesInScope=NamesInScope tf cp cf fp 
 
 cmdMain = (cmdArgs $ 
-                modes [msynchronize, msynchronize1, mconfigure,mbuild, moutline, mtokenTypes,moccurrences,mthingAtPoint,mnamesInScope]
+                modes [msynchronize, msynchronize1, mconfigure,mwrite,mbuild, moutline, mtokenTypes,moccurrences,mthingAtPoint,mnamesInScope]
                 &= helpArg [explicit, name "help", name "h"]
                 &= help "buildwrapper executable"
                 &= program "buildwrapper"
@@ -62,6 +64,7 @@ cmdMain = (cmdArgs $
                 handle ::BWCmd -> IO ()
                 handle (Synchronize tf cp cf)=run tf cp cf synchronize
                 handle (Synchronize1 tf cp cf fp)=run tf cp cf (synchronize1 fp)
+                handle (Write tf cp cf fp s)=run tf cp cf (write fp s)
                 handle (Configure tf cp cf v wc)=runV v tf cp cf (configure wc)
                 handle (Build tf cp cf wc output)=runV v tf cp cf (build output)
                 handle (Outline tf cp cf fp)=run tf cp cf (getOutline fp)

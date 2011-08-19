@@ -23,7 +23,7 @@ executable buildwrapper
 test-suite buildwrapper-test
   type:            exitcode-stdio-1.0
   hs-source-dirs:  test
-  build-depends:   base, buildwrapper, HUnit, mtl, filepath, directory, Cabal, old-time, aeson, text
+  build-depends:   base, buildwrapper, HUnit, mtl, filepath, directory, Cabal, old-time, aeson, text, process, bytestring, attoparsec
   main-is:         Main.hs
   ghc-options:     -Wall -fno-warn-unused-do-bind
-  other-modules:   Language.Haskell.BuildWrapper.APITest
+  other-modules:   Language.Haskell.BuildWrapper.APITest, Language.Haskell.BuildWrapper.Tests, Language.Haskell.BuildWrapper.CMDTests

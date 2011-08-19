@@ -38,6 +38,7 @@ synchronize1 fp = do
 write ::  FilePath -> String -> BuildWrapper()
 write fp s= do
         real<-getTargetPath fp
+        liftIO $ putStrLn ("contents:"++s)
         liftIO $ writeFile real s
 
 configure ::  WhichCabal -> BuildWrapper (OpResult Bool)
@@ -64,8 +65,8 @@ build = cabalBuild
 preproc :: CabalBuildInfo -> FilePath -> IO String
 preproc cbi tgt= do
         inputOrig<-readFile tgt
-        let cppo=fileCppOptions cbi
-        --putStrLn $ "cppo=" ++ (show cppo)
+        let cppo=fileCppOptions cbi ++ ["-D__GLASGOW_HASKELL__=" ++ show (__GLASGOW_HASKELL__::Int)]
+        putStrLn $ "cppo=" ++ (show cppo)
         if not $ null cppo 
             then do
                 let epo=parseOptions cppo
