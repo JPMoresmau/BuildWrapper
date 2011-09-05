@@ -13,7 +13,7 @@ library
   other-modules:   Language.Haskell.BuildWrapper.Cabal, Language.Haskell.BuildWrapper.GHC, Language.Haskell.BuildWrapper.Src, Language.Haskell.BuildWrapper.Find
 
 executable buildwrapper
-  hs-source-dirs:  src
+  hs-source-dirs:  src-exe
   main-is:         Main.hs
   build-depends:   base, buildwrapper, cmdargs, filepath, Cabal, directory, mtl, ghc, cpphs,haskell-src-exts, old-time, ghc-syb-utils, ghc-paths
                    ,vector, containers, syb, process, regex-tdfa, text, aeson, bytestring
