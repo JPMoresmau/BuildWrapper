@@ -25,7 +25,8 @@ tests=  [
         testOutlinePreproc ,
         testPreviewTokenTypes,
         testThingAtPoint,
-        testNamesInScope
+        testNamesInScope,
+        testInPlaceReference
         ]
 
 class APIFacade a where
@@ -487,6 +488,42 @@ testNamesInScope api= TestLabel "testNamesInScope" (TestCase ( do
         assertBool "does not contain GHC.Types.Char" (elem "GHC.Types.Char" tts)
         )) 
         
+testInPlaceReference  :: (APIFacade a)=> a -> Test
+testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
+        root<-createTestProject
+        synchronize api root
+        write api root (testProjectName <.> ".cabal") $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:  base",
+                "",
+                "executable BWTest",
+                "  hs-source-dirs:  src",
+                "  main-is:         Main.hs",
+                "  other-modules:  B.D",
+                "  build-depends:  base, BWTest",
+                "",
+                "test-suite BWTest-test",
+                "  type:            exitcode-stdio-1.0",
+                "  hs-source-dirs:  test",
+                "  main-is:         Main.hs",
+                "  other-modules:  TestA",
+                "  build-depends:  base, BWTest",
+                ""
+                ]   
+        (boolOKc,nsOKc)<-configure api root Target
+        assertBool ("returned false on configure") boolOKc
+        assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
+        (boolOK,nsOK)<-build api root False
+        assertBool ("returned false on build") boolOK
+        assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
+        ))
 
 testProjectName :: String
 testProjectName="BWTest"         
