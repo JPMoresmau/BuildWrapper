@@ -21,6 +21,7 @@ tests=  [
         testSynchronizeAll,
         testConfigureWarnings,testConfigureErrors,
         testBuildErrors,testBuildWarnings,
+        testModuleNotInCabal,
         testOutline,
         testOutlinePreproc ,
         testPreviewTokenTypes,
@@ -30,7 +31,7 @@ tests=  [
         ]
 
 class APIFacade a where
-        synchronize :: a -> FilePath -> IO [FilePath]
+        synchronize :: a -> FilePath -> IO (OpResult [FilePath])
         synchronize1 :: a -> FilePath -> FilePath -> IO (Maybe FilePath)
         write :: a -> FilePath -> FilePath -> String -> IO ()
         configure :: a -> FilePath -> WhichCabal -> IO (OpResult Bool)
@@ -45,7 +46,7 @@ class APIFacade a where
 testSynchronizeAll :: (APIFacade a)=> a -> Test
 testSynchronizeAll api= TestLabel "testSynchronizeAll" (TestCase ( do
         root<-createTestProject
-        fps<-synchronize api root
+        (fps,ns)<-synchronize api root
         assertBool "no file path on creation" (not $ null fps) 
         assertEqual "no cabal file" (testProjectName <.> ".cabal") (head fps)
         assertBool "no A" (elem ("src" </> "A.hs") fps)
@@ -213,10 +214,11 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
                 "  ghc-options:     -Wall"]
         --let srcF=root </> "src"
         (boolOK,nsOK)<-configure api root Target
-        let rel="src"</>"A.hs"
-        write api root rel $ unlines ["module A where","import Data.List","fA=undefined"] 
         assertBool ("returned false") boolOK
         assertBool ("errors or warnings:"++show nsOK) (null nsOK)
+        let rel="src"</>"A.hs"
+        write api root rel $ unlines ["module A where","import Data.List","fA=undefined"] 
+
         (bool1,nsErrors1)<-build api root False
         assertBool ("returned false on bool1") bool1
         assertBool ("no errors or warnings on nsErrors1") (not $ null nsErrors1)
@@ -226,6 +228,23 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         
         )) 
         
+testModuleNotInCabal :: (APIFacade a)=> a -> Test
+testModuleNotInCabal api = TestLabel "testModuleNotInCabal" (TestCase ( do
+        root<-createTestProject
+        synchronize api root
+        let rel="src"</>"A.hs"
+        write api root rel $ unlines ["module A where","import Auto","fA=undefined"] 
+        let rel2="src"</>"Auto.hs"
+        putStrLn (root </> rel2) 
+        writeFile (root </> rel2) $ unlines ["module Auto where","fAuto=undefined"] 
+        (fps,ns)<-synchronize api root
+        putStrLn $ show fps
+        putStrLn $ show ns
+        (bool1,nsErrors1)<-build api root False
+        putStrLn $ show nsErrors1
+        assertBool ("returned false on bool1") bool1
+        assertBool ("errors or warnings on nsErrors1") (null nsErrors1)
+        ))      
         
 --testAST :: Test
 --testAST = TestLabel "testAST" (TestCase ( do

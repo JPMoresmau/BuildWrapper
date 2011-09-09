@@ -215,4 +215,18 @@ fileToModule fp=map rep (dropExtension fp)
                 rep a = a  
                 
 data Verbosity = Silent | Normal | Verbose | Deafening
-    deriving (Show, Read, Eq, Ord, Enum, Bounded,Data,Typeable)                
+    deriving (Show, Read, Eq, Ord, Enum, Bounded,Data,Typeable)
+    
+
+-- |  http://book.realworldhaskell.org/read/io-case-study-a-library-for-searching-the-filesystem.html
+getRecursiveContents :: FilePath -> IO [FilePath]
+getRecursiveContents topdir = do
+  names <- getDirectoryContents topdir
+  let properNames = filter (`notElem` [".", ".."]) names
+  paths <- forM properNames $ \name -> do
+    let path = topdir </> name
+    isDirectory <- doesDirectoryExist path
+    if isDirectory
+      then getRecursiveContents path
+      else return [path]
+  return (concat paths)                    

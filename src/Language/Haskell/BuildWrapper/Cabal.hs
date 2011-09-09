@@ -30,7 +30,7 @@ getFilesToCopy :: BuildWrapper(OpResult [FilePath])
 getFilesToCopy =do
        (mfps,bwns)<-withCabal Source getAllFiles
        return $ case mfps of
-                Just fps->(concat $ map (\(_,_,_,ls)->map snd ls) fps,bwns)
+                Just fps->(nub $ concatMap (\(_,_,_,ls)->map snd ls) fps,bwns)
                 Nothing ->([],bwns); 
 
 
@@ -78,35 +78,40 @@ cabalV =do
                 toCabalV Verbose =V.verbose
                 toCabalV Deafening =V.deafening
 
-cabalBuild :: Bool -> BuildWrapper(OpResult Bool)
+cabalBuild :: Bool -> BuildWrapper (OpResult Bool)
 cabalBuild output= do
-        cf<-getCabalFile Target
-        cp<-gets cabalPath
-        v<-cabalV
-        dist_dir<-getDistDir
-       
-        let args=[
-                "build",
-                "--verbose="++(show $ fromEnum v),
-                "--builddir="++dist_dir
-                
-                ] ++ (if output 
-                        then ["--ghc-option=-c"]
-                        else [])
-                
-        liftIO $ do
-                cd<-getCurrentDirectory
-                setCurrentDirectory (takeDirectory cf)
-                -- c1<-getClockTime
-                -- f<-readFile ((takeDirectory cf) </> "src" </> "A.hs")
-                -- putStrLn "cabal build start"
-                (ex,_,err)<-readProcessWithExitCode cp args ""
-                -- putStrLn err
-                -- c2<-getClockTime
-                -- putStrLn ("cabal build end" ++ (timeDiffToString  $ diffClockTimes c2 c1))
-                let ret=parseBuildMessages err
-                setCurrentDirectory cd
-                return (ex==ExitSuccess,ret)
+        (mr,n)<-withCabal Target (\_->do
+                cf<-getCabalFile Target
+                cp<-gets cabalPath
+                v<-cabalV
+                dist_dir<-getDistDir
+               
+                let args=[
+                        "build",
+                        "--verbose="++(show $ fromEnum v),
+                        "--builddir="++dist_dir
+                        
+                        ] ++ (if output 
+                                then ["--ghc-option=-c"]
+                                else [])
+                        
+                liftIO $ do
+                        cd<-getCurrentDirectory
+                        setCurrentDirectory (takeDirectory cf)
+                        -- c1<-getClockTime
+                        -- f<-readFile ((takeDirectory cf) </> "src" </> "A.hs")
+                        -- putStrLn "cabal build start"
+                        (ex,_,err)<-readProcessWithExitCode cp args ""
+                        -- putStrLn err
+                        -- c2<-getClockTime
+                        -- putStrLn ("cabal build end" ++ (timeDiffToString  $ diffClockTimes c2 c1))
+                        let ret=parseBuildMessages err
+                        setCurrentDirectory cd
+                        return (ex==ExitSuccess,ret)
+            )
+        return $ case mr of
+                Nothing -> (False,n)
+                Just (r,n2) -> (r,n++n2)
 
 cabalConfigure :: WhichCabal-> BuildWrapper (OpResult (Maybe LocalBuildInfo))
 cabalConfigure srcOrTgt= do
@@ -294,7 +299,7 @@ type CabalBuildInfo=(BuildInfo,ComponentLocalBuildInfo,FilePath,[(ModuleName,Fil
 getBuildInfo ::  FilePath  -> BuildWrapper (OpResult (Maybe (LocalBuildInfo,CabalBuildInfo)))
 getBuildInfo fp=do
         (mmr,bwns)<-withCabal Target (\lbi->do
-                fps<-getAllFiles lbi
+                fps<-getReferencedFiles lbi
                 let ok=filter (\(_,_,_,ls)->not $ null ls ) $
                         map (\(n1,n2,n3,ls)->(n1,n2,n3,filter (\(_,b)->b==fp) ls) ) 
                                 fps
@@ -332,13 +337,57 @@ getAllFiles lbi= do
                 let libs=maybe [] extractFromLib $ library pd
                 let exes=map extractFromExe $ executables pd
                 let tests=map extractFromTest $ testSuites pd
+                mapM (\(a,b,c,d)->do
+                        mf<-copyAll d
+                        return (a,b,c,mf)) (libs ++ exes ++ tests)
+        where 
+        extractFromLib :: Library -> [(BuildInfo,ComponentLocalBuildInfo,FilePath,[FilePath])]
+        extractFromLib l=let
+                lib=libBuildInfo l
+                in [(lib,fromJust $ libraryConfig lbi,buildDir lbi,(hsSourceDirs lib))]
+        extractFromExe :: Executable -> (BuildInfo,ComponentLocalBuildInfo,FilePath,[FilePath])
+        extractFromExe e@Executable{exeName=exeName'}=let
+                ebi=buildInfo e
+                targetDir = buildDir lbi </> exeName'
+                exeDir    = targetDir </> (exeName' ++ "-tmp")
+                hsd=hsSourceDirs ebi
+                in (ebi,fromJust $ lookup exeName' $ executableConfigs lbi,exeDir, hsd) 
+        extractFromTest :: TestSuite -> (BuildInfo,ComponentLocalBuildInfo,FilePath,[FilePath])
+        extractFromTest t@TestSuite {testName=testName'} =let
+                tbi=testBuildInfo t
+                hsd=hsSourceDirs tbi
+                in (tbi,fromJust $ lookup testName' $ testSuiteConfigs lbi,buildDir lbi,hsd)
+        copyAll :: [FilePath] -> BuildWrapper [(ModuleName,FilePath)]
+        copyAll fps= do 
+--                cf<-gets cabalFile
+--                let dir=(takeDirectory cf)
+--                ffps<-mapM getFullSrc fps
+--                allF<-liftIO $ mapM getRecursiveContents ffps
+--                liftIO $ putStrLn ("allF:" ++ (show allF))
+--                return $ map (\f->(fromString $ fileToModule f,f)) $ map (\f->makeRelative dir f) $ concat allF
+                  allF<-mapM copyAll' fps
+                  return $ concat allF
+        copyAll' :: FilePath -> BuildWrapper [(ModuleName,FilePath)]
+        copyAll' fp=do
+                cf<-gets cabalFile
+                let dir=(takeDirectory cf)
+                fullFP<-getFullSrc fp
+                allF<-liftIO $ getRecursiveContents fullFP
+                return $ map (\f->(fromString $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) allF
+     
+getReferencedFiles :: LocalBuildInfo -> BuildWrapper [CabalBuildInfo]
+getReferencedFiles lbi= do
+                let pd=localPkgDescr lbi
+                let libs=maybe [] extractFromLib $ library pd
+                let exes=map extractFromExe $ executables pd
+                let tests=map extractFromTest $ testSuites pd
                 return (libs ++ exes ++ tests)
         where 
         extractFromLib :: Library -> [(BuildInfo,ComponentLocalBuildInfo,FilePath,[(ModuleName,FilePath)])]
         extractFromLib l=let
                 lib=libBuildInfo l
                 modules=(exposedModules l) ++ (otherModules lib)
-                in [(lib,fromJust $ libraryConfig lbi,buildDir lbi,copyModules modules (hsSourceDirs lib))]
+                in [(lib,fromJust $ libraryConfig lbi,buildDir lbi,(copyModules modules (hsSourceDirs lib)))]
         extractFromExe :: Executable -> (BuildInfo,ComponentLocalBuildInfo,FilePath,[(ModuleName,FilePath)])
         extractFromExe e@Executable{exeName=exeName'}=let
                 ebi=buildInfo e
@@ -346,7 +395,7 @@ getAllFiles lbi= do
                 exeDir    = targetDir </> (exeName' ++ "-tmp")
                 modules= (otherModules ebi)
                 hsd=hsSourceDirs ebi
-                in (ebi,fromJust $ lookup exeName' $ executableConfigs lbi,exeDir, copyFiles [modulePath e] hsd++ (copyModules modules hsd)  ) 
+                in (ebi,fromJust $ lookup exeName' $ executableConfigs lbi,exeDir, copyFiles [modulePath e] hsd++ (copyModules modules hsd) ) 
         extractFromTest :: TestSuite -> (BuildInfo,ComponentLocalBuildInfo,FilePath,[(ModuleName,FilePath)])
         extractFromTest t@TestSuite {testName=testName'} =let
                 tbi=testBuildInfo t
@@ -356,11 +405,11 @@ getAllFiles lbi= do
                        (TestSuiteExeV10 _ mp)->(copyFiles [mp] hsd)
                        (TestSuiteLibV09 _ mn)->copyModules [mn] hsd
                        _->[]
-                in (tbi,fromJust $ lookup testName' $ testSuiteConfigs lbi,buildDir lbi,extras++ (copyModules modules hsd))
+                in (tbi,fromJust $ lookup testName' $ testSuiteConfigs lbi,buildDir lbi,extras++ (copyModules modules hsd)       )
         copyModules :: [ModuleName] -> [FilePath] -> [(ModuleName,FilePath)]
         copyModules mods=copyFiles (concatMap (\m->[(toFilePath m) <.> "hs",((toFilePath m) <.> "lhs")]) mods)
         copyFiles :: [FilePath] -> [FilePath] -> [(ModuleName,FilePath)]
-        copyFiles mods dirs=[(fromString $ fileToModule m,d </> m)  | m<-mods, d<-dirs]
+        copyFiles mods dirs=[(fromString $ fileToModule m,d </> m)  | m<-mods, d<-dirs]     
         
 moduleToString :: ModuleName -> String
 moduleToString = concat . intersperse ['.'] . components

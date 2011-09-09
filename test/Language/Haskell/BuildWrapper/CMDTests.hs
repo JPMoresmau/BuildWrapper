@@ -36,7 +36,7 @@ runAPI root command args= do
         --putStrLn ("out:"++out)
         --putStrLn ("err:"++err)
         assertEqual ("returned error: "++show fullargs++"\n:"++show err) ExitSuccess ex
-        let res=map (drop 5) $ filter (isPrefixOf "json:") $ lines out
+        let res=map (drop $ length "build-wrapper-json:") $ filter (isPrefixOf "build-wrapper-json:") $ lines out
         assertEqual ("no json: "++show fullargs++"\n:"++show out) 1 (length res)
         let r=parse value $ BS.pack (head res)
         case r of

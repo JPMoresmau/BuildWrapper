@@ -15,11 +15,12 @@ import Data.Maybe
 import System.FilePath
 import GHC (TypecheckedSource)
 
-synchronize ::  BuildWrapper([FilePath])
+synchronize ::  BuildWrapper(OpResult [FilePath])
 synchronize =do
         cf<-gets cabalFile
         m<-copyFromMain $ takeFileName cf
-        (fileList,_)<-getFilesToCopy
+        (fileList,ns)<-getFilesToCopy
+        --liftIO $ putStrLn  ("filelist:" ++ (show fileList))
         --let fileList=case motherFiles of
         --       Nothing ->[]
         --        Just fps->fps
@@ -27,7 +28,7 @@ synchronize =do
                 "Setup.hs":
                 "Setup.lhs":
                 fileList)
-        return $ catMaybes (m:m1)
+        return $ (catMaybes (m:m1),ns)
 
 
 synchronize1 ::  FilePath -> BuildWrapper(Maybe FilePath)
