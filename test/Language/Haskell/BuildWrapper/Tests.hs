@@ -10,6 +10,7 @@ import Test.HUnit
 
 import System.Directory
 import System.FilePath
+import System.Info
 
 import Control.Monad
 import Control.Monad.State
@@ -19,8 +20,9 @@ import System.Time
 tests :: (APIFacade a)=> [(a -> Test)]
 tests=  [
         testSynchronizeAll,
-        testConfigureWarnings,testConfigureErrors,
+        testConfigureWarnings ,testConfigureErrors ,
         testBuildErrors,testBuildWarnings,
+        testBuildOutput,
         testModuleNotInCabal,
         testOutline,
         testOutlinePreproc ,
@@ -63,7 +65,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         (boolNoCabal,nsNoCabal)<- configure api root Target
         assertBool ("configure returned true on no cabal") (not boolNoCabal)
         assertEqual ("no errors or warnings on no cabal") 1 (length nsNoCabal)        
-        assertEqual ("wrong error on no cabal") (BWNote BWError "No cabal file found." (BWLocation "" 0 1)) (head nsNoCabal)   
+        assertEqual ("wrong error on no cabal") (BWNote BWError "No cabal file found.\nPlease create a package description file <pkgname>.cabal\n" (BWLocation "" 0 1)) (head nsNoCabal)   
         
         synchronize api root
         (boolOK,nsOK)<-configure api root Target
@@ -78,8 +80,8 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         assertBool ("bool1 returned true") (not bool1)
         assertEqual "no errors on no name" 2 (length nsErrors1)
         let (nsError1:nsError2:[])=nsErrors1
-        assertEqual "not proper error 1" (BWNote BWError "No 'name' field." (BWLocation cfn 1 1)) nsError1
-        assertEqual "not proper error 2" (BWNote BWError "No executables and no library found. Nothing to do." (BWLocation cfn 1 1)) nsError2
+        assertEqual "not proper error 1" (BWNote BWError "No 'name' field.\n" (BWLocation cfn 1 1)) nsError1
+        assertEqual "not proper error 2" (BWNote BWError "No executables and no library found. Nothing to do.\n" (BWLocation cfn 1 1)) nsError2
         writeFile cf $ unlines ["name: 4 P1",
                 "version:0.1",
                 "build-type:     Simple"]
@@ -88,7 +90,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         assertBool ("bool2 returned true") (not bool2)
         assertEqual "no errors on invalid name" 1 (length nsErrors2)
         let (nsError3:[])=nsErrors2
-        assertEqual "not proper error 3" (BWNote BWError "Parse of field 'name' failed." (BWLocation cfn 1 1)) nsError3
+        assertEqual "not proper error 3" (BWNote BWError "Parse of field 'name' failed.\n" (BWLocation cfn 1 1)) nsError3
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.8",
@@ -135,7 +137,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         assertBool ("bool5 returned true") (not bool5)
         assertEqual "no errors on no main" 1 (length nsErrors5)
         let (nsError6:[])=nsErrors5
-        assertEqual "not proper error 6" (BWNote BWError "No 'Main-Is' field found for executable BWTest" (BWLocation cfn 1 1)) nsError6
+        assertEqual "not proper error 6" (BWNote BWError "No 'Main-Is' field found for executable BWTest\n" (BWLocation cfn 1 1)) nsError6
         
         ))
         
@@ -158,10 +160,43 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
                 "  build-depends:   base"]
         synchronize api root
         (bool1,ns1)<- configure api root Target
-        assertBool ("returned false") bool1
+        assertBool ("returned false 1 "++ (show ns1)) bool1
         assertEqual ("didn't return 1 warning") 1 (length ns1)
         let (nsWarning1:[])=ns1
-        assertEqual "not proper warning 1" (BWNote BWWarning "Unknown fields: field1 (line 5)" (BWLocation cfn 5 1)) nsWarning1
+        assertEqual "not proper warning 1" (BWNote BWWarning "Unknown fields: field1 (line 5)\nFields allowed in this section:\nname, version, cabal-version, build-type, license, license-file,\ncopyright, maintainer, build-depends, stability, homepage,\npackage-url, bug-reports, synopsis, description, category, author,\ntested-with, data-files, data-dir, extra-source-files,\nextra-tmp-files\n" (BWLocation cfn 5 1)) nsWarning1
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:   base"]
+        synchronize api root
+        (bool2,ns2)<- configure api root Target
+        assertBool ("returned false 2 "++ (show ns2)) bool2
+        assertEqual ("didn't return 1 warning") 1 (length ns2)
+        let (nsWarning2:[])=ns2
+        assertEqual "not proper warning 2" (BWNote BWWarning "A package using section syntax must specify at least\n'cabal-version: >= 1.2'.\n" (BWLocation cfn 0 1)) nsWarning2
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.2",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:   base"]
+        writeFile ((takeDirectory cf) </> "Setup.hs") $ unlines ["import Distribution.Simple",
+			"main = defaultMain"]
+        synchronize api root
+        (bool3,ns3)<- configure api root Target
+        assertBool ("returned false 3 "++ (show ns3)) bool3
+        assertEqual ("didn't return 1 warning") 1 (length ns3)
+        let (nsWarning3:[])=ns3
+        assertEqual "not proper warning 3" (BWNote BWWarning "No 'build-type' specified. If you do not need a custom Setup.hs or\n./configure script then use 'build-type: Simple'.\n" (BWLocation cfn 0 1)) nsWarning3
+
         ))   
         
 testBuildErrors :: (APIFacade a)=> a -> Test
@@ -227,6 +262,25 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         assertEqual "not proper error 2" (BWNote BWWarning "Top-level binding with no type signature:\n               fA :: forall a. a\n" (BWLocation rel 3 1)) nsError2
         
         )) 
+        
+testBuildOutput :: (APIFacade a)=> a -> Test
+testBuildOutput api = TestLabel "testBuildOutput" (TestCase ( do       
+        root<-createTestProject
+        synchronize api root
+        build api root True
+        let exeN=case os of
+        	"mingw32"->(addExtension testProjectName "exe")
+        	_->testProjectName
+        let exeF=root </> ".dist-buildwrapper" </> "dist" </> "build" </> testProjectName </> exeN
+        exeE1<-doesFileExist exeF
+        assertBool ("exe does not exist on build output: "++exeF) exeE1
+        removeFile exeF
+        exeE2<-doesFileExist exeF
+        assertBool ("exe does still exist after deletion: "++exeF) (not exeE2)
+        build api root False
+        exeE3<-doesFileExist exeF
+        assertBool ("exe exists after build no output: "++exeF) (not exeE3)
+        ))
         
 testModuleNotInCabal :: (APIFacade a)=> a -> Test
 testModuleNotInCabal api = TestLabel "testModuleNotInCabal" (TestCase ( do

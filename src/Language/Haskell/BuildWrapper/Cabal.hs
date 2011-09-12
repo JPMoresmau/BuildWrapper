@@ -92,8 +92,8 @@ cabalBuild output= do
                         "--builddir="++dist_dir
                         
                         ] ++ (if output 
-                                then ["--ghc-option=-c"]
-                                else [])
+                                then []
+                                else ["--ghc-option=-c"])
                         
                 liftIO $ do
                         cd<-getCurrentDirectory
@@ -234,32 +234,37 @@ parseCabalMessages cf s=let
         where 
                 parseCabalLine :: (Maybe (BWNote,[String]),[BWNote]) -> String ->(Maybe (BWNote,[String]),[BWNote])
                 parseCabalLine (currentNote,ls) l 
-                        | isPrefixOf "Error:" l=(Nothing,ls++[BWNote BWError (dropWhile isSpace $ drop 6 l) (BWLocation cf 1 1)])
+                        | isPrefixOf "Error:" l=(Just (BWNote BWError "" (BWLocation cf 1 1),[dropWhile isSpace $ drop 6 l]),addCurrent currentNote ls)
                         | isPrefixOf "Warning:" l=let
                                 msg=(dropWhile isSpace $ drop 8 l)
                                 msg2=if isPrefixOf cf msg
                                         then dropWhile isSpace $ drop ((length cf) + 1) msg
                                         else msg
-                                in (Nothing,ls++[BWNote BWWarning msg2 (BWLocation cf (extractLine  msg2) 1)])
+                                in (Just (BWNote BWWarning "" (BWLocation cf (extractLine msg2) 1),[msg2]),addCurrent currentNote ls)
                         | isPrefixOf "cabal:" l=
                                 let 
                                         s2=(dropWhile isSpace $ drop 6 l)
                                 in if isPrefixOf "At least the following" s2
-                                                then (Just $ (BWNote BWError "" (BWLocation cf 1 1),[s2]),ls)
+                                                then (Just $ (BWNote BWError "" (BWLocation cf 1 1),[s2]),addCurrent currentNote ls)
                                                 else 
                                                         let
                                                                 (loc,rest)=span (/= ':') s2
                                                                 (realloc,line,msg)=if null rest
                                                                         then    ("","0",s2)
                                                                         else 
-                                                                                let (line',msg')=span (/= ':') (tail rest)
-                                                                                in (loc,line',tail msg')
-                                                        in (Nothing,ls++[BWNote BWError (dropWhile isSpace msg) (BWLocation realloc (read line) 1)])
+                                                                                let tr=tail rest
+                                                                                    (line',msg')=span (/= ':') tr
+                                                                                in if null msg'
+                                                                                        then (loc,"0",tr)
+                                                                                        else (loc,line',tail msg')
+                                                        in (Just (BWNote BWError "" (BWLocation realloc (read line) 1),[msg]),addCurrent currentNote ls)
                         | Just (jcn,msgs)<-currentNote=
                                 if (not $ null l)
                                         then (Just (jcn,l:msgs),ls)
                                         else (Nothing,ls++[makeNote jcn msgs])
                         | otherwise =(Nothing,ls)
+                addCurrent Nothing xs=xs
+                addCurrent (Just (n,msgs)) xs=xs++[makeNote n msgs]
                 extractLine el=let
                         (_,_,_,ls)=el =~ "\\(line ([0-9]*)\\)" :: (String,String,String,[String])
                         in if null ls
