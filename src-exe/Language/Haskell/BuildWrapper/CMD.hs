@@ -27,6 +27,8 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, file:: FilePath,token::String}
         | ThingAtPoint {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, file:: FilePath, line::Int, column::Int, qualify::Bool, typed::Bool}
         | NamesInScope {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, file:: FilePath} 
+        | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile}
+        | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile}
     deriving (Show,Read,Data,Typeable)    
   
  
@@ -52,9 +54,11 @@ mthingAtPoint=ThingAtPoint tf cp cf fp
         (def &= help "qualify results")
         (def &= help "type results")
 mnamesInScope=NamesInScope tf cp cf fp 
+mdependencies=Dependencies tf cp cf
+mcomponents=Components tf cp cf
 
 cmdMain = (cmdArgs $ 
-                modes [msynchronize, msynchronize1, mconfigure,mwrite,mbuild, moutline, mtokenTypes,moccurrences,mthingAtPoint,mnamesInScope]
+                modes [msynchronize, msynchronize1, mconfigure,mwrite,mbuild, moutline, mtokenTypes,moccurrences,mthingAtPoint,mnamesInScope,mdependencies,mcomponents]
                 &= helpArg [explicit, name "help", name "h"]
                 &= help "buildwrapper executable"
                 &= program "buildwrapper"
@@ -72,6 +76,8 @@ cmdMain = (cmdArgs $
                 handle (Occurrences tf cp cf fp token)=run tf cp cf (getOccurrences fp token)
                 handle (ThingAtPoint tf cp cf fp line column qual typed)=run tf cp cf (getThingAtPoint fp line column qual typed)
                 handle (NamesInScope tf cp cf fp)=run tf cp cf (getNamesInScope fp)
+                handle (Dependencies tf cp cf)=run tf cp cf getCabalDependencies
+                handle (Components tf cp cf)=run tf cp cf getCabalComponents
                 run:: (ToJSON a) => FilePath -> FilePath -> FilePath -> StateT BuildWrapperState IO a -> IO ()
                 run = runV Normal
                 runV:: (ToJSON a) => Verbosity -> FilePath -> FilePath -> FilePath -> StateT BuildWrapperState IO a -> IO ()

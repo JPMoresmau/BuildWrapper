@@ -1,20 +1,32 @@
-{-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE PatternGuards,ScopedTypeVariables #-}
 module Language.Haskell.BuildWrapper.Cabal where
 
 import Language.Haskell.BuildWrapper.Base
+import Language.Haskell.BuildWrapper.Packages
 
 import Control.Monad.State
 
 
 import Data.Char
+import Data.Function (on)
 import Data.List
 import Data.Maybe
+import qualified Data.Map as DM
 
+import Exception (ghandle)
 
 import Distribution.ModuleName
-import Distribution.PackageDescription (exposedModules, otherModules,library,executables,testSuites,Library,hsSourceDirs,libBuildInfo,Executable(..),exeName,modulePath,buildInfo,TestSuite(..),testName,TestSuiteInterface(..),testInterface,testBuildInfo,BuildInfo,cppOptions,defaultExtensions,otherExtensions,oldExtensions )
+import Distribution.PackageDescription ( otherModules,library,executables,testSuites,Library,hsSourceDirs,libBuildInfo,Executable(..),exeName,modulePath,buildInfo,TestSuite(..),testName,TestSuiteInterface(..),testInterface,testBuildInfo,BuildInfo,cppOptions,defaultExtensions,otherExtensions,oldExtensions )
 import Distribution.Simple.GHC
-import Distribution.Simple.LocalBuildInfo                         
+import Distribution.Simple.LocalBuildInfo     
+
+import qualified Distribution.PackageDescription as PD 
+import Distribution.Package
+import Distribution.InstalledPackageInfo as IPI
+import Distribution.Version
+import Distribution.Text (display)
+
+                    
 import qualified Distribution.Simple.Configure as DSC
 import qualified Distribution.Verbosity as V
 import Text.Regex.TDFA
@@ -391,7 +403,7 @@ getReferencedFiles lbi= do
         extractFromLib :: Library -> [(BuildInfo,ComponentLocalBuildInfo,FilePath,[(ModuleName,FilePath)])]
         extractFromLib l=let
                 lib=libBuildInfo l
-                modules=(exposedModules l) ++ (otherModules lib)
+                modules=(PD.exposedModules l) ++ (otherModules lib)
                 in [(lib,fromJust $ libraryConfig lbi,buildDir lbi,(copyModules modules (hsSourceDirs lib)))]
         extractFromExe :: Executable -> (BuildInfo,ComponentLocalBuildInfo,FilePath,[(ModuleName,FilePath)])
         extractFromExe e@Executable{exeName=exeName'}=let
@@ -419,7 +431,57 @@ getReferencedFiles lbi= do
 moduleToString :: ModuleName -> String
 moduleToString = concat . intersperse ['.'] . components
 
+cabalComponents :: BuildWrapper (OpResult [CabalComponent])
+cabalComponents = do
+     (rs,ns)<-withCabal Source (return . cabalComponentsFromDescription . localPkgDescr)
+     return (fromMaybe [] rs,ns)   
 
+cabalDependencies :: BuildWrapper (OpResult [(FilePath,[CabalPackage])])
+cabalDependencies = do
+     (rs,ns)<-withCabal Source (\lbi-> do
+        liftIO $ ghandle (\(e :: IOError) -> do
+               putStrLn $ show e
+               return []) $ do
+            pkgs<-liftIO $ getPkgInfos
+            return $ dependencies (localPkgDescr lbi) pkgs
+            )
+     return (fromMaybe [] rs,ns)
+
+        
+dependencies :: PD.PackageDescription -> [(FilePath,[InstalledPackageInfo])] -> [(FilePath,[CabalPackage])]
+dependencies pd pkgs=let
+        pkgsMap=foldr buildPkgMap DM.empty pkgs -- build the map of package by name with ordered version (more recent first)
+        allC= cabalComponentsFromDescription pd
+        gdeps=PD.buildDepends pd
+        cpkgs=concat $ DM.elems $ DM.map (\ipis->getDep allC ipis gdeps []) pkgsMap
+        in DM.assocs $ DM.fromListWith (++) $ ((map (\(a,b)->(a,[b])) cpkgs) ++ (map (\(a,_)->(a,[])) pkgs))
+        where 
+                buildPkgMap :: (FilePath,[InstalledPackageInfo]) -> DM.Map String [(FilePath,InstalledPackageInfo)] -> DM.Map String  [(FilePath,InstalledPackageInfo)]
+                buildPkgMap (fp,ipis) m=foldr (\i dm->let
+                        key=display $ pkgName $ sourcePackageId i
+                        vals=DM.lookup key dm
+                        newvals=case vals of
+                                Nothing->[(fp,i)]
+                                Just l->sortBy (flip (compare `on` (pkgVersion . sourcePackageId . snd))) ((fp,i):l)
+                        in DM.insert key newvals dm
+                        ) m ipis
+                getDep :: [CabalComponent] -> [(FilePath,InstalledPackageInfo)] -> [Dependency]-> [(FilePath,CabalPackage)] -> [(FilePath,CabalPackage)]
+                getDep _ [] _ acc= acc
+                getDep allC ((fp,InstalledPackageInfo{sourcePackageId=i,exposed=e,IPI.exposedModules=ems}):xs) deps acc= let
+                        (ds,deps2)=partition (\(Dependency n v)->((pkgName i)==n) && withinRange (pkgVersion i) v) deps -- find if version is referenced, remove the referencing component so that it doesn't match an older version
+                        cps=if null ds then [] else allC
+                        mns=map display ems
+                        in getDep allC xs deps2 ((fp,CabalPackage (display $ pkgName i) (display $ pkgVersion i) e cps mns): acc) -- build CabalPackage structure
+                
+                --DM.map (sortBy (flip (compare `on` (pkgVersion . sourcePackageId . snd)))) $ DM.fromListWith (++) (map (\i->((display $ pkgName $ sourcePackageId i),[i]) ) ipis) --concatenates all version and sort them, most recent first
+        
+cabalComponentsFromDescription :: PD.PackageDescription -> [CabalComponent]
+cabalComponentsFromDescription pd= 
+      (if isJust (PD.library pd) then [CCLibrary (PD.buildable $ PD.libBuildInfo $ fromJust (PD.library pd))] else []) ++
+      [ CCExecutable (PD.exeName e) (PD.buildable $ PD.buildInfo e)
+      | e <- PD.executables pd ]
+       ++ [ CCTestSuite (PD.testName e) (PD.buildable $ PD.testBuildInfo e)
+        | e <- PD.testSuites pd ]
 
 --class ToBWNote a where
 --        toBWNote :: a -> BWNote

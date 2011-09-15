@@ -159,3 +159,9 @@ getThingAtPoint fp line col qual typed=withGHCAST fp $ BwGHC.getThingAtPoint lin
                 
 getNamesInScope :: FilePath-> BuildWrapper (OpResult (Maybe [String]))
 getNamesInScope fp=withGHCAST fp BwGHC.getGhcNamesInScope
+
+getCabalDependencies :: BuildWrapper (OpResult [(FilePath,[CabalPackage])])
+getCabalDependencies = cabalDependencies
+
+getCabalComponents :: BuildWrapper (OpResult [CabalComponent])
+getCabalComponents = cabalComponents

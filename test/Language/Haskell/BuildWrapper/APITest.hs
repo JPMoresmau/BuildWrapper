@@ -27,6 +27,8 @@ instance APIFacade DirectAPI where
         getOccurrences _ r fp s= runAPI r $ API.getOccurrences fp s 
         getThingAtPoint _ r fp l c q t= runAPI r $ API.getThingAtPoint fp l c q t
         getNamesInScope _ r= runAPI r . API.getNamesInScope
+        getCabalDependencies _ r= runAPI r . API.getCabalDependencies
+        getCabalComponents _ r= runAPI r . API.getCabalComponents
 
 runAPI:: FilePath -> StateT BuildWrapperState IO a -> IO a
 runAPI root f= do

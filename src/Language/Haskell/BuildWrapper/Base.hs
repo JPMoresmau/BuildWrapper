@@ -217,6 +217,47 @@ fileToModule fp=map rep (dropExtension fp)
 data Verbosity = Silent | Normal | Verbose | Deafening
     deriving (Show, Read, Eq, Ord, Enum, Bounded,Data,Typeable)
     
+data CabalComponent
+  = CCLibrary { cc_buildable :: Bool}
+  | CCExecutable { cc_exe_name :: String
+        , cc_buildable :: Bool}
+  | CCTestSuite { cc_test_name :: String
+        , cc_buildable :: Bool}      
+  deriving (Eq, Show)
+
+instance ToJSON CabalComponent where
+        toJSON (CCLibrary b)=  object ["Library" .= b]
+        toJSON (CCExecutable e b)=  object ["Executable" .= b,"e" .= e]
+        toJSON (CCTestSuite t b)=  object ["TestSuite" .= b,"t" .= t]
+
+instance FromJSON CabalComponent where
+    parseJSON (Object v)
+        | Just b <- M.lookup "Library" v =CCLibrary <$> parseJSON b
+        | Just b <- M.lookup "Executable" v =CCExecutable <$> v .: "e" <*> parseJSON b
+        | Just b <- M.lookup "TestSuite" v =CCTestSuite <$> v .: "t" <*> parseJSON b
+        | otherwise = mzero
+    parseJSON _= mzero
+
+data CabalPackage=CabalPackage {
+        cp_name::String,
+        cp_version::String,
+        cp_exposed::Bool,
+        cp_dependent::[CabalComponent],
+        cp_exposedModules::[String]
+        }
+   deriving (Eq, Show)
+
+instance ToJSON CabalPackage where
+        toJSON (CabalPackage n v e d em)=object ["n" .= n,"v" .= v, "e" .= e, "d" .= map toJSON d, "m" .= map toJSON em]
+
+instance FromJSON CabalPackage where
+    parseJSON (Object v) =CabalPackage <$>
+                         v .: "n" <*>
+                         v .: "v" <*>
+                         v .: "e" <*>
+                         v .: "d" <*>
+                         v .: "m"
+    parseJSON _= mzero
 
 -- |  http://book.realworldhaskell.org/read/io-case-study-a-library-for-searching-the-filesystem.html
 getRecursiveContents :: FilePath -> IO [FilePath]

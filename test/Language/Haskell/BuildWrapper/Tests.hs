@@ -29,7 +29,9 @@ tests=  [
         testPreviewTokenTypes,
         testThingAtPoint,
         testNamesInScope,
-        testInPlaceReference
+        testInPlaceReference,
+        testCabalComponents,
+        testCabalDependencies
         ]
 
 class APIFacade a where
@@ -43,7 +45,8 @@ class APIFacade a where
         getOccurrences :: a -> FilePath -> FilePath -> String -> IO (OpResult [TokenDef])
         getThingAtPoint :: a -> FilePath -> FilePath -> Int -> Int -> Bool -> Bool -> IO (OpResult (Maybe String))
         getNamesInScope :: a -> FilePath -> FilePath-> IO (OpResult (Maybe [String]))
-        
+        getCabalDependencies :: a -> FilePath -> IO (OpResult [(FilePath,[CabalPackage])])
+        getCabalComponents :: a -> FilePath -> IO (OpResult [CabalComponent])
         
 testSynchronizeAll :: (APIFacade a)=> a -> Test
 testSynchronizeAll api= TestLabel "testSynchronizeAll" (TestCase ( do
@@ -597,6 +600,72 @@ testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
         assertBool ("returned false on build") boolOK
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
         ))
+
+testCabalComponents  :: (APIFacade a)=> a -> Test
+testCabalComponents api= TestLabel "testCabalComponents" (TestCase ( do
+        root<-createTestProject
+        synchronize api root
+        (cps,nsOK)<-getCabalComponents api root
+        assertBool ("errors or warnings on getCabalComponents:"++show nsOK) (null nsOK)
+        assertEqual "not three components" 3 (length cps)
+        let (l:ex:ts:[])=cps
+        assertEqual "not library true" (CCLibrary True) l
+        assertEqual "not executable true" (CCExecutable "BWTest" True) ex
+        assertEqual "not test suite true" (CCTestSuite "BWTest-test" True) ts
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+	        "version:0.1",
+	        "cabal-version:  >= 1.8",
+	        "build-type:     Simple",
+	        "",
+	        "library",
+	        "  hs-source-dirs:  src",
+	        "  exposed-modules: A",
+	        "  other-modules:  B.C",
+	        "  build-depends:  base",
+	        "  buildable: False",
+	        "",
+	        "executable BWTest",
+	        "  hs-source-dirs:  src",
+	        "  main-is:         Main.hs",
+	        "  other-modules:  B.D",
+	        "  build-depends:  base",
+	        "  buildable: False",
+	        "",
+	        "test-suite BWTest-test",
+	        "  type:            exitcode-stdio-1.0",
+	        "  hs-source-dirs:  test",
+	        "  main-is:         Main.hs",
+	        "  other-modules:  TestA",
+	        "  build-depends:  base",
+	        "  buildable: False",
+	        ""
+	        ]
+        synchronize api root
+        (cps2,nsOK2)<-getCabalComponents api root
+        assertBool ("errors or warnings on getCabalComponents:"++show nsOK2) (null nsOK2)
+        assertEqual "not three components" 3 (length cps2)
+        let (l2:ex2:ts2:[])=cps2
+        assertEqual "not library false" (CCLibrary False) l2
+        assertEqual "not executable false" (CCExecutable "BWTest" False) ex2
+        assertEqual "not test suite false" (CCTestSuite "BWTest-test" False) ts2          
+        ))
+
+testCabalDependencies  :: (APIFacade a)=> a -> Test
+testCabalDependencies api= TestLabel "testCabalDependencies" (TestCase ( do
+        root<-createTestProject
+        synchronize api root
+        (cps,nsOK)<-getCabalDependencies api root
+        assertBool ("errors or warnings on getCabalDependencies:"++show nsOK) (null nsOK)
+        assertEqual "not two databases" 2 (length cps)
+        let (f1:(fp,pkgs):[])=cps
+        let base=filter (\pkg->(cp_name pkg)=="base") pkgs
+        assertEqual "not 1 base" 1 (length base)
+        let (l:ex:ts:[])=cp_dependent $ head base
+        assertEqual "not library true" (CCLibrary True) l
+        assertEqual "not executable true" (CCExecutable "BWTest" True) ex
+        assertEqual "not test suite true" (CCTestSuite "BWTest-test" True) ts
+		))
 
 testProjectName :: String
 testProjectName="BWTest"         

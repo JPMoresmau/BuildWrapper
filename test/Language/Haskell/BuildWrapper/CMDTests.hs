@@ -28,7 +28,9 @@ instance APIFacade CMDAPI where
         getOccurrences _ r fp s= runAPI r "occurrences" ["--file="++fp,"--token="++s]
         getThingAtPoint _ r fp l c q t= runAPI r "thingatpoint" ["--file="++fp,"--line="++(show l),"--column="++(show c),"--qualify="++(show q),"--typed="++(show t)]
         getNamesInScope _ r fp= runAPI r "namesinscope" ["--file="++fp]
-
+        getCabalDependencies _ r= runAPI r "dependencies" []
+        getCabalComponents _ r= runAPI r "components" []
+        
 runAPI:: (FromJSON a,Show a) => FilePath -> String -> [String] -> IO a
 runAPI root command args= do
         let fullargs=[command,"--tempfolder=.dist-buildwrapper","--cabalpath=cabal","--cabalfile="++(testCabalFile root)] ++ args

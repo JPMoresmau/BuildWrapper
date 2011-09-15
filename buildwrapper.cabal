@@ -10,7 +10,7 @@ library
   ghc-options:     -O2 -Wall -fno-warn-unused-do-bind
   exposed-modules: Language.Haskell.BuildWrapper.API,Language.Haskell.BuildWrapper.Base
   extensions:      CPP
-  other-modules:   Language.Haskell.BuildWrapper.Cabal, Language.Haskell.BuildWrapper.GHC, Language.Haskell.BuildWrapper.Src, Language.Haskell.BuildWrapper.Find
+  other-modules:   Language.Haskell.BuildWrapper.Cabal, Language.Haskell.BuildWrapper.GHC, Language.Haskell.BuildWrapper.Src, Language.Haskell.BuildWrapper.Find, Language.Haskell.BuildWrapper.Packages
 
 executable buildwrapper
   hs-source-dirs:  src-exe
