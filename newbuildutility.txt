@@ -1,6 +1,10 @@
 we could have a server listening to requests and always on (one server for all projects) Without the GHC API it shouldn't take much memory. 
 Calls that use the GHC API should be run in a separate process (one process for each open file???) 
 
+what is the purpose of the synchronized temp folder?
+	- save in there files not saved by the editor so that preprocessing et al can be done (run GHC on new file)
+	- having all files there mean we get an exact replica except of the changed file
+	- BUT we do not need it for builds!
 
 synchronize
 	create/synchronize sub folder (.dist-toolname) and ensure all files that have changed in base folder are present in folder
@@ -15,12 +19,14 @@ synchronize
 	can take a reset flag that ensure all files are the same (remove generated files)
 
 configure
+	configure in proper folder
 	cabal API call
 		maybe a executable call + parse result is better (warnings and such will just be written to output, so we need to parse it anyway)
 	with additional flags (enable-tests)
 	parse errors and warnings
 
 build
+	build in proper folder
 	require configure
 	cabal executable/API call?
 	parse errors and warnings

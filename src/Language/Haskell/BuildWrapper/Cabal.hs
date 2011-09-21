@@ -90,10 +90,10 @@ cabalV =do
                 toCabalV Verbose =V.verbose
                 toCabalV Deafening =V.deafening
 
-cabalBuild :: Bool -> BuildWrapper (OpResult Bool)
-cabalBuild output= do
-        (mr,n)<-withCabal Target (\_->do
-                cf<-getCabalFile Target
+cabalBuild :: Bool -> WhichCabal -> BuildWrapper (OpResult Bool)
+cabalBuild output srcOrTgt= do
+        (mr,n)<-withCabal srcOrTgt (\_->do
+                cf<-getCabalFile srcOrTgt
                 cp<-gets cabalPath
                 v<-cabalV
                 dist_dir<-getDistDir
@@ -315,17 +315,22 @@ type CabalBuildInfo=(BuildInfo,ComponentLocalBuildInfo,FilePath,[(ModuleName,Fil
              
 getBuildInfo ::  FilePath  -> BuildWrapper (OpResult (Maybe (LocalBuildInfo,CabalBuildInfo)))
 getBuildInfo fp=do
-        (mmr,bwns)<-withCabal Target (\lbi->do
-                fps<-getReferencedFiles lbi
+        (mmr,bwns)<-go getReferencedFiles
+        case mmr of
+                Nothing-> do
+                        (mmr2,bwns2)<-go getAllFiles
+                        return $ case mmr2 of
+                                Nothing-> (Nothing,bwns)
+                                Just a-> (a,bwns2)
+                Just a->return $ (a,bwns)
+        where go f=withCabal Source (\lbi->do
+                fps<-f lbi
                 let ok=filter (\(_,_,_,ls)->not $ null ls ) $
                         map (\(n1,n2,n3,ls)->(n1,n2,n3,filter (\(_,b)->b==fp) ls) ) 
                                 fps
                 return  $ if null ok
                         then Nothing
                         else Just $ (lbi,head ok))
-        return $ case mmr of
-                Nothing->(Nothing,bwns)
-                Just a->(a,bwns)
              
 fileGhcOptions :: (LocalBuildInfo,CabalBuildInfo) -> (ModuleName,[String])
 fileGhcOptions (lbi,(bi,clbi,fp,ls))=(fst $ head ls,(ghcOptions lbi bi clbi fp))

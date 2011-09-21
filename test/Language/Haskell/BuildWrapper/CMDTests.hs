@@ -18,11 +18,11 @@ cmdTests=TestList $ map (\f->f CMDAPI) tests
 data CMDAPI=CMDAPI
 
 instance APIFacade CMDAPI where
-        synchronize _ r= runAPI r "synchronize" []
-        synchronize1 _ r fp= runAPI r "synchronize1" ["--file="++fp]
+        synchronize _ r ff= runAPI r "synchronize" ["--force="++(show ff)]
+        synchronize1 _ r ff fp= runAPI r "synchronize1" ["--force="++(show ff),"--file="++fp]
         write _ r fp s= runAPI r "write" ["--file="++fp,"--contents="++s]
         configure _ r t= runAPI r "configure" ["--cabaltarget="++(show t)]
-        build _ r b= runAPI r "build" ["--output="++(show b)]
+        build _ r b wc= runAPI r "build" ["--output="++(show b),"--cabaltarget="++(show wc)]
         getOutline _ r fp= runAPI r "outline" ["--file="++fp]
         getTokenTypes _ r fp= runAPI r "tokentypes" ["--file="++fp]
         getOccurrences _ r fp s= runAPI r "occurrences" ["--file="++fp,"--token="++s]

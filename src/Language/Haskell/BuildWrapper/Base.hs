@@ -182,15 +182,15 @@ getFullSrc src=do
         let dir=(takeDirectory cf)
         return $ (dir </> src)
 
-copyFromMain :: FilePath -> BuildWrapper(Maybe FilePath)
-copyFromMain src=do
+copyFromMain :: Bool -> FilePath -> BuildWrapper(Maybe FilePath)
+copyFromMain force src=do
         fullSrc<-getFullSrc src
         exSrc<-liftIO $ doesFileExist fullSrc
         if exSrc 
                 then do
                         fullTgt<-getTargetPath src
                         ex<-liftIO $ doesFileExist fullTgt
-                        shouldCopy<-if (not ex )
+                        shouldCopy<- if (force || (not ex))
                                 then return True
                                 else do
                                         modSrc<-liftIO $ getModificationTime fullSrc

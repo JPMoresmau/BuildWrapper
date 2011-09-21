@@ -15,25 +15,25 @@ import Data.Maybe
 import System.FilePath
 import GHC (TypecheckedSource)
 
-synchronize ::  BuildWrapper(OpResult [FilePath])
-synchronize =do
+synchronize ::  Bool -> BuildWrapper(OpResult [FilePath])
+synchronize force =do
         cf<-gets cabalFile
-        m<-copyFromMain $ takeFileName cf
+        m<-copyFromMain force $ takeFileName cf
         (fileList,ns)<-getFilesToCopy
         --liftIO $ putStrLn  ("filelist:" ++ (show fileList))
         --let fileList=case motherFiles of
         --       Nothing ->[]
         --        Just fps->fps
-        m1<-mapM copyFromMain (
+        m1<-mapM (copyFromMain force)(
                 "Setup.hs":
                 "Setup.lhs":
                 fileList)
         return $ (catMaybes (m:m1),ns)
 
 
-synchronize1 ::  FilePath -> BuildWrapper(Maybe FilePath)
-synchronize1 fp = do
-        m1<-mapM copyFromMain [fp]
+synchronize1 ::  Bool -> FilePath -> BuildWrapper(Maybe FilePath)
+synchronize1 force fp = do
+        m1<-mapM (copyFromMain force) [fp]
         return $ head m1
 
 write ::  FilePath -> String -> BuildWrapper()
@@ -48,7 +48,7 @@ configure which= do
         (mlbi,msgs)<-cabalConfigure which
         return $ (isJust mlbi,msgs)
 
-build :: Bool -> BuildWrapper (OpResult Bool)
+build :: Bool -> WhichCabal -> BuildWrapper (OpResult Bool)
 build = cabalBuild
 --        (bool,bwns)<-configure
 --        if bool
@@ -120,7 +120,7 @@ withGHCAST fp f= do
 getOutline :: FilePath -> BuildWrapper (OpResult [OutlineDef])
 getOutline fp=do
        (mast,bwns)<-getAST fp
-       -- liftIO $ putStrLn $ show mast
+       liftIO $ putStrLn $ show mast
        case mast of
         Just (ParseOk ast)->do
                 return (getHSEOutline ast,bwns)

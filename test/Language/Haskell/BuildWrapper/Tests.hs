@@ -35,11 +35,11 @@ tests=  [
         ]
 
 class APIFacade a where
-        synchronize :: a -> FilePath -> IO (OpResult [FilePath])
-        synchronize1 :: a -> FilePath -> FilePath -> IO (Maybe FilePath)
+        synchronize :: a -> FilePath -> Bool -> IO (OpResult [FilePath])
+        synchronize1 :: a  -> FilePath -> Bool -> FilePath -> IO (Maybe FilePath)
         write :: a -> FilePath -> FilePath -> String -> IO ()
         configure :: a -> FilePath -> WhichCabal -> IO (OpResult Bool)
-        build :: a -> FilePath -> Bool -> IO (OpResult Bool)
+        build :: a -> FilePath -> Bool -> WhichCabal -> IO (OpResult Bool)
         getOutline :: a -> FilePath -> FilePath -> IO (OpResult [OutlineDef])
         getTokenTypes :: a -> FilePath -> FilePath -> IO (OpResult [TokenDef])
         getOccurrences :: a -> FilePath -> FilePath -> String -> IO (OpResult [TokenDef])
@@ -51,7 +51,7 @@ class APIFacade a where
 testSynchronizeAll :: (APIFacade a)=> a -> Test
 testSynchronizeAll api= TestLabel "testSynchronizeAll" (TestCase ( do
         root<-createTestProject
-        (fps,ns)<-synchronize api root
+        (fps,ns)<-synchronize api root False
         assertBool "no file path on creation" (not $ null fps) 
         assertEqual "no cabal file" (testProjectName <.> ".cabal") (head fps)
         assertBool "no A" (elem ("src" </> "A.hs") fps)
@@ -70,7 +70,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         assertEqual ("no errors or warnings on no cabal") 1 (length nsNoCabal)        
         assertEqual ("wrong error on no cabal") (BWNote BWError "No cabal file found.\nPlease create a package description file <pkgname>.cabal\n" (BWLocation "" 0 1)) (head nsNoCabal)   
         
-        synchronize api root
+        synchronize api root False
         (boolOK,nsOK)<-configure api root Target
         assertBool ("configure returned false") boolOK
         assertBool ("errors or warnings:"++show nsOK) (null nsOK)
@@ -78,7 +78,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         let cfn=takeFileName cf
         writeFile cf $ unlines ["version:0.1",
                 "build-type:     Simple"]
-        synchronize api root
+        synchronize api root False
         (bool1,nsErrors1)<-configure api root Target
         assertBool ("bool1 returned true") (not bool1)
         assertEqual "no errors on no name" 2 (length nsErrors1)
@@ -88,7 +88,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         writeFile cf $ unlines ["name: 4 P1",
                 "version:0.1",
                 "build-type:     Simple"]
-        synchronize api root
+        synchronize api root False
         (bool2,nsErrors2)<-configure api root Target
         assertBool ("bool2 returned true") (not bool2)
         assertEqual "no errors on invalid name" 1 (length nsErrors2)
@@ -104,7 +104,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
                 "  exposed-modules: A",
                 "  other-modules:  B.C",
                 "  build-depends:   base, toto"]
-        synchronize api root
+        synchronize api root False
         (bool3,nsErrors3)<-configure api root Target
         assertBool ("bool3 returned true") (not bool3)
         assertEqual "no errors on unknown dependency" 1 (length nsErrors3)
@@ -120,7 +120,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
                 "  exposed-modules: A",
                 "  other-modules:  B.C",
                 "  build-depends:   base, toto, titi"]
-        synchronize api root
+        synchronize api root False
         (bool4,nsErrors4)<-configure api root Target
         assertBool ("bool4 returned true") (not bool4)
         assertEqual "no errors on unknown dependencies" 1 (length nsErrors4)
@@ -135,7 +135,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
                 "  hs-source-dirs:  src",
                 "  other-modules:  B.D",
                 "  build-depends:  base"]
-        synchronize api root
+        synchronize api root False
         (bool5,nsErrors5)<-configure api root Target
         assertBool ("bool5 returned true") (not bool5)
         assertEqual "no errors on no main" 1 (length nsErrors5)
@@ -147,7 +147,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
 testConfigureWarnings :: (APIFacade a)=> a -> Test
 testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
         root<-createTestProject
-        synchronize api root
+        synchronize api root False
         let cf=testCabalFile root
         let cfn=takeFileName cf
         writeFile cf $ unlines ["name: "++testProjectName,
@@ -161,7 +161,7 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
                 "  exposed-modules: A",
                 "  other-modules:  B.C",
                 "  build-depends:   base"]
-        synchronize api root
+        synchronize api root False
         (bool1,ns1)<- configure api root Target
         assertBool ("returned false 1 "++ (show ns1)) bool1
         assertEqual ("didn't return 1 warning") 1 (length ns1)
@@ -176,7 +176,7 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
                 "  exposed-modules: A",
                 "  other-modules:  B.C",
                 "  build-depends:   base"]
-        synchronize api root
+        synchronize api root False
         (bool2,ns2)<- configure api root Target
         assertBool ("returned false 2 "++ (show ns2)) bool2
         assertEqual ("didn't return 1 warning") 1 (length ns2)
@@ -193,7 +193,7 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
                 "  build-depends:   base"]
         writeFile ((takeDirectory cf) </> "Setup.hs") $ unlines ["import Distribution.Simple",
 			"main = defaultMain"]
-        synchronize api root
+        synchronize api root False
         (bool3,ns3)<- configure api root Target
         assertBool ("returned false 3 "++ (show ns3)) bool3
         assertEqual ("didn't return 1 warning") 1 (length ns3)
@@ -205,20 +205,20 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
 testBuildErrors :: (APIFacade a)=> a -> Test
 testBuildErrors api = TestLabel "testBuildErrors" (TestCase ( do
         root<-createTestProject
-        synchronize api root
+        synchronize api root False
         (boolOKc,nsOKc)<-configure api root Target
         assertBool ("returned false on configure") boolOKc
         assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
-        (boolOK,nsOK)<-build api root False
+        (boolOK,nsOK)<-build api root False Source
         assertBool ("returned false on build") boolOK
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
         --let srcF=root </> "src"
         let rel="src"</>"A.hs"
         -- use api to write temp file
-        write api root rel $ unlines ["module A where","import toto","fA=undefined"]
-        --mf1<-runAPI root $ synchronize1 rel
+        writeFile (root </> rel) $ unlines ["module A where","import toto","fA=undefined"]
+        --mf1<-runAPI root $ synchronize1 rel False
         --assertBool ("mf1 not just") (isJust mf1)
-        (bool1,nsErrors1)<-build api root False
+        (bool1,nsErrors1)<-build api root False Source
         assertBool ("returned true on bool1") (not bool1)
         assertBool ("no errors or warnings on nsErrors") (not $ null nsErrors1)
         let (nsError1:[])=nsErrors1
@@ -226,9 +226,9 @@ testBuildErrors api = TestLabel "testBuildErrors" (TestCase ( do
         -- write file and synchronize
         writeFile (root </> "src"</>"A.hs")$ unlines ["module A where","import Toto","fA=undefined"]
         --runAPI root $ write rel $ unlines ["module A where","import Toto","fA=undefined"]
-        mf2<-synchronize1 api root rel
+        mf2<-synchronize1 api root False rel
         assertBool ("mf2 not just") (isJust mf2)
-        (bool2,nsErrors2)<-build api root False
+        (bool2,nsErrors2)<-build api root False Source
         assertBool ("returned true on bool2") (not bool2)
         assertBool ("no errors or warnings on nsErrors2") (not $ null nsErrors2)
         let (nsError2:[])=nsErrors2
@@ -238,9 +238,9 @@ testBuildErrors api = TestLabel "testBuildErrors" (TestCase ( do
 testBuildWarnings :: (APIFacade a)=> a -> Test
 testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         root<-createTestProject
-        synchronize api root
+        synchronize api root False
         --let cf=testCabalFile root      
-        write  api root(testProjectName <.> ".cabal") $ unlines ["name: "++testProjectName,
+        writeFile (root </> (testProjectName <.> ".cabal")) $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.8",
                 "build-type:     Simple",
@@ -251,13 +251,12 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
                 "  build-depends:   base",
                 "  ghc-options:     -Wall"]
         --let srcF=root </> "src"
-        (boolOK,nsOK)<-configure api root Target
+        (boolOK,nsOK)<-configure api root Source
         assertBool ("returned false") boolOK
         assertBool ("errors or warnings:"++show nsOK) (null nsOK)
         let rel="src"</>"A.hs"
-        write api root rel $ unlines ["module A where","import Data.List","fA=undefined"] 
-
-        (bool1,nsErrors1)<-build api root False
+        writeFile (root </> rel) $ unlines ["module A where","import Data.List","fA=undefined"] 
+        (bool1,nsErrors1)<-build api root False Source
         assertBool ("returned false on bool1") bool1
         assertBool ("no errors or warnings on nsErrors1") (not $ null nsErrors1)
         let (nsError1:nsError2:[])=nsErrors1
@@ -269,8 +268,8 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
 testBuildOutput :: (APIFacade a)=> a -> Test
 testBuildOutput api = TestLabel "testBuildOutput" (TestCase ( do       
         root<-createTestProject
-        synchronize api root
-        build api root True
+        synchronize api root False
+        build api root True Source
         let exeN=case os of
         	"mingw32"->(addExtension testProjectName "exe")
         	_->testProjectName
@@ -280,7 +279,7 @@ testBuildOutput api = TestLabel "testBuildOutput" (TestCase ( do
         removeFile exeF
         exeE2<-doesFileExist exeF
         assertBool ("exe does still exist after deletion: "++exeF) (not exeE2)
-        build api root False
+        build api root False Source
         exeE3<-doesFileExist exeF
         assertBool ("exe exists after build no output: "++exeF) (not exeE3)
         ))
@@ -288,16 +287,16 @@ testBuildOutput api = TestLabel "testBuildOutput" (TestCase ( do
 testModuleNotInCabal :: (APIFacade a)=> a -> Test
 testModuleNotInCabal api = TestLabel "testModuleNotInCabal" (TestCase ( do
         root<-createTestProject
-        synchronize api root
+        synchronize api root False
         let rel="src"</>"A.hs"
         write api root rel $ unlines ["module A where","import Auto","fA=undefined"] 
         let rel2="src"</>"Auto.hs"
         putStrLn (root </> rel2) 
         writeFile (root </> rel2) $ unlines ["module Auto where","fAuto=undefined"] 
-        (fps,ns)<-synchronize api root
+        (fps,ns)<-synchronize api root False
         putStrLn $ show fps
         putStrLn $ show ns
-        (bool1,nsErrors1)<-build api root False
+        (bool1,nsErrors1)<-build api root False Source
         putStrLn $ show nsErrors1
         assertBool ("returned false on bool1") bool1
         assertBool ("errors or warnings on nsErrors1") (null nsErrors1)
@@ -306,7 +305,7 @@ testModuleNotInCabal api = TestLabel "testModuleNotInCabal" (TestCase ( do
 --testAST :: Test
 --testAST = TestLabel "testAST" (TestCase ( do
 --        root<-createTestProject
---        runAPI root synchronize
+--        runAPI root synchronize False
 --        (boolOKc,nsOKc)<-runAPI root $ configure Target
 --        assertBool ("returned false on configure") boolOKc
 --        assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
@@ -326,7 +325,7 @@ testModuleNotInCabal api = TestLabel "testModuleNotInCabal" (TestCase ( do
 testOutline :: (APIFacade a)=> a -> Test
 testOutline api= TestLabel "testOutline" (TestCase ( do
         root<-createTestProject
-        synchronize api root
+        synchronize api root False
         let rel="src"</>"A.hs"
         -- use api to write temp file
         write api root rel $ unlines [
@@ -408,7 +407,7 @@ testOutline api= TestLabel "testOutline" (TestCase ( do
 testOutlinePreproc :: (APIFacade a)=> a -> Test
 testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
         root<-createTestProject
-        synchronize api root
+        synchronize api root False
         let rel="src"</>"A.hs"
         write api root (testProjectName <.> ".cabal") $ unlines ["name: "++testProjectName,
                 "version:0.1",
@@ -490,7 +489,7 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
 testPreviewTokenTypes :: (APIFacade a)=> a -> Test
 testPreviewTokenTypes api= TestLabel "testPreviewTokenTypes" (TestCase ( do
         root<-createTestProject
-        synchronize api root
+        synchronize api root False
         configure api root Target        
         let rel="src"</>"Main.hs"
         write api root rel $ unlines [
@@ -517,7 +516,7 @@ testPreviewTokenTypes api= TestLabel "testPreviewTokenTypes" (TestCase ( do
 testThingAtPoint :: (APIFacade a)=> a -> Test
 testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         root<-createTestProject
-        synchronize api root
+        synchronize api root False
         configure api root Target        
         let rel="src"</>"Main.hs"
         write api root rel $ unlines [  
@@ -543,15 +542,16 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
 testNamesInScope :: (APIFacade a)=> a -> Test
 testNamesInScope api= TestLabel "testNamesInScope" (TestCase ( do
         root<-createTestProject
-        synchronize api root
-        configure api root Target        
+        synchronize api root False
+        configure api root Source        
         let rel="src"</>"Main.hs"
-        write api root rel $ unlines [  
+        writeFile (root </> rel) $ unlines [  
                   "module Main where",
                   "import B.D",
                   "main=return $ map id \"toto\""
                   ] 
-        build api root True
+        build api root True Source
+        synchronize api root False
         --c1<-getClockTime
         (mtts,nsErrors1)<-getNamesInScope api root rel
         --c2<-getClockTime
@@ -567,8 +567,8 @@ testNamesInScope api= TestLabel "testNamesInScope" (TestCase ( do
 testInPlaceReference  :: (APIFacade a)=> a -> Test
 testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
         root<-createTestProject
-        synchronize api root
-        write api root (testProjectName <.> ".cabal") $ unlines ["name: "++testProjectName,
+        synchronize api root False
+        writeFile (root </> (testProjectName <.> ".cabal")) $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.8",
                 "build-type:     Simple",
@@ -593,10 +593,10 @@ testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
                 "  build-depends:  base, BWTest",
                 ""
                 ]   
-        (boolOKc,nsOKc)<-configure api root Target
+        (boolOKc,nsOKc)<-configure api root Source
         assertBool ("returned false on configure") boolOKc
         assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
-        (boolOK,nsOK)<-build api root False
+        (boolOK,nsOK)<-build api root False Source
         assertBool ("returned false on build") boolOK
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
         ))
@@ -604,7 +604,7 @@ testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
 testCabalComponents  :: (APIFacade a)=> a -> Test
 testCabalComponents api= TestLabel "testCabalComponents" (TestCase ( do
         root<-createTestProject
-        synchronize api root
+        synchronize api root False
         (cps,nsOK)<-getCabalComponents api root
         assertBool ("errors or warnings on getCabalComponents:"++show nsOK) (null nsOK)
         assertEqual "not three components" 3 (length cps)
@@ -641,7 +641,7 @@ testCabalComponents api= TestLabel "testCabalComponents" (TestCase ( do
 	        "  buildable: False",
 	        ""
 	        ]
-        synchronize api root
+        configure api root Source
         (cps2,nsOK2)<-getCabalComponents api root
         assertBool ("errors or warnings on getCabalComponents:"++show nsOK2) (null nsOK2)
         assertEqual "not three components" 3 (length cps2)
@@ -654,7 +654,7 @@ testCabalComponents api= TestLabel "testCabalComponents" (TestCase ( do
 testCabalDependencies  :: (APIFacade a)=> a -> Test
 testCabalDependencies api= TestLabel "testCabalDependencies" (TestCase ( do
         root<-createTestProject
-        synchronize api root
+        synchronize api root False
         (cps,nsOK)<-getCabalDependencies api root
         assertBool ("errors or warnings on getCabalDependencies:"++show nsOK) (null nsOK)
         assertEqual "not two databases" 2 (length cps)
