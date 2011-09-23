@@ -32,7 +32,7 @@ import Var ( varName,varType )
 import TypeRep ( Type(..), PredType(..) )
 
 import Data.Monoid ( mempty, mappend, mconcat )
-import Data.Foldable as F ( toList, maximumBy )
+import Data.Foldable as F ( maximumBy )
 import Data.Ord    ( comparing )
 import qualified Data.Set as S
 

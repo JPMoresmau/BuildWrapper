@@ -13,6 +13,7 @@ import Language.Haskell.Exts.Annotated
 import Language.Preprocessor.Cpphs
 import Data.Maybe
 import System.FilePath
+import System.Time
 import GHC (TypecheckedSource)
 
 synchronize ::  Bool -> BuildWrapper(OpResult [FilePath])
@@ -82,14 +83,21 @@ getAST fp = do
         (mcbi,bwns)<-getBuildInfo fp
         case mcbi of
                 Just(cbi)->do
-                        let (modName,opts)=cabalExtensions $ snd  cbi
+                        let (_,opts)=cabalExtensions $ snd  cbi
                         tgt<-getTargetPath fp
-                        let modS=moduleToString modName
+                        --let modS=moduleToString modName
                         input<-liftIO $ preproc (snd cbi) tgt
-                        pr<- liftIO $ getHSEAST input modS opts
+                        pr<- liftIO $ getHSEAST input opts
                         --let json=makeObj  [("parse" , (showJSON $ pr))]
                         return (Just pr,bwns)
-                Nothing-> return (Nothing,bwns)
+                Nothing-> do
+                        cf<-gets cabalFile
+                        let dir=(takeDirectory cf)
+                        --liftIO $ putStrLn "not in cabal"
+                        input<-liftIO $ readFile (dir </> fp)
+                        pr<- liftIO $ getHSEAST input $ map show knownExtensions
+                        --let json=makeObj  [("parse" , (showJSON $ pr))]
+                        return (Just pr,bwns)
 
 getGHCAST :: FilePath -> BuildWrapper (OpResult (Maybe TypecheckedSource))
 getGHCAST fp = do
@@ -120,7 +128,7 @@ withGHCAST fp f= do
 getOutline :: FilePath -> BuildWrapper (OpResult [OutlineDef])
 getOutline fp=do
        (mast,bwns)<-getAST fp
-       liftIO $ putStrLn $ show mast
+       --liftIO $ putStrLn $ show mast
        case mast of
         Just (ParseOk ast)->do
                 return (getHSEOutline ast,bwns)
@@ -128,17 +136,31 @@ getOutline fp=do
  
 getTokenTypes :: FilePath -> BuildWrapper (OpResult [TokenDef])
 getTokenTypes fp=do
-        (mcbi,bwns)<-getBuildInfo fp
-        case mcbi of
-                Just(cbi)->do
-                        let (_,opts)=cabalExtensions $ snd  cbi
-                        tgt<-getTargetPath fp
-                        input<-liftIO $ readFile tgt
-                        ett<-liftIO $ BwGHC.tokenTypesArbitrary tgt input (".lhs" == (takeExtension fp)) opts
+--        c1<-liftIO $ getClockTime
+--        (mcbi,bwns)<-getBuildInfo fp
+--        case mcbi of
+--                Just(cbi)->do
+--                        let (_,opts)=cabalExtensions $ snd cbi
+--                        tgt<-getTargetPath fp
+--                        ett<-liftIO $ do
+--                                input<-readFile tgt
+--                                putStrLn $ show $ length input
+--                                ett2<-BwGHC.tokenTypesArbitrary tgt input (".lhs" == (takeExtension fp)) opts
+--                                c2<-getClockTime
+--                                putStrLn ("getTokenTypes: " ++ (show $  tdPicosec $ diffClockTimes c2 c1))
+--                                return ett2
+--                        case ett of
+--                                Right tt->return (tt,bwns)
+--                                Left bw -> return ([],bw:bwns)
+--                Nothing-> do
+                        cf<-gets cabalFile
+                        let dir=(takeDirectory cf)
+                        --liftIO $ putStrLn "not in cabal"
+                        input<-liftIO $ readFile (dir </> fp)
+                        ett<-liftIO $ BwGHC.tokenTypesArbitrary dir input (".lhs" == (takeExtension fp)) $ map show knownExtensions
                         case ett of
-                                Right tt->return (tt,bwns)
-                                Left bw -> return ([],bw:bwns)
-                Nothing-> return ([],bwns)
+                                Right tt->return (tt,[])  -- bwns
+                                Left bw -> return ([],bw:[])  -- bwns
                 
 getOccurrences :: FilePath -> String -> BuildWrapper (OpResult [TokenDef])
 getOccurrences fp query=do

@@ -16,8 +16,8 @@ import qualified Data.Text as T
 --import Data.DeriveTH
 --import Data.Derive.JSON
 
-getHSEAST :: String -> String -> [String] -> IO (ParseResult (Module SrcSpanInfo, [Comment]))
-getHSEAST input mod options=do
+getHSEAST :: String -> [String] -> IO (ParseResult (Module SrcSpanInfo, [Comment]))
+getHSEAST input options=do
         let exts=map classifyExtension options
         -- putStrLn $ show exts
         let mode=defaultParseMode {extensions=exts,ignoreLinePragmas=False,ignoreLanguagePragmas=False} 

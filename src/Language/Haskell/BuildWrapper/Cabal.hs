@@ -129,44 +129,49 @@ cabalConfigure :: WhichCabal-> BuildWrapper (OpResult (Maybe LocalBuildInfo))
 cabalConfigure srcOrTgt= do
         cf<-getCabalFile srcOrTgt
         cp<-gets cabalPath
-        v<-cabalV
-        dist_dir<-getDistDir
-       
-        let args=[
-                "configure",
-                "--verbose="++(show $ fromEnum v),
-                "--user",
-                "--enable-tests",
-                "--builddir="++dist_dir
-                ]
-        {--(_,Just hOut,Just hErr)<-liftIO $ createProcess 
-                ((proc cp args){
-                        cwd = Just $takeDirectory cf,
-                        std_out = CreatePipe,
-                        std_err = CreatePipe
-                        })--}
-        liftIO $ do
-                cd<-getCurrentDirectory
-                setCurrentDirectory (takeDirectory cf)
-                c1<-getClockTime
-                --c<-readFile cf
-                --putStrLn dist_dir
-                --putStrLn (takeDirectory cf)
-                --putStrLn (show $ fromEnum v)
-                --putStrLn "cabal configure start"
-                (ex,_,err)<-readProcessWithExitCode cp args ""
-                c2<-getClockTime
-                putStrLn ("cabal configure end: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
-                --putStrLn err
-                let msgs=(parseCabalMessages (takeFileName cf) err) -- ++ (parseCabalMessages (takeFileName cf) out)
-                --putStrLn ("msgs:"++(show $ length msgs))
-                ret<-case ex of
-                        ExitSuccess  -> do
-                                lbi<-DSC.getPersistBuildConfig dist_dir
-                                return (Just lbi,msgs)
-                        ExitFailure _ -> return $ (Nothing,msgs)
-                setCurrentDirectory cd
-                return ret
+        ok<-liftIO $ doesFileExist cp
+        if ok 
+            then 
+                do
+                v<-cabalV
+                dist_dir<-getDistDir
+               
+                let args=[
+                        "configure",
+                        "--verbose="++(show $ fromEnum v),
+                        "--user",
+                        "--enable-tests",
+                        "--builddir="++dist_dir
+                        ]
+                {--(_,Just hOut,Just hErr)<-liftIO $ createProcess 
+                        ((proc cp args){
+                                cwd = Just $takeDirectory cf,
+                                std_out = CreatePipe,
+                                std_err = CreatePipe
+                                })--}
+                liftIO $ do
+                        cd<-getCurrentDirectory
+                        setCurrentDirectory (takeDirectory cf)
+                        c1<-getClockTime
+                        --c<-readFile cf
+                        --putStrLn dist_dir
+                        --putStrLn (takeDirectory cf)
+                        --putStrLn (show $ fromEnum v)
+                        --putStrLn "cabal configure start"
+                        (ex,_,err)<-readProcessWithExitCode cp args ""
+                        c2<-getClockTime
+                        putStrLn ("cabal configure end: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
+                        --putStrLn err
+                        let msgs=(parseCabalMessages (takeFileName cf) err) -- ++ (parseCabalMessages (takeFileName cf) out)
+                        --putStrLn ("msgs:"++(show $ length msgs))
+                        ret<-case ex of
+                                ExitSuccess  -> do
+                                        lbi<-DSC.getPersistBuildConfig dist_dir
+                                        return (Just lbi,msgs)
+                                ExitFailure _ -> return $ (Nothing,msgs)
+                        setCurrentDirectory cd
+                        return ret
+            else return (Nothing,[])       
         {-- 
         v<-gets cabalVerbosity
         gen_pkg_descr <- liftIO $ readPackageDescription v cf
@@ -325,6 +330,7 @@ getBuildInfo fp=do
                 Just a->return $ (a,bwns)
         where go f=withCabal Source (\lbi->do
                 fps<-f lbi
+                --liftIO $ mapM_ (\(_,_,_,ls)->mapM_ (putStrLn . snd) ls) fps
                 let ok=filter (\(_,_,_,ls)->not $ null ls ) $
                         map (\(n1,n2,n3,ls)->(n1,n2,n3,filter (\(_,b)->b==fp) ls) ) 
                                 fps
