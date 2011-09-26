@@ -38,6 +38,7 @@ import System.Process
 import System.Time
 
 
+
 getFilesToCopy :: BuildWrapper(OpResult [FilePath])
 getFilesToCopy =do
        (mfps,bwns)<-withCabal Source getAllFiles
@@ -493,6 +494,7 @@ cabalComponentsFromDescription pd=
       | e <- PD.executables pd ]
        ++ [ CCTestSuite (PD.testName e) (PD.buildable $ PD.testBuildInfo e)
         | e <- PD.testSuites pd ]
+
 
 --class ToBWNote a where
 --        toBWNote :: a -> BWNote

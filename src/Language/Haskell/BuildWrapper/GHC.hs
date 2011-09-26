@@ -276,12 +276,13 @@ ghctokensArbitrary base_dir contents options= do
 #else
                 let dflags1 = List.foldl' dopt_set flg' lexerFlags
 #endif
-        --let dflags1 = dflags0{flags=(Opt_TemplateHaskell:(flags dflags0))}
-                let prTS = lexTokenStream sb (mkSrcLoc (mkFastString "<interactive>") 1 (scionColToGhcCol 1)) dflags1
-        --setSessionDynFlags dflags0
+                let prTS = lexTokenStream sb lexLoc dflags1
                 case prTS of
                         POk _ toks      -> return $ Right $ (filter ofInterest toks)
                         PFailed loc msg -> return $ Left $ ghcErrMsgToNote base_dir $ mkPlainErrMsg loc msg
+
+lexLoc :: SrcLoc
+lexLoc = mkSrcLoc (mkFastString "<interactive>") 1 (scionColToGhcCol 1)
 
 #if __GLASGOW_HASKELL__ >= 700
 lexerFlags :: [ExtensionFlag]
@@ -366,7 +367,7 @@ generateTokens :: FilePath                        -- ^ The project's root direct
                -> ([TokenDef] -> a)               -- ^ The TokenDef filter function
                -> IO (Either BWNote a)
 generateTokens projectRoot contents literate options  xform filterFunc =
-  let (ppTs, ppC) = preprocessSource contents literate --([],contents)
+  let (ppTs, ppC) = preprocessSource contents literate
   in   ghctokensArbitrary projectRoot ppC options
        >>= (\result ->
              case result of 

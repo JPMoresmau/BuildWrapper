@@ -80,24 +80,25 @@ preproc cbi tgt= do
 
 getAST :: FilePath -> BuildWrapper (OpResult (Maybe (ParseResult (Module SrcSpanInfo, [Comment]))))
 getAST fp = do
-        (mcbi,bwns)<-getBuildInfo fp
-        case mcbi of
-                Just(cbi)->do
-                        let (_,opts)=cabalExtensions $ snd  cbi
+--        (mcbi,bwns)<-getBuildInfo fp
+--        case mcbi of
+--                Just(cbi)->do
+--                        let (_,opts)=cabalExtensions $ snd  cbi
+--                        tgt<-getTargetPath fp
+--                        --let modS=moduleToString modName
+--                        input<-liftIO $ preproc (snd cbi) tgt
+--                        pr<- liftIO $ getHSEAST input opts
+--                        --let json=makeObj  [("parse" , (showJSON $ pr))]
+--                        return (Just pr,bwns)
+--                Nothing-> do
+                        -- cf<-gets cabalFile
                         tgt<-getTargetPath fp
-                        --let modS=moduleToString modName
-                        input<-liftIO $ preproc (snd cbi) tgt
-                        pr<- liftIO $ getHSEAST input opts
-                        --let json=makeObj  [("parse" , (showJSON $ pr))]
-                        return (Just pr,bwns)
-                Nothing-> do
-                        cf<-gets cabalFile
-                        let dir=(takeDirectory cf)
+                        -- let dir=(takeDirectory cf)
                         --liftIO $ putStrLn "not in cabal"
-                        input<-liftIO $ readFile (dir </> fp)
-                        pr<- liftIO $ getHSEAST input $ map show knownExtensions
+                        input<-liftIO $ readFile tgt -- (dir </> fp)
+                        pr<- liftIO $ getHSEAST input knownExtensionNames
                         --let json=makeObj  [("parse" , (showJSON $ pr))]
-                        return (Just pr,bwns)
+                        return (Just pr,[])
 
 getGHCAST :: FilePath -> BuildWrapper (OpResult (Maybe TypecheckedSource))
 getGHCAST fp = do
@@ -136,7 +137,7 @@ getOutline fp=do
  
 getTokenTypes :: FilePath -> BuildWrapper (OpResult [TokenDef])
 getTokenTypes fp=do
---        c1<-liftIO $ getClockTime
+        c1<-liftIO $ getClockTime
 --        (mcbi,bwns)<-getBuildInfo fp
 --        case mcbi of
 --                Just(cbi)->do
@@ -153,14 +154,22 @@ getTokenTypes fp=do
 --                                Right tt->return (tt,bwns)
 --                                Left bw -> return ([],bw:bwns)
 --                Nothing-> do
-                        cf<-gets cabalFile
-                        let dir=(takeDirectory cf)
-                        --liftIO $ putStrLn "not in cabal"
-                        input<-liftIO $ readFile (dir </> fp)
-                        ett<-liftIO $ BwGHC.tokenTypesArbitrary dir input (".lhs" == (takeExtension fp)) $ map show knownExtensions
-                        case ett of
-                                Right tt->return (tt,[])  -- bwns
-                                Left bw -> return ([],bw:[])  -- bwns
+        tgt<-getTargetPath fp
+        ett<-liftIO $ do
+                --let dir=takeDirectory cf
+                --liftIO $ putStrLn "not in cabal"
+                input<-readFile tgt --(dir </> fp)
+                ett2<-BwGHC.tokenTypesArbitrary tgt input (".lhs" == (takeExtension fp)) knownExtensionNames
+                case ett2 of 
+                        Right tt-> putStrLn ("getTokenTypes: " ++ (show $ length tt))
+                        Left _->return()
+                c2<-getClockTime
+                putStrLn ("getTokenTypes: " ++ (show $ (\x->div x 1000000000) $ tdPicosec $ diffClockTimes c2 c1) ++"ms")
+                return ett2
+        case ett of
+                Right tt->return (tt,[])  -- bwns
+                Left bw -> return ([],bw:[])  -- bwns
+                 
                 
 getOccurrences :: FilePath -> String -> BuildWrapper (OpResult [TokenDef])
 getOccurrences fp query=do

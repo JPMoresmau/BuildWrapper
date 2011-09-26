@@ -83,5 +83,5 @@ cmdMain = (cmdArgs $
                 run = runV Normal
                 runV:: (ToJSON a) => Verbosity -> FilePath -> FilePath -> FilePath -> StateT BuildWrapperState IO a -> IO ()
                 runV v tf cp cf f=(evalStateT f (BuildWrapperState tf cp cf v))
-                        >>= BS.putStrLn . BS.append "build-wrapper-json:" . encode
-                
+                                >>= BS.putStrLn . BS.append "build-wrapper-json:" . encode
+                        

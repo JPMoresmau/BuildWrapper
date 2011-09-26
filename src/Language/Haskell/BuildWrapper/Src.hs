@@ -96,6 +96,10 @@ makeSpan si=let
         (sl,sc)=srcSpanStart sis
         (el,ec)=srcSpanEnd sis      
         in   InFileSpan (InFileLoc sl sc) (InFileLoc el ec)
+   
+knownExtensionNames :: [String]
+knownExtensionNames = map show knownExtensions
+   
         
 -- $( derive makeJSON ''ParseResult )
 -- $( derive makeJSON ''Module )
