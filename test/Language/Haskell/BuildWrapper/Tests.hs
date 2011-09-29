@@ -25,7 +25,7 @@ tests=  [
         testBuildOutput,
         testModuleNotInCabal,
         testOutline,
-        testOutlinePreproc ,
+        testOutlinePreproc,
         testPreviewTokenTypes,
         testThingAtPoint,
         testNamesInScope,
@@ -66,9 +66,9 @@ testConfigureErrors :: (APIFacade a)=> a -> Test
 testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         root<-createTestProject
         (boolNoCabal,nsNoCabal)<- configure api root Target
-        assertBool ("configure returned true on no cabal") (not boolNoCabal)
-        assertEqual ("no errors or warnings on no cabal") 1 (length nsNoCabal)        
-        assertEqual ("wrong error on no cabal") (BWNote BWError "No cabal file found.\nPlease create a package description file <pkgname>.cabal\n" (BWLocation "" 0 1)) (head nsNoCabal)   
+        assertBool "configure returned true on no cabal" (not boolNoCabal)
+        assertEqual "errors or warnings on no cabal (should be ignored)" 0 (length nsNoCabal)        
+        -- assertEqual ("wrong error on no cabal") (BWNote BWError "No cabal file found.\nPlease create a package description file <pkgname>.cabal\n" (BWLocation "" 0 1)) (head nsNoCabal)   
         
         synchronize api root False
         (boolOK,nsOK)<-configure api root Target
@@ -438,7 +438,7 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
         let expected1=[
                 OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25))  []
                 ]
-        assertEqual "length" (length expected1) (length defs1)
+        assertEqual "length of expected1" (length expected1) (length defs1)
         mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected1 defs1)
         write api root rel $ unlines [
                 "{-# LANGUAGE CPP #-}",
@@ -463,7 +463,7 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
                   OutlineDef "Symbol" [Constructor] (InFileSpan (InFileLoc 7 6)(InFileLoc 7 19))  []
                   ]
                 ] 
-        assertEqual "length" (length expected2) (length defs2)
+        assertEqual "length of expected2" (length expected2) (length defs2)
         mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected2 defs2)
         write api root rel $ unlines [
                 "{-# LANGUAGE CPP #-}",
@@ -482,7 +482,7 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
         let expected3=[
                 OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25))  []
                 ]
-        assertEqual "length" (length expected3) (length defs3)
+        assertEqual "length of expected3" (length expected3) (length defs3)
         mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected3 defs3)
       ))      
         
@@ -594,11 +594,17 @@ testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
                 ""
                 ]   
         (boolOKc,nsOKc)<-configure api root Source
-        assertBool ("returned false on configure") boolOKc
+        assertBool ("returned false on configure:"++show nsOKc) boolOKc
         assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
-        (boolOK,nsOK)<-build api root False Source
+        (boolOK,nsOK)<-build api root True Source
         assertBool ("returned false on build") boolOK
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
+        let rel="src"</>"Main.hs"
+        (mtts,nsErrors1)<-getNamesInScope api root rel
+        assertBool ("errors or warnings on getNamesInScope in place:"++show nsErrors1) (null nsErrors1)
+        assertBool "getNamesInScope in place not just" (isJust mtts)
+        let tts=fromJust mtts
+        assertBool "getNamesInScope in place  does not contain Main.main" (elem "Main.main" tts)
         ))
 
 testCabalComponents  :: (APIFacade a)=> a -> Test

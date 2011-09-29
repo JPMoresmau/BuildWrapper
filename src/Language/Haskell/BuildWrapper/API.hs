@@ -80,17 +80,17 @@ preproc cbi tgt= do
 
 getAST :: FilePath -> BuildWrapper (OpResult (Maybe (ParseResult (Module SrcSpanInfo, [Comment]))))
 getAST fp = do
---        (mcbi,bwns)<-getBuildInfo fp
---        case mcbi of
---                Just(cbi)->do
---                        let (_,opts)=cabalExtensions $ snd  cbi
---                        tgt<-getTargetPath fp
---                        --let modS=moduleToString modName
---                        input<-liftIO $ preproc (snd cbi) tgt
---                        pr<- liftIO $ getHSEAST input opts
---                        --let json=makeObj  [("parse" , (showJSON $ pr))]
---                        return (Just pr,bwns)
---                Nothing-> do
+        (mcbi,bwns)<-getBuildInfo fp
+        case mcbi of
+                Just(cbi)->do
+                        let (_,opts)=cabalExtensions $ snd  cbi
+                        tgt<-getTargetPath fp
+                        --let modS=moduleToString modName
+                        input<-liftIO $ preproc (snd cbi) tgt
+                        pr<- liftIO $ getHSEAST input opts
+                        --let json=makeObj  [("parse" , (showJSON $ pr))]
+                        return (Just pr,bwns)
+                Nothing-> do
                         -- cf<-gets cabalFile
                         tgt<-getTargetPath fp
                         -- let dir=(takeDirectory cf)
@@ -106,7 +106,7 @@ getGHCAST fp = do
         case mcbi of
                 Just(cbi)->do
                         let (modName,opts)=cabalExtensions $ snd  cbi
-                        let (_,opts2)=fileGhcOptions cbi
+                        (_,opts2)<-fileGhcOptions cbi
                         tgt<-getTargetPath fp
                         let modS=moduleToString modName
                         pr<- liftIO $ BwGHC.getAST tgt modS (opts++opts2)
@@ -119,7 +119,7 @@ withGHCAST fp f= do
         case mcbi of
                 Just(cbi)->do
                         let (modName,opts)=cabalExtensions $ snd  cbi
-                        let (_,opts2)=fileGhcOptions cbi
+                        (_,opts2)<-fileGhcOptions cbi
                         tgt<-getTargetPath fp
                         let modS=moduleToString modName
                         pr<- liftIO $ f tgt modS (opts++opts2)

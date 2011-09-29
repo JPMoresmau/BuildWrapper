@@ -130,7 +130,8 @@ cabalConfigure :: WhichCabal-> BuildWrapper (OpResult (Maybe LocalBuildInfo))
 cabalConfigure srcOrTgt= do
         cf<-getCabalFile srcOrTgt
         cp<-gets cabalPath
-        ok<-liftIO $ doesFileExist cp
+        ok<-liftIO $ doesFileExist cf
+        liftIO $ putStrLn (cf ++ "exists:" ++ (show ok))
         if ok 
             then 
                 do
@@ -162,7 +163,7 @@ cabalConfigure srcOrTgt= do
                         (ex,_,err)<-readProcessWithExitCode cp args ""
                         c2<-getClockTime
                         putStrLn ("cabal configure end: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
-                        --putStrLn err
+                        putStrLn err
                         let msgs=(parseCabalMessages (takeFileName cf) err) -- ++ (parseCabalMessages (takeFileName cf) out)
                         --putStrLn ("msgs:"++(show $ length msgs))
                         ret<-case ex of
@@ -339,8 +340,15 @@ getBuildInfo fp=do
                         then Nothing
                         else Just $ (lbi,head ok))
              
-fileGhcOptions :: (LocalBuildInfo,CabalBuildInfo) -> (ModuleName,[String])
-fileGhcOptions (lbi,(bi,clbi,fp,ls))=(fst $ head ls,(ghcOptions lbi bi clbi fp))
+fileGhcOptions :: (LocalBuildInfo,CabalBuildInfo) -> BuildWrapper(ModuleName,[String])
+fileGhcOptions (lbi,(bi,clbi,fp,ls))=do
+        dist_dir<-getDistDir
+        let inplace=dist_dir </> "package.conf.inplace"
+        inplaceExist<-liftIO $ doesFileExist inplace
+        let pkg=if inplaceExist 
+                then ["-package-conf",inplace]
+                else []
+        return (fst $ head ls,pkg++(ghcOptions lbi bi clbi fp))
 
 
 
