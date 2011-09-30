@@ -436,13 +436,15 @@ getReferencedFiles lbi= do
         extractFromTest :: TestSuite -> (BuildInfo,ComponentLocalBuildInfo,FilePath,[(ModuleName,FilePath)])
         extractFromTest t@TestSuite {testName=testName'} =let
                 tbi=testBuildInfo t
+                targetDir = buildDir lbi </> testName'
+                testDir    = targetDir </> (testName' ++ "-tmp")
                 modules= (otherModules tbi )
                 hsd=hsSourceDirs tbi
                 extras=case testInterface t of
                        (TestSuiteExeV10 _ mp)->(copyFiles [mp] hsd)
                        (TestSuiteLibV09 _ mn)->copyModules [mn] hsd
                        _->[]
-                in (tbi,fromJust $ lookup testName' $ testSuiteConfigs lbi,buildDir lbi,extras++ (copyModules modules hsd)       )
+                in (tbi,fromJust $ lookup testName' $ testSuiteConfigs lbi,testDir,extras++ (copyModules modules hsd)       )
         copyModules :: [ModuleName] -> [FilePath] -> [(ModuleName,FilePath)]
         copyModules mods=copyFiles (concatMap (\m->[(toFilePath m) <.> "hs",((toFilePath m) <.> "lhs")]) mods)
         copyFiles :: [FilePath] -> [FilePath] -> [(ModuleName,FilePath)]

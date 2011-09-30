@@ -35,8 +35,8 @@ runAPI:: (FromJSON a,Show a) => FilePath -> String -> [String] -> IO a
 runAPI root command args= do
         let fullargs=[command,"--tempfolder=.dist-buildwrapper","--cabalpath=cabal","--cabalfile="++(testCabalFile root)] ++ args
         (ex,out,err)<-readProcessWithExitCode "dist/build/buildwrapper/buildwrapper" fullargs ""
-        --putStrLn ("out:"++out)
-        --putStrLn ("err:"++err)
+        putStrLn ("out:"++out)
+        putStrLn ("err:"++err)
         assertEqual ("returned error: "++show fullargs++"\n:"++show err) ExitSuccess ex
         let res=map (drop $ length "build-wrapper-json:") $ filter (isPrefixOf "build-wrapper-json:") $ lines out
         assertEqual ("no json: "++show fullargs++"\n:"++show out) 1 (length res)

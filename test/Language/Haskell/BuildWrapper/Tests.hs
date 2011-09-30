@@ -592,19 +592,30 @@ testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
                 "  other-modules:  TestA",
                 "  build-depends:  base, BWTest",
                 ""
-                ]   
+                ] 
+        let rel="src"</>"Main.hs"          
+        writeFile (root </> rel) $ unlines [  
+                  "module Main where",
+                  "import B.C",
+                  "main=return $ map id \"toto\""
+                  ]         
         (boolOKc,nsOKc)<-configure api root Source
         assertBool ("returned false on configure:"++show nsOKc) boolOKc
         assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
         (boolOK,nsOK)<-build api root True Source
         assertBool ("returned false on build") boolOK
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
-        let rel="src"</>"Main.hs"
+        synchronize api root True
         (mtts,nsErrors1)<-getNamesInScope api root rel
         assertBool ("errors or warnings on getNamesInScope in place:"++show nsErrors1) (null nsErrors1)
         assertBool "getNamesInScope in place not just" (isJust mtts)
         let tts=fromJust mtts
-        assertBool "getNamesInScope in place  does not contain Main.main" (elem "Main.main" tts)
+        assertBool "getNamesInScope in place does not contain Main.main" (elem "Main.main" tts)
+        assertBool "getNamesInScope in place does not contain B.C.fC" (elem "B.C.fC" tts)
+        (tap1,nsErrors1)<-getThingAtPoint api root rel 3 16 True True
+        assertBool ("errors or warnings on getThingAtPoint1 in place:"++show nsErrors1) (null nsErrors1)
+        assertEqual "not just typed qualified" (Just "GHC.Base.map :: forall a b.\n                (a -> b) -> [a] -> [b] GHC.Types.Char GHC.Types.Char") tap1
+        
         ))
 
 testCabalComponents  :: (APIFacade a)=> a -> Test

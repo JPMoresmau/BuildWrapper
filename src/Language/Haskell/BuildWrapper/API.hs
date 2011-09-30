@@ -101,24 +101,14 @@ getAST fp = do
                         return (Just pr,[])
 
 getGHCAST :: FilePath -> BuildWrapper (OpResult (Maybe TypecheckedSource))
-getGHCAST fp = do
-        (mcbi,bwns)<-getBuildInfo fp
-        case mcbi of
-                Just(cbi)->do
-                        let (modName,opts)=cabalExtensions $ snd  cbi
-                        (_,opts2)<-fileGhcOptions cbi
-                        tgt<-getTargetPath fp
-                        let modS=moduleToString modName
-                        pr<- liftIO $ BwGHC.getAST tgt modS (opts++opts2)
-                        return (Just pr,bwns)
-                Nothing-> return (Nothing,bwns)
+getGHCAST fp = withGHCAST fp BwGHC.getAST
 
 withGHCAST :: FilePath -> (FilePath -> String -> [String] -> IO a) -> BuildWrapper (OpResult (Maybe a))
 withGHCAST fp f= do
         (mcbi,bwns)<-getBuildInfo fp
         case mcbi of
                 Just(cbi)->do
-                        let (modName,opts)=cabalExtensions $ snd  cbi
+                        let (modName,opts)=cabalExtensions $ snd cbi
                         (_,opts2)<-fileGhcOptions cbi
                         tgt<-getTargetPath fp
                         let modS=moduleToString modName

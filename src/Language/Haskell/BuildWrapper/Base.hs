@@ -211,7 +211,8 @@ copyFileFull src tgt=do
       
 fileToModule :: FilePath -> String
 fileToModule fp=map rep (dropExtension fp)
-        where   rep '/' = '.'
+        where   rep '/'  = '.'
+                rep '\\' = '.'
                 rep a = a  
                 
 data Verbosity = Silent | Normal | Verbose | Deafening
