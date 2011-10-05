@@ -575,8 +575,7 @@ testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
                 "",
                 "library",
                 "  hs-source-dirs:  src",
-                "  exposed-modules: A",
-                "  other-modules:  B.C",
+                "  exposed-modules: A,B.C",
                 "  build-depends:  base",
                 "",
                 "executable BWTest",
@@ -599,6 +598,10 @@ testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
                   "import B.C",
                   "main=return $ map id \"toto\""
                   ]         
+        let rel3="test"</>"TestA.hs"          
+        writeFile (root </> rel3) $ unlines ["module TestA where","import A","fTA=undefined"]
+        let rel2="src"</>"A.hs"
+        writeFile (root </> rel2) $ unlines ["module A where","import B.C","fA=undefined"]          
         (boolOKc,nsOKc)<-configure api root Source
         assertBool ("returned false on configure:"++show nsOKc) boolOKc
         assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
@@ -610,12 +613,24 @@ testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
         assertBool ("errors or warnings on getNamesInScope in place:"++show nsErrors1) (null nsErrors1)
         assertBool "getNamesInScope in place not just" (isJust mtts)
         let tts=fromJust mtts
-        assertBool "getNamesInScope in place does not contain Main.main" (elem "Main.main" tts)
-        assertBool "getNamesInScope in place does not contain B.C.fC" (elem "B.C.fC" tts)
+        assertBool "getNamesInScope in place 1 does not contain Main.main" (elem "Main.main" tts)
+        assertBool "getNamesInScope in place 1 does not contain B.C.fC" (elem "B.C.fC" tts)
         (tap1,nsErrors1)<-getThingAtPoint api root rel 3 16 True True
         assertBool ("errors or warnings on getThingAtPoint1 in place:"++show nsErrors1) (null nsErrors1)
         assertEqual "not just typed qualified" (Just "GHC.Base.map :: forall a b.\n                (a -> b) -> [a] -> [b] GHC.Types.Char GHC.Types.Char") tap1
+        let rel2="src"</>"A.hs"
+        (mtts2,nsErrors2)<-getNamesInScope api root rel2
+        assertBool ("errors or warnings on getNamesInScope in place 2:"++show nsErrors2) (null nsErrors2)
+        assertBool "getNamesInScope in place 2 not just" (isJust mtts2)
+        let tts2=fromJust mtts2
+        assertBool "getNamesInScope in place 2 does not contain A.fA" (elem "A.fA" tts2)     
+        assertBool "getNamesInScope in place 2 does not contain B.C.fC" (elem "B.C.fC" tts2) 
         
+        (mtts3,nsErrors3)<-getNamesInScope api root rel3
+        assertBool ("errors or warnings on getNamesInScope in place 3:"++show nsErrors3) (null nsErrors3)
+        assertBool "getNamesInScope in place 3 not just" (isJust mtts3)
+        let tts3=fromJust mtts3
+        assertBool "getNamesInScope in place 3 does not contain A.fA" (elem "A.fA" tts3)       
         ))
 
 testCabalComponents  :: (APIFacade a)=> a -> Test

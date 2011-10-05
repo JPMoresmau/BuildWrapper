@@ -50,13 +50,15 @@ withAST f fp mod options=do
     runGhc (Just libdir) $ do
         flg <- getSessionDynFlags
         (flg', _, _) <- parseDynamicFlags flg _leftovers
-        setSessionDynFlags flg'  { ghcLink = LinkInMemory, ghcMode = OneShot }
+        setSessionDynFlags flg'  { hscTarget = HscNothing, ghcLink = NoLink , ghcMode = OneShot }
+        -- $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
         addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }
         c1<-GMU.liftIO getClockTime
-        load LoadAllTargets
+        let modName=mkModuleName mod
+        load $ LoadUpTo modName-- LoadAllTargets
         c2<-GMU.liftIO getClockTime
         GMU.liftIO $ putStrLn ("load all targets: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
-        modSum <- getModSummary $ mkModuleName mod
+        modSum <- getModSummary $ modName
         p <- parseModule modSum
         --return $ showSDocDump $ ppr $ pm_mod_summary p
         t <- typecheckModule p
