@@ -123,6 +123,7 @@ getOutline fp=do
        case mast of
         Just (ParseOk ast)->do
                 return (getHSEOutline ast,bwns)
+        Just (ParseFailed loc err)->return ([],(BWNote BWError err (BWLocation fp (srcLine loc) (srcColumn loc))):bwns)
         _ -> return ([],bwns)
  
 getTokenTypes :: FilePath -> BuildWrapper (OpResult [TokenDef])
