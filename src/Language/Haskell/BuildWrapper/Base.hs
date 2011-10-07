@@ -20,7 +20,8 @@ data BuildWrapperState=BuildWrapperState{
         tempFolder::String,
         cabalPath::FilePath,
         cabalFile::FilePath,
-        verbosity::Verbosity
+        verbosity::Verbosity,
+        cabalFlags::String
         }
 
 data BWNoteStatus=BWError | BWWarning

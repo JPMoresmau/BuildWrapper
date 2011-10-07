@@ -137,13 +137,14 @@ cabalConfigure srcOrTgt= do
                 do
                 v<-cabalV
                 dist_dir<-getDistDir
-               
+                uf<-gets cabalFlags
                 let args=[
                         "configure",
                         "--verbose="++(show $ fromEnum v),
                         "--user",
                         "--enable-tests",
-                        "--builddir="++dist_dir
+                        "--builddir="++dist_dir,
+                        "--flags="++uf
                         ]
                 {--(_,Just hOut,Just hErr)<-liftIO $ createProcess 
                         ((proc cp args){

@@ -17,18 +17,18 @@ type CabalFile = FilePath
 type CabalPath = FilePath
 type TempFolder = FilePath
 
-data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, force::Bool}
-        | Synchronize1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, force::Bool, file:: FilePath}
-        | Write {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, file:: FilePath, contents::String}  
-        | Configure {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile,verbosity::Verbosity,cabalTarget::WhichCabal}
-        | Build {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile,verbosity::Verbosity,output::Bool,cabalTarget::WhichCabal}
-        | Outline {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, file:: FilePath} 
-        | TokenTypes {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, file:: FilePath} 
-        | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, file:: FilePath,token::String}
-        | ThingAtPoint {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, file:: FilePath, line::Int, column::Int, qualify::Bool, typed::Bool}
-        | NamesInScope {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, file:: FilePath} 
-        | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile}
-        | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile}
+data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, force::Bool}
+        | Synchronize1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, force::Bool, file:: FilePath}
+        | Write {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath, contents::String}  
+        | Configure {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, verbosity::Verbosity,cabalTarget::WhichCabal}
+        | Build {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, verbosity::Verbosity,output::Bool,cabalTarget::WhichCabal}
+        | Outline {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath} 
+        | TokenTypes {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath} 
+        | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath,token::String}
+        | ThingAtPoint {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath, line::Int, column::Int, qualify::Bool, typed::Bool}
+        | NamesInScope {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath} 
+        | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String}
+        | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String}
     deriving (Show,Read,Data,Typeable)    
   
  
@@ -37,26 +37,27 @@ cp="cabal" &= typFile &= help "location of cabal executable"
 cf=def &= typFile &= help "cabal file" 
 fp=def &= typFile &= help "relative path of file to process"
 ff=def &= help "overwrite newer file"
- 
+uf=def &= help "user cabal flags"
+
 v=Normal &= help "verbosity"
 wc=Target &= help "which cabal file to use: original or temporary"
 
-msynchronize = Synchronize tf cp cf ff
-msynchronize1 = Synchronize1 tf cp cf ff fp
-mconfigure = Configure tf cp cf v wc
-mwrite= Write tf cp cf fp (def &= help "file contents")
-mbuild = Build tf cp cf v (def &= help "output compilation and linking result") wc
-moutline = Outline tf cp cf fp
-mtokenTypes= TokenTypes tf cp cf fp
-moccurrences=Occurrences tf cp cf fp (def &= help "text to search occurrences of" &= name "token")
-mthingAtPoint=ThingAtPoint tf cp cf fp 
+msynchronize = Synchronize tf cp cf uf ff
+msynchronize1 = Synchronize1 tf cp cf uf ff fp
+mconfigure = Configure tf cp cf uf v wc
+mwrite= Write tf cp cf uf fp (def &= help "file contents")
+mbuild = Build tf cp cf uf v (def &= help "output compilation and linking result") wc
+moutline = Outline tf cp cf uf fp
+mtokenTypes= TokenTypes tf cp cf uf fp
+moccurrences=Occurrences tf cp cf uf fp (def &= help "text to search occurrences of" &= name "token")
+mthingAtPoint=ThingAtPoint tf cp cf uf fp 
         (def &= help "line" &= name "line")
         (def &= help "column" &= name "column")
         (def &= help "qualify results")
         (def &= help "type results")
-mnamesInScope=NamesInScope tf cp cf fp 
-mdependencies=Dependencies tf cp cf
-mcomponents=Components tf cp cf
+mnamesInScope=NamesInScope tf cp cf uf fp 
+mdependencies=Dependencies tf cp cf uf
+mcomponents=Components tf cp cf uf
 
 cmdMain = (cmdArgs $ 
                 modes [msynchronize, msynchronize1, mconfigure,mwrite,mbuild, moutline, mtokenTypes,moccurrences,mthingAtPoint,mnamesInScope,mdependencies,mcomponents]
@@ -67,21 +68,21 @@ cmdMain = (cmdArgs $
         >>= handle
         where 
                 handle ::BWCmd -> IO ()
-                handle (Synchronize tf cp cf ff )=run tf cp cf (synchronize ff)
-                handle (Synchronize1 tf cp cf ff fp)=run tf cp cf (synchronize1 ff fp)
-                handle (Write tf cp cf fp s)=run tf cp cf (write fp s)
-                handle (Configure tf cp cf v wc)=runV v tf cp cf (configure wc)
-                handle (Build tf cp cf v output wc)=runV v tf cp cf (build output wc)
-                handle (Outline tf cp cf fp)=run tf cp cf (getOutline fp)
-                handle (TokenTypes tf cp cf fp)=run tf cp cf (getTokenTypes fp)
-                handle (Occurrences tf cp cf fp token)=run tf cp cf (getOccurrences fp token)
-                handle (ThingAtPoint tf cp cf fp line column qual typed)=run tf cp cf (getThingAtPoint fp line column qual typed)
-                handle (NamesInScope tf cp cf fp)=run tf cp cf (getNamesInScope fp)
-                handle (Dependencies tf cp cf)=run tf cp cf getCabalDependencies
-                handle (Components tf cp cf)=run tf cp cf getCabalComponents
-                run:: (ToJSON a) => FilePath -> FilePath -> FilePath -> StateT BuildWrapperState IO a -> IO ()
+                handle (Synchronize tf cp cf uf ff )=run tf cp cf uf (synchronize ff)
+                handle (Synchronize1 tf cp cf uf ff fp)=run tf cp cf uf (synchronize1 ff fp)
+                handle (Write tf cp cf uf fp s)=run tf cp cf uf (write fp s)
+                handle (Configure tf cp cf uf v wc)=runV v tf cp cf uf (configure wc)
+                handle (Build tf cp cf uf v output wc)=runV v tf cp cf uf (build output wc)
+                handle (Outline tf cp cf uf fp)=run tf cp cf uf (getOutline fp)
+                handle (TokenTypes tf cp cf uf fp)=run tf cp cf uf (getTokenTypes fp)
+                handle (Occurrences tf cp cf uf fp token)=run tf cp cf uf (getOccurrences fp token)
+                handle (ThingAtPoint tf cp cf uf fp line column qual typed)=run tf cp cf uf (getThingAtPoint fp line column qual typed)
+                handle (NamesInScope tf cp cf uf fp)=run tf cp cf uf (getNamesInScope fp)
+                handle (Dependencies tf cp cf uf)=run tf cp cf uf getCabalDependencies
+                handle (Components tf cp cf uf)=run tf cp cf uf getCabalComponents
+                run:: (ToJSON a) => FilePath -> FilePath -> FilePath -> String -> StateT BuildWrapperState IO a -> IO ()
                 run = runV Normal
-                runV:: (ToJSON a) => Verbosity -> FilePath -> FilePath -> FilePath -> StateT BuildWrapperState IO a -> IO ()
-                runV v tf cp cf f=(evalStateT f (BuildWrapperState tf cp cf v))
+                runV:: (ToJSON a) => Verbosity -> FilePath -> FilePath -> FilePath -> String -> StateT BuildWrapperState IO a -> IO ()
+                runV v tf cp cf uf f=(evalStateT f (BuildWrapperState tf cp cf v uf))
                                 >>= BS.putStrLn . BS.append "build-wrapper-json:" . encode
                         
