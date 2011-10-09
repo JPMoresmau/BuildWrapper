@@ -115,7 +115,7 @@ cabalBuild output srcOrTgt= do
                         -- f<-readFile ((takeDirectory cf) </> "src" </> "A.hs")
                         -- putStrLn "cabal build start"
                         (ex,_,err)<-readProcessWithExitCode cp args ""
-                        -- putStrLn err
+                        putStrLn err
                         -- c2<-getClockTime
                         -- putStrLn ("cabal build end" ++ (timeDiffToString  $ diffClockTimes c2 c1))
                         let ret=parseBuildMessages err
@@ -307,7 +307,7 @@ parseBuildMessages s=let
                         | Just n<-extractLocation l=(Just (n,[bwn_title n]),ls)
                         | otherwise =(Nothing,ls)
                 extractLocation el=let
-                        (_,_,aft,ls)=el =~ "([^:]+):([0-9]+):([0-9]+):" :: (String,String,String,[String])   
+                        (_,_,aft,ls)=el =~ "(.+):([0-9]+):([0-9]+):" :: (String,String,String,[String])   
                         in case ls of
                                 (loc:line:col:[])-> (Just $ BWNote BWError (dropWhile isSpace aft) (BWLocation loc (read line) (read col)))
                                 _ -> Nothing
