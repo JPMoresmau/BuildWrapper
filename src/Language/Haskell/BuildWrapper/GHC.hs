@@ -5,13 +5,19 @@ import Language.Haskell.BuildWrapper.Base hiding (Target)
 import Language.Haskell.BuildWrapper.Find
 
 
+import Control.Monad
+import Control.Monad.State
+
 -- import Text.JSON
 -- import Data.DeriveTH
 -- import Data.Derive.JSON
 import Data.Generics hiding (Fixity, typeOf)
 import Data.Maybe
+import Data.Monoid
 import qualified Data.Foldable as F
 
+
+import Data.IORef
 import qualified Data.List as List
 import Data.Ord (comparing)
 import qualified Data.Text as T
@@ -19,13 +25,15 @@ import qualified Data.Text as T
 import qualified Data.Sequence as Seq
 
 import DynFlags
-import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg )
+import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,WarningMessages )
 import GHC
 import GHC.Paths ( libdir )
+import HscTypes ( srcErrorMessages, SourceError)
 import Outputable
 import FastString (FastString,unpackFS,concatFS,fsLit,mkFastString)
 import Lexer
 import PprTyThing ( pprTypeForUser )
+import Bag
 
 #if __GLASGOW_HASKELL__ >= 610
 import StringBuffer
@@ -37,14 +45,19 @@ import System.Time
 
 import qualified MonadUtils as GMU
 
-getAST :: FilePath -> String -> [String] -> IO TypecheckedSource
-getAST =withAST (\t -> do
+getAST :: FilePath -> FilePath -> String -> [String] -> IO (OpResult (Maybe TypecheckedSource))
+getAST =withASTNotes (\t -> do
         return $ tm_typechecked_source t
         )
-   
-withAST ::  (TypecheckedModule -> Ghc a) -> FilePath -> String -> [String] -> IO a
-withAST f fp mod options=do
-    putStrLn $ show options
+
+withAST ::  (TypecheckedModule -> Ghc a) -> FilePath -> FilePath ->  String -> [String] -> IO (Maybe a)
+withAST f fp base_dir mod options= do
+        (a,_)<-withASTNotes f fp base_dir mod options
+        return a
+
+withASTNotes ::  (TypecheckedModule -> Ghc a) -> FilePath -> FilePath -> String -> [String] -> IO (OpResult (Maybe a))
+withASTNotes f fp base_dir mod options=do
+    putStrLn $ show base_dir
     let lflags=map noLoc options
     (_leftovers, _) <- parseStaticFlags lflags
     runGhc (Just libdir) $ do
@@ -55,43 +68,90 @@ withAST f fp mod options=do
         addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }
         c1<-GMU.liftIO getClockTime
         let modName=mkModuleName mod
-        load $ LoadUpTo modName-- LoadAllTargets
+        ref <- GMU.liftIO $ newIORef (mempty, mempty)
+        res<-loadWithLogger (logWarnErr ref) (LoadUpTo modName) -- LoadAllTargets
+                  --  `gcatch` (\(e :: SourceError) -> handle_error ref e)
+        (warns, errs) <- GMU.liftIO $ readIORef ref
+        let notes = ghcMessagesToNotes base_dir (warns, errs)
         c2<-GMU.liftIO getClockTime
         GMU.liftIO $ putStrLn ("load all targets: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
-        modSum <- getModSummary $ modName
-        p <- parseModule modSum
-        --return $ showSDocDump $ ppr $ pm_mod_summary p
-        t <- typecheckModule p
-        --d <- desugarModule t
-        l <- loadModule t
-        c3<-GMU.liftIO getClockTime
-        setContext [ms_mod modSum] []
-        GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
-        f l
+        case res of 
+                Succeeded -> do
+                        modSum <- getModSummary $ modName
+                        p <- parseModule modSum
+                        --return $ showSDocDump $ ppr $ pm_mod_summary p
+                        t <- typecheckModule p
+                        --d <- desugarModule t
+                        l <- loadModule t
+                        c3<-GMU.liftIO getClockTime
+                        setContext [ms_mod modSum] []
+                        GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
+                        a<-f l
+                        return $ (Just a,notes)
+                Failed -> return $ (Nothing,notes)
+        where
+            logWarnErr :: GhcMonad m => IORef (WarningMessages,ErrorMessages) -> Maybe SourceError -> m ()
+            logWarnErr ref err = do
+              let errs = case err of
+                           Nothing -> mempty
+                           Just exc -> srcErrorMessages exc
+              warns <- getWarnings
+              clearWarnings
+              add_warn_err ref warns errs
+        
+            add_warn_err :: GhcMonad m => IORef (WarningMessages,ErrorMessages) -> WarningMessages -> ErrorMessages -> m()
+            add_warn_err ref warns errs =
+              GMU.liftIO $ modifyIORef ref $
+                         \(warns', errs') -> ( warns `mappend` warns'
+                                             , errs `mappend` errs')
+        
+            handle_error :: GhcMonad m => IORef (WarningMessages,ErrorMessages) -> SourceError -> m SuccessFlag
+            handle_error ref e = do
+               let errs = srcErrorMessages e
+               warns <- getWarnings
+               add_warn_err ref warns errs
+               clearWarnings
+               return Failed
         --f $ tm_typechecked_source t
         --return $ showSDocDump $ ppr $ pm_parsed_source p
         --return $ showSDocDump $ ppr $ tm_typechecked_source t
     --return  $ makeObj  [("parse" , (showJSON $ tm_typechecked_source t))]
     --return r
    
-getGhcNamesInScope  :: FilePath -> String -> [String] -> IO [String]
-getGhcNamesInScope=withAST (\_->do
-        c1<-GMU.liftIO getClockTime
-        names<-getNamesInScope
-        c2<-GMU.liftIO getClockTime
-        GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
-        return $ map (showSDocDump . ppr ) names)
+-- | Convert 'GHC.Messages' to '[BWNote]'.
+--
+-- This will mix warnings and errors, but you can split them back up
+-- by filtering the '[BWNote]' based on the 'bw_status'.
+ghcMessagesToNotes :: FilePath ->  Messages -> [BWNote]
+ghcMessagesToNotes base_dir (warns, errs) =
+             (map_bag2ms (ghcWarnMsgToNote base_dir) warns) ++
+             (map_bag2ms (ghcErrMsgToNote base_dir) errs)
+  where
+    map_bag2ms f =  map f . Bag.bagToList   
    
-getThingAtPoint :: Int -> Int -> Bool -> Bool -> FilePath -> String -> [String] -> IO String
-getThingAtPoint line col qual typed fp = withAST (\tcm->do
-      let loc = srcLocSpan $ mkSrcLoc (fsLit fp) line (scionColToGhcCol col)
-      uq<-unqualifiedForModule tcm
-      let f=(if typed then (doThingAtPointTyped $ typecheckedSource tcm) else (doThingAtPointUntyped $ renamedSource tcm))
-      --tap<- doThingAtPoint loc qual typed tcm (if typed then (typecheckedSource tcm) else (renamedSource tcm))
-      let tap=f loc qual tcm uq
-      --(if typed then (doThingAtPointTyped $ typecheckedSource tcm)
-      -- else doThingAtPointTyped (renamedSource tcm) loc qual tcm
-      return tap) fp
+   
+getGhcNamesInScope  :: FilePath -> FilePath -> String -> [String] -> IO [String]
+getGhcNamesInScope f base_dir mod options=do
+        names<-withAST (\_->do
+                c1<-GMU.liftIO getClockTime
+                names<-getNamesInScope
+                c2<-GMU.liftIO getClockTime
+                GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
+                return $ map (showSDocDump . ppr ) names)  f base_dir mod options
+        return $ fromMaybe[] names
+   
+getThingAtPoint :: Int -> Int -> Bool -> Bool -> FilePath -> FilePath -> String -> [String] -> IO String
+getThingAtPoint line col qual typed fp base_dir mod options= do
+        t<-withAST (\tcm->do
+              let loc = srcLocSpan $ mkSrcLoc (fsLit fp) line (scionColToGhcCol col)
+              uq<-unqualifiedForModule tcm
+              let f=(if typed then (doThingAtPointTyped $ typecheckedSource tcm) else (doThingAtPointUntyped $ renamedSource tcm))
+              --tap<- doThingAtPoint loc qual typed tcm (if typed then (typecheckedSource tcm) else (renamedSource tcm))
+              let tap=f loc qual tcm uq
+              --(if typed then (doThingAtPointTyped $ typecheckedSource tcm)
+              -- else doThingAtPointTyped (renamedSource tcm) loc qual tcm
+              return tap) fp base_dir mod options
+        return $ fromMaybe "" t
       where
             doThingAtPointTyped :: TypecheckedSource -> SrcSpan -> Bool -> TypecheckedModule -> PrintUnqualified -> String
             doThingAtPointTyped src loc qual tcm uq=let
@@ -241,7 +301,7 @@ ghcSpanToBWLocation :: FilePath -- ^ Base directory
                   -> BWLocation
 ghcSpanToBWLocation baseDir sp
   | GHC.isGoodSrcSpan sp =
-      BWLocation (baseDir </> (unpackFS (GHC.srcSpanFile sp)))
+      BWLocation (makeRelative baseDir $ unpackFS (GHC.srcSpanFile sp))
                  (GHC.srcSpanStartLine sp)
                  (ghcColToScionCol $ GHC.srcSpanStartCol sp)
   | otherwise = BWLocation "" 1 1
@@ -684,6 +744,10 @@ tokenValue False (ITprefixqconsym (_,a)) = mkUnqualTokenValue a
 tokenValue True (ITprefixqconsym (q,a)) = mkQualifiedTokenValue q a
 tokenValue _ _= ""                       
         
+instance Monoid (Bag a) where
+  mempty = emptyBag
+  mappend = unionBags
+  mconcat = unionManyBags        
         
 --instance JSON SrcLoc
 --        where showJSON src 

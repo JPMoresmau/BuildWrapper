@@ -173,19 +173,22 @@ instance FromJSON TokenDef where
 --        cf<-gets cabalFile
 --        return $ parsePackageDescription cf
 
-getDistDir ::  BuildWrapper(FilePath)
-getDistDir = do
+getFullTempDir ::  BuildWrapper(FilePath)
+getFullTempDir = do
         cf<-gets cabalFile
         temp<-gets tempFolder
         let dir=(takeDirectory cf)
-        return $ (dir </> temp </> "dist")
+        return $ (dir </> temp)
+
+getDistDir ::  BuildWrapper(FilePath)
+getDistDir = do
+       temp<-getFullTempDir
+       return $ (temp </> "dist")
 
 getTargetPath :: FilePath -> BuildWrapper(FilePath)
 getTargetPath src=do
-        cf<-gets cabalFile
-        temp<-gets tempFolder
-        let dir=(takeDirectory cf)
-        let path=dir </> temp </> src
+        temp<-getFullTempDir
+        let path=temp </> src
         liftIO $ createDirectoryIfMissing True (takeDirectory path)
         return path
 

@@ -47,10 +47,16 @@ configure ::  WhichCabal -> BuildWrapper (OpResult Bool)
 configure which= do
         --synchronize
         (mlbi,msgs)<-cabalConfigure which
-        return $ (isJust mlbi,msgs)
+        return (isJust mlbi,msgs)
 
 build :: Bool -> WhichCabal -> BuildWrapper (OpResult BuildResult)
 build = cabalBuild
+
+build1 :: FilePath -> BuildWrapper (OpResult Bool)
+build1 fp=do
+        (mtm,msgs)<-getGHCAST fp
+        return (isJust mtm,msgs)
+
 --        (bool,bwns)<-configure
 --        if bool
 --                then do
@@ -101,9 +107,20 @@ getAST fp = do
                         return (Just pr,[])
 
 getGHCAST :: FilePath -> BuildWrapper (OpResult (Maybe TypecheckedSource))
-getGHCAST fp = withGHCAST fp BwGHC.getAST
+getGHCAST fp = do
+        (mcbi,bwns)<-getBuildInfo fp
+        case mcbi of
+                Just(cbi)->do
+                        let (modName,opts)=cabalExtensions $ snd cbi
+                        (_,opts2)<-fileGhcOptions cbi
+                        tgt<-getTargetPath fp
+                        temp<-getFullTempDir
+                        let modS=moduleToString modName
+                        (pr,bwns2)<- liftIO $ BwGHC.getAST tgt temp modS (opts++opts2)
+                        return (pr,bwns2)
+                Nothing-> return (Nothing,bwns)
 
-withGHCAST :: FilePath -> (FilePath -> String -> [String] -> IO a) -> BuildWrapper (OpResult (Maybe a))
+withGHCAST :: FilePath -> (FilePath -> FilePath -> String -> [String] -> IO a) -> BuildWrapper (OpResult (Maybe a))
 withGHCAST fp f= do
         (mcbi,bwns)<-getBuildInfo fp
         case mcbi of
@@ -111,8 +128,9 @@ withGHCAST fp f= do
                         let (modName,opts)=cabalExtensions $ snd cbi
                         (_,opts2)<-fileGhcOptions cbi
                         tgt<-getTargetPath fp
+                        temp<-getFullTempDir
                         let modS=moduleToString modName
-                        pr<- liftIO $ f tgt modS (opts++opts2)
+                        pr<- liftIO $ f tgt temp modS (opts++opts2)
                         return (Just pr,bwns)
                 Nothing-> return (Nothing,bwns)
 

@@ -22,6 +22,7 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | Write {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath, contents::String}  
         | Configure {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, verbosity::Verbosity,cabalTarget::WhichCabal}
         | Build {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, verbosity::Verbosity,output::Bool,cabalTarget::WhichCabal}
+        | Build1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath}
         | Outline {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath} 
         | TokenTypes {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath} 
         | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath,token::String}
@@ -47,6 +48,7 @@ msynchronize1 = Synchronize1 tf cp cf uf ff fp
 mconfigure = Configure tf cp cf uf v wc
 mwrite= Write tf cp cf uf fp (def &= help "file contents")
 mbuild = Build tf cp cf uf v (def &= help "output compilation and linking result") wc
+mbuild1 = Build1 tf cp cf uf fp
 moutline = Outline tf cp cf uf fp
 mtokenTypes= TokenTypes tf cp cf uf fp
 moccurrences=Occurrences tf cp cf uf fp (def &= help "text to search occurrences of" &= name "token")
@@ -60,7 +62,7 @@ mdependencies=Dependencies tf cp cf uf
 mcomponents=Components tf cp cf uf
 
 cmdMain = (cmdArgs $ 
-                modes [msynchronize, msynchronize1, mconfigure,mwrite,mbuild, moutline, mtokenTypes,moccurrences,mthingAtPoint,mnamesInScope,mdependencies,mcomponents]
+                modes [msynchronize, msynchronize1, mconfigure,mwrite,mbuild,mbuild1, moutline, mtokenTypes,moccurrences,mthingAtPoint,mnamesInScope,mdependencies,mcomponents]
                 &= helpArg [explicit, name "help", name "h"]
                 &= help "buildwrapper executable"
                 &= program "buildwrapper"
@@ -73,6 +75,7 @@ cmdMain = (cmdArgs $
                 handle (Write tf cp cf uf fp s)=run tf cp cf uf (write fp s)
                 handle (Configure tf cp cf uf v wc)=runV v tf cp cf uf (configure wc)
                 handle (Build tf cp cf uf v output wc)=runV v tf cp cf uf (build output wc)
+                handle (Build1 tf cp cf uf fp)=runV v tf cp cf uf (build1 fp)
                 handle (Outline tf cp cf uf fp)=run tf cp cf uf (getOutline fp)
                 handle (TokenTypes tf cp cf uf fp)=run tf cp cf uf (getTokenTypes fp)
                 handle (Occurrences tf cp cf uf fp token)=run tf cp cf uf (getOccurrences fp token)
