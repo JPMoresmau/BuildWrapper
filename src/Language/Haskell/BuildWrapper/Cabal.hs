@@ -91,7 +91,7 @@ cabalV =do
                 toCabalV Verbose =V.verbose
                 toCabalV Deafening =V.deafening
 
-cabalBuild :: Bool -> WhichCabal -> BuildWrapper (OpResult Bool)
+cabalBuild :: Bool -> WhichCabal -> BuildWrapper (OpResult BuildResult)
 cabalBuild output srcOrTgt= do
         (mr,n)<-withCabal srcOrTgt (\_->do
                 cf<-getCabalFile srcOrTgt
@@ -114,17 +114,19 @@ cabalBuild output srcOrTgt= do
                         -- c1<-getClockTime
                         -- f<-readFile ((takeDirectory cf) </> "src" </> "A.hs")
                         -- putStrLn "cabal build start"
-                        (ex,_,err)<-readProcessWithExitCode cp args ""
+                        (ex,out,err)<-readProcessWithExitCode cp args ""
                         putStrLn err
+                        --putStrLn ("build out:" ++ out)
+                        let fps=catMaybes $ map getBuiltPath $ lines out
                         -- c2<-getClockTime
                         -- putStrLn ("cabal build end" ++ (timeDiffToString  $ diffClockTimes c2 c1))
                         let ret=parseBuildMessages err
                         setCurrentDirectory cd
-                        return (ex==ExitSuccess,ret)
+                        return (ex==ExitSuccess,ret,fps)
             )
         return $ case mr of
-                Nothing -> (False,n)
-                Just (r,n2) -> (r,n++n2)
+                Nothing -> ((BuildResult False []),n)
+                Just (r,n2,fps) -> ((BuildResult r fps),n++n2)
 
 cabalConfigure :: WhichCabal-> BuildWrapper (OpResult (Maybe LocalBuildInfo))
 cabalConfigure srcOrTgt= do
@@ -291,12 +293,13 @@ parseCabalMessages cf s=let
                                 then 0
                                 else (read $ head ls)
  
+
 parseBuildMessages :: String -> [BWNote]
 parseBuildMessages s=let
         (m,ls)=foldl parseBuildLine (Nothing,[]) $ lines s
-        in nub $ case m of
+        in ((nub $ case m of
                 Nothing -> ls
-                Just (bwn,msgs)->ls++[makeNote bwn msgs] 
+                Just (bwn,msgs)->ls++[makeNote bwn msgs]))
         where 
                 parseBuildLine :: (Maybe (BWNote,[String]),[BWNote]) -> String ->(Maybe (BWNote,[String]),[BWNote])
                 parseBuildLine (currentNote,ls) l  
@@ -304,6 +307,7 @@ parseBuildMessages s=let
                                 if (not $ null l)
                                        then (Just (jcn,l:msgs),ls)
                                        else (Nothing,ls++[makeNote jcn msgs])
+                        -- | Just fp<-getBuiltPath l=(currentNote,ls,fp:fps)             
                         | Just n<-extractLocation l=(Just (n,[bwn_title n]),ls)
                         | otherwise =(Nothing,ls)
                 extractLocation el=let
@@ -318,7 +322,14 @@ makeNote bwn msgs=let
         in if isPrefixOf "Warning:" title
                 then bwn{bwn_title=dropWhile isSpace $ drop 8 title,bwn_status=BWWarning}    
                 else bwn{bwn_title=title}      
-             
+
+getBuiltPath :: String -> Maybe FilePath
+getBuiltPath line=let
+         (_,_,_,ls)=line =~ "\\[[0-9]+ of [0-9]+\\] Compiling .+\\( (.+), (.+)\\)" :: (String,String,String,[String])   
+         in case ls of
+                (src:_:[])->Just src
+                _ -> Nothing
+          
 type CabalBuildInfo=(BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[(ModuleName,FilePath)])             
              
 getBuildInfo ::  FilePath  -> BuildWrapper (OpResult (Maybe (LocalBuildInfo,CabalBuildInfo)))

@@ -70,6 +70,18 @@ instance FromJSON BWNote where
         
 type OpResult a=(a,[BWNote])
         
+data BuildResult=BuildResult Bool [FilePath]
+        deriving (Show,Read,Eq)
+  
+instance ToJSON BuildResult  where
+    toJSON (BuildResult b fps)= object ["r" .= b, "fps" .= map toJSON fps]       
+
+instance FromJSON BuildResult where
+    parseJSON (Object v) =BuildResult <$>
+                         v .: "r" <*>
+                         v .: "fps" 
+    parseJSON _= mzero    
+
 data WhichCabal=Source | Target
         deriving (Show,Read,Eq,Enum,Data,Typeable)        
         

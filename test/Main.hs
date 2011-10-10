@@ -1,7 +1,7 @@
 
 module Main where
 
---import Language.Haskell.BuildWrapper.APITest
+import Language.Haskell.BuildWrapper.APITest
 import Language.Haskell.BuildWrapper.CMDTests
 
 import Control.Monad
@@ -12,7 +12,10 @@ import Test.HUnit
 
 main :: IO()
 main = do
-    allCounts<- (liftM mconcat) (mapM runTestTT [cmdTests])
+    unit<-mapM runTestTT [unitTests]
+    cmd<-mapM runTestTT [cmdTests]
+    --let cmd=[]
+    let allCounts=mconcat (unit ++ cmd)
     when ((errors allCounts)>0 || (failures allCounts)>0) exitFailure     
         
         

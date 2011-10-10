@@ -8,9 +8,9 @@ library
   build-depends:   base, filepath, mtl, directory, Cabal, process, regex-tdfa, ghc, ghc-paths, syb, ghc-syb-utils, 
                    text, containers, vector, haskell-src-exts, cpphs, old-time, aeson
   ghc-options:     -O2 -Wall -fno-warn-unused-do-bind
-  exposed-modules: Language.Haskell.BuildWrapper.API,Language.Haskell.BuildWrapper.Base
+  exposed-modules: Language.Haskell.BuildWrapper.API,Language.Haskell.BuildWrapper.Base,Language.Haskell.BuildWrapper.Cabal
   extensions:      CPP
-  other-modules:   Language.Haskell.BuildWrapper.Cabal, Language.Haskell.BuildWrapper.GHC, Language.Haskell.BuildWrapper.Src, Language.Haskell.BuildWrapper.Find, Language.Haskell.BuildWrapper.Packages
+  other-modules:   Language.Haskell.BuildWrapper.GHC, Language.Haskell.BuildWrapper.Src, Language.Haskell.BuildWrapper.Find, Language.Haskell.BuildWrapper.Packages
 
 executable buildwrapper
   hs-source-dirs:  src-exe

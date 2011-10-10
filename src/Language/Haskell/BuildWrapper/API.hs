@@ -49,7 +49,7 @@ configure which= do
         (mlbi,msgs)<-cabalConfigure which
         return $ (isJust mlbi,msgs)
 
-build :: Bool -> WhichCabal -> BuildWrapper (OpResult Bool)
+build :: Bool -> WhichCabal -> BuildWrapper (OpResult BuildResult)
 build = cabalBuild
 --        (bool,bwns)<-configure
 --        if bool

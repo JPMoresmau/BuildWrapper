@@ -39,7 +39,7 @@ class APIFacade a where
         synchronize1 :: a  -> FilePath -> Bool -> FilePath -> IO (Maybe FilePath)
         write :: a -> FilePath -> FilePath -> String -> IO ()
         configure :: a -> FilePath -> WhichCabal -> IO (OpResult Bool)
-        build :: a -> FilePath -> Bool -> WhichCabal -> IO (OpResult Bool)
+        build :: a -> FilePath -> Bool -> WhichCabal -> IO (OpResult BuildResult)
         getOutline :: a -> FilePath -> FilePath -> IO (OpResult [OutlineDef])
         getTokenTypes :: a -> FilePath -> FilePath -> IO (OpResult [TokenDef])
         getOccurrences :: a -> FilePath -> FilePath -> String -> IO (OpResult [TokenDef])
@@ -209,28 +209,29 @@ testBuildErrors api = TestLabel "testBuildErrors" (TestCase ( do
         (boolOKc,nsOKc)<-configure api root Target
         assertBool ("returned false on configure") boolOKc
         assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
-        (boolOK,nsOK)<-build api root False Source
+        (BuildResult boolOK fps,nsOK)<-build api root False Source
         assertBool ("returned false on build") boolOK
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
         --let srcF=root </> "src"
         let rel="src"</>"A.hs"
-        -- use api to write temp file
+        -- write source file
         writeFile (root </> rel) $ unlines ["module A where","import toto","fA=undefined"]
         --mf1<-runAPI root $ synchronize1 rel False
         --assertBool ("mf1 not just") (isJust mf1)
-        (bool1,nsErrors1)<-build api root False Source
+        (BuildResult bool1 fps1,nsErrors1)<-build api root False Source
         assertBool ("returned true on bool1") (not bool1)
         assertBool ("no errors or warnings on nsErrors") (not $ null nsErrors1)
+        -- assertBool ("no rel in fps1: "++(show fps1)) (elem rel fps1)
         let (nsError1:[])=nsErrors1
         assertEqual "not proper error 1" (BWNote BWError "parse error on input `toto'\n" (BWLocation rel 2 8)) nsError1
         -- write file and synchronize
         writeFile (root </> "src"</>"A.hs")$ unlines ["module A where","import Toto","fA=undefined"]
-        --runAPI root $ write rel $ unlines ["module A where","import Toto","fA=undefined"]
         mf2<-synchronize1 api root False rel
         assertBool ("mf2 not just") (isJust mf2)
-        (bool2,nsErrors2)<-build api root False Source
+        (BuildResult bool2 fps2,nsErrors2)<-build api root False Source
         assertBool ("returned true on bool2") (not bool2)
         assertBool ("no errors or warnings on nsErrors2") (not $ null nsErrors2)
+        -- assertBool ("no rel in fps2: "++(show fps2)) (elem rel fps1)
         let (nsError2:[])=nsErrors2
         assertEqual "not proper error 2" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" (BWLocation rel 2 8)) nsError2
         ))        
@@ -256,9 +257,10 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         assertBool ("errors or warnings:"++show nsOK) (null nsOK)
         let rel="src"</>"A.hs"
         writeFile (root </> rel) $ unlines ["module A where","import Data.List","fA=undefined"] 
-        (bool1,nsErrors1)<-build api root False Source
+        (BuildResult bool1 fps1,nsErrors1)<-build api root False Source
         assertBool ("returned false on bool1") bool1
         assertBool ("no errors or warnings on nsErrors1") (not $ null nsErrors1)
+        assertBool ("no rel in fps1: "++(show fps1)) (elem rel fps1)
         let (nsError1:nsError2:[])=nsErrors1
         assertEqual "not proper error 1" (BWNote BWWarning "The import of `Data.List' is redundant\n               except perhaps to import instances from `Data.List'\n             To import instances alone, use: import Data.List()\n" (BWLocation rel 2 1)) nsError1
         assertEqual "not proper error 2" (BWNote BWWarning "Top-level binding with no type signature:\n               fA :: forall a. a\n" (BWLocation rel 3 1)) nsError2
@@ -296,7 +298,7 @@ testModuleNotInCabal api = TestLabel "testModuleNotInCabal" (TestCase ( do
         (fps,ns)<-synchronize api root False
         putStrLn $ show fps
         putStrLn $ show ns
-        (bool1,nsErrors1)<-build api root False Source
+        (BuildResult bool1 fps1,nsErrors1)<-build api root False Source
         putStrLn $ show nsErrors1
         assertBool ("returned false on bool1") bool1
         assertBool ("errors or warnings on nsErrors1") (null nsErrors1)
@@ -605,7 +607,7 @@ testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
         (boolOKc,nsOKc)<-configure api root Source
         assertBool ("returned false on configure:"++show nsOKc) boolOKc
         assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
-        (boolOK,nsOK)<-build api root True Source
+        (BuildResult boolOK fps,nsOK)<-build api root True Source
         assertBool ("returned false on build") boolOK
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
         synchronize api root True
