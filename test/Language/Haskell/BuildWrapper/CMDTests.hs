@@ -23,6 +23,7 @@ instance APIFacade CMDAPI where
         write _ r fp s= runAPI r "write" ["--file="++fp,"--contents="++s]
         configure _ r t= runAPI r "configure" ["--cabaltarget="++(show t)]
         build _ r b wc= runAPI r "build" ["--output="++(show b),"--cabaltarget="++(show wc)]
+        build1 _ r fp= runAPI r "build1" ["--file="++fp]
         getOutline _ r fp= runAPI r "outline" ["--file="++fp]
         getTokenTypes _ r fp= runAPI r "tokentypes" ["--file="++fp]
         getOccurrences _ r fp s= runAPI r "occurrences" ["--file="++fp,"--token="++s]

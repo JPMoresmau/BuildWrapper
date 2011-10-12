@@ -57,7 +57,7 @@ withAST f fp base_dir mod options= do
 
 withASTNotes ::  (TypecheckedModule -> Ghc a) -> FilePath -> FilePath -> String -> [String] -> IO (OpResult (Maybe a))
 withASTNotes f fp base_dir mod options=do
-    putStrLn $ show base_dir
+    --putStrLn $ show options
     let lflags=map noLoc options
     (_leftovers, _) <- parseStaticFlags lflags
     runGhc (Just libdir) $ do
@@ -66,15 +66,15 @@ withASTNotes f fp base_dir mod options=do
         setSessionDynFlags flg'  { hscTarget = HscNothing, ghcLink = NoLink , ghcMode = OneShot }
         -- $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
         addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }
-        c1<-GMU.liftIO getClockTime
+        --c1<-GMU.liftIO getClockTime
         let modName=mkModuleName mod
         ref <- GMU.liftIO $ newIORef (mempty, mempty)
         res<-loadWithLogger (logWarnErr ref) (LoadUpTo modName) -- LoadAllTargets
-                  --  `gcatch` (\(e :: SourceError) -> handle_error ref e)
+                   `gcatch` (\(e :: SourceError) -> handle_error ref e)
         (warns, errs) <- GMU.liftIO $ readIORef ref
         let notes = ghcMessagesToNotes base_dir (warns, errs)
-        c2<-GMU.liftIO getClockTime
-        GMU.liftIO $ putStrLn ("load all targets: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
+        --c2<-GMU.liftIO getClockTime
+        --GMU.liftIO $ putStrLn ("load all targets: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
         case res of 
                 Succeeded -> do
                         modSum <- getModSummary $ modName
@@ -83,9 +83,9 @@ withASTNotes f fp base_dir mod options=do
                         t <- typecheckModule p
                         --d <- desugarModule t
                         l <- loadModule t
-                        c3<-GMU.liftIO getClockTime
+                        --c3<-GMU.liftIO getClockTime
                         setContext [ms_mod modSum] []
-                        GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
+                        --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
                         a<-f l
                         return $ (Just a,notes)
                 Failed -> return $ (Nothing,notes)
@@ -133,10 +133,10 @@ ghcMessagesToNotes base_dir (warns, errs) =
 getGhcNamesInScope  :: FilePath -> FilePath -> String -> [String] -> IO [String]
 getGhcNamesInScope f base_dir mod options=do
         names<-withAST (\_->do
-                c1<-GMU.liftIO getClockTime
+                --c1<-GMU.liftIO getClockTime
                 names<-getNamesInScope
-                c2<-GMU.liftIO getClockTime
-                GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
+                --c2<-GMU.liftIO getClockTime
+                --GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
                 return $ map (showSDocDump . ppr ) names)  f base_dir mod options
         return $ fromMaybe[] names
    

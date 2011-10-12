@@ -40,6 +40,7 @@ class APIFacade a where
         write :: a -> FilePath -> FilePath -> String -> IO ()
         configure :: a -> FilePath -> WhichCabal -> IO (OpResult Bool)
         build :: a -> FilePath -> Bool -> WhichCabal -> IO (OpResult BuildResult)
+        build1 :: a -> FilePath -> FilePath -> IO (OpResult Bool)
         getOutline :: a -> FilePath -> FilePath -> IO (OpResult [OutlineDef])
         getTokenTypes :: a -> FilePath -> FilePath -> IO (OpResult [TokenDef])
         getOccurrences :: a -> FilePath -> FilePath -> String -> IO (OpResult [TokenDef])
@@ -297,17 +298,21 @@ testModuleNotInCabal api = TestLabel "testModuleNotInCabal" (TestCase ( do
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
-        write api root rel $ unlines ["module A where","import Auto","fA=undefined"] 
+        writeFile (root </> rel) $ unlines ["module A where","import Auto","fA=undefined"] 
         let rel2="src"</>"Auto.hs"
         putStrLn (root </> rel2) 
         writeFile (root </> rel2) $ unlines ["module Auto where","fAuto=undefined"] 
         (fps,ns)<-synchronize api root False
         putStrLn $ show fps
         putStrLn $ show ns
-        (BuildResult bool1 fps1,nsErrors1)<-build api root False Source
+        (BuildResult bool1 fps1,nsErrors1)<-build api root True Source
         putStrLn $ show nsErrors1
         assertBool ("returned false on bool1") bool1
         assertBool ("errors or warnings on nsErrors1") (null nsErrors1)
+        (bool2, nsErrors2)<-build1 api root rel
+        assertBool ("returned false on bool2: "++(show nsErrors2)) bool2
+        assertBool ("errors or warnings on nsErrors2: "++(show nsErrors2)) (null nsErrors2)
+        
         ))      
         
 --testAST :: Test

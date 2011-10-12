@@ -40,7 +40,7 @@ synchronize1 force fp = do
 write ::  FilePath -> String -> BuildWrapper()
 write fp s= do
         real<-getTargetPath fp
-        liftIO $ putStrLn ("contents:"++s)
+        --liftIO $ putStrLn ("contents:"++s)
         liftIO $ writeFile real s
 
 configure ::  WhichCabal -> BuildWrapper (OpResult Bool)
@@ -74,7 +74,7 @@ preproc :: CabalBuildInfo -> FilePath -> IO String
 preproc cbi tgt= do
         inputOrig<-readFile tgt
         let cppo=fileCppOptions cbi ++ ["-D__GLASGOW_HASKELL__=" ++ show (__GLASGOW_HASKELL__::Int)]
-        putStrLn $ "cppo=" ++ (show cppo)
+        --putStrLn $ "cppo=" ++ (show cppo)
         if not $ null cppo 
             then do
                 let epo=parseOptions cppo
@@ -146,7 +146,7 @@ getOutline fp=do
  
 getTokenTypes :: FilePath -> BuildWrapper (OpResult [TokenDef])
 getTokenTypes fp=do
-        c1<-liftIO $ getClockTime
+--        c1<-liftIO $ getClockTime
 --        (mcbi,bwns)<-getBuildInfo fp
 --        case mcbi of
 --                Just(cbi)->do
@@ -169,11 +169,11 @@ getTokenTypes fp=do
                 --liftIO $ putStrLn "not in cabal"
                 input<-readFile tgt --(dir </> fp)
                 ett2<-BwGHC.tokenTypesArbitrary tgt input (".lhs" == (takeExtension fp)) knownExtensionNames
-                case ett2 of 
-                        Right tt-> putStrLn ("getTokenTypes: " ++ (show $ length tt))
-                        Left _->return()
-                c2<-getClockTime
-                putStrLn ("getTokenTypes: " ++ (show $ (\x->div x 1000000000) $ tdPicosec $ diffClockTimes c2 c1) ++"ms")
+                --case ett2 of 
+                --        Right tt-> putStrLn ("getTokenTypes: " ++ (show $ length tt))
+                --        Left _->return()
+                --c2<-getClockTime
+                --putStrLn ("getTokenTypes: " ++ (show $ (\x->div x 1000000000) $ tdPicosec $ diffClockTimes c2 c1) ++"ms")
                 return ett2
         case ett of
                 Right tt->return (tt,[])  -- bwns

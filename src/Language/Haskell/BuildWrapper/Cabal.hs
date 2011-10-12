@@ -156,15 +156,15 @@ cabalConfigure srcOrTgt= do
                 liftIO $ do
                         cd<-getCurrentDirectory
                         setCurrentDirectory (takeDirectory cf)
-                        c1<-getClockTime
+                        --c1<-getClockTime
                         --c<-readFile cf
                         --putStrLn dist_dir
                         --putStrLn (takeDirectory cf)
                         --putStrLn (show $ fromEnum v)
                         --putStrLn "cabal configure start"
                         (ex,_,err)<-readProcessWithExitCode cp args ""
-                        c2<-getClockTime
-                        putStrLn ("cabal configure end: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
+                        --c2<-getClockTime
+                        --putStrLn ("cabal configure end: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
                         putStrLn err
                         let msgs=(parseCabalMessages (takeFileName cf) (takeFileName cp) err) -- ++ (parseCabalMessages (takeFileName cf) out)
                         --putStrLn ("msgs:"++(show $ length msgs))
