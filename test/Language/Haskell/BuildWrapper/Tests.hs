@@ -20,7 +20,7 @@ import System.Time
 tests :: (APIFacade a)=> [(a -> Test)]
 tests=  [
         testSynchronizeAll,
-        testConfigureWarnings ,testConfigureErrors ,
+        testConfigureWarnings , testConfigureErrors ,
         testBuildErrors,testBuildWarnings,
         testBuildOutput,
         testModuleNotInCabal,
@@ -110,6 +110,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         assertEqual "no errors on unknown dependency" 1 (length nsErrors3)
         let (nsError4:[])=nsErrors3
         assertEqual "not proper error 4" (BWNote BWError "At least the following dependencies are missing:\ntoto -any\n" (BWLocation cfn 1 1)) nsError4
+        
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.8",
@@ -126,6 +127,11 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         assertEqual "no errors on unknown dependencies" 1 (length nsErrors4)
         let (nsError5:[])=nsErrors4
         assertEqual "not proper error 5" (BWNote BWError "At least the following dependencies are missing:\ntiti -any, toto -any\n" (BWLocation cfn 1 1)) nsError5
+        (BuildResult bool4b fps4b,nsErrors4b)<-build api root False Source
+        assertBool ("bool4b returned true") (not bool4b)
+        assertEqual "no errors on unknown dependencies" 1 (length nsErrors4b)
+        let (nsError5b:[])=nsErrors4b
+        assertEqual "not proper error 5b" (BWNote BWError "At least the following dependencies are missing:\ntiti -any, toto -any\n" (BWLocation cfn 1 1)) nsError5b
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.8",

@@ -133,7 +133,6 @@ cabalConfigure srcOrTgt= do
         cf<-getCabalFile srcOrTgt
         cp<-gets cabalPath
         ok<-liftIO $ doesFileExist cf
-        liftIO $ putStrLn (cf ++ "exists:" ++ (show ok))
         if ok 
             then 
                 do
@@ -167,7 +166,7 @@ cabalConfigure srcOrTgt= do
                         c2<-getClockTime
                         putStrLn ("cabal configure end: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
                         putStrLn err
-                        let msgs=(parseCabalMessages (takeFileName cf) err) -- ++ (parseCabalMessages (takeFileName cf) out)
+                        let msgs=(parseCabalMessages (takeFileName cf) (takeFileName cp) err) -- ++ (parseCabalMessages (takeFileName cf) out)
                         --putStrLn ("msgs:"++(show $ length msgs))
                         ret<-case ex of
                                 ExitSuccess  -> do
@@ -247,8 +246,8 @@ withCabal srcOrTgt f=do
                         return (Just r, notes)
      
 
-parseCabalMessages :: FilePath -> String -> [BWNote]
-parseCabalMessages cf s=let
+parseCabalMessages :: FilePath -> FilePath -> String -> [BWNote]
+parseCabalMessages cf cabalExe s=let
         (m,ls)=foldl parseCabalLine (Nothing,[]) $ lines s
         in nub $ case m of
                 Nothing -> ls
@@ -263,9 +262,9 @@ parseCabalMessages cf s=let
                                         then dropWhile isSpace $ drop ((length cf) + 1) msg
                                         else msg
                                 in (Just (BWNote BWWarning "" (BWLocation cf (extractLine msg2) 1),[msg2]),addCurrent currentNote ls)
-                        | isPrefixOf "cabal:" l=
+                        | isPrefixOf (cabalExe++":") l=
                                 let 
-                                        s2=(dropWhile isSpace $ drop 6 l)
+                                        s2=(dropWhile isSpace $ drop ((length cabalExe)+1) l)
                                 in if isPrefixOf "At least the following" s2
                                                 then (Just $ (BWNote BWError "" (BWLocation cf 1 1),[s2]),addCurrent currentNote ls)
                                                 else 
