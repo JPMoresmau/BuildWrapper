@@ -199,7 +199,7 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
                 "  other-modules:  B.C",
                 "  build-depends:   base"]
         writeFile ((takeDirectory cf) </> "Setup.hs") $ unlines ["import Distribution.Simple",
-			"main = defaultMain"]
+                        "main = defaultMain"]
         synchronize api root False
         (bool3,ns3)<- configure api root Target
         assertBool ("returned false 3 "++ (show ns3)) bool3
@@ -280,8 +280,8 @@ testBuildOutput api = TestLabel "testBuildOutput" (TestCase ( do
         synchronize api root False
         build api root True Source
         let exeN=case os of
-        	"mingw32"->(addExtension testProjectName "exe")
-        	_->testProjectName
+                "mingw32"->(addExtension testProjectName "exe")
+                _->testProjectName
         let exeF=root </> ".dist-buildwrapper" </> "dist" </> "build" </> testProjectName </> exeN
         exeE1<-doesFileExist exeF
         assertBool ("exe does not exist on build output: "++exeF) exeE1
@@ -659,33 +659,33 @@ testCabalComponents api= TestLabel "testCabalComponents" (TestCase ( do
         assertEqual "not test suite true" (CCTestSuite "BWTest-test" True) ts
         let cf=testCabalFile root
         writeFile cf $ unlines ["name: "++testProjectName,
-	        "version:0.1",
-	        "cabal-version:  >= 1.8",
-	        "build-type:     Simple",
-	        "",
-	        "library",
-	        "  hs-source-dirs:  src",
-	        "  exposed-modules: A",
-	        "  other-modules:  B.C",
-	        "  build-depends:  base",
-	        "  buildable: False",
-	        "",
-	        "executable BWTest",
-	        "  hs-source-dirs:  src",
-	        "  main-is:         Main.hs",
-	        "  other-modules:  B.D",
-	        "  build-depends:  base",
-	        "  buildable: False",
-	        "",
-	        "test-suite BWTest-test",
-	        "  type:            exitcode-stdio-1.0",
-	        "  hs-source-dirs:  test",
-	        "  main-is:         Main.hs",
-	        "  other-modules:  TestA",
-	        "  build-depends:  base",
-	        "  buildable: False",
-	        ""
-	        ]
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:  base",
+                "  buildable: False",
+                "",
+                "executable BWTest",
+                "  hs-source-dirs:  src",
+                "  main-is:         Main.hs",
+                "  other-modules:  B.D",
+                "  build-depends:  base",
+                "  buildable: False",
+                "",
+                "test-suite BWTest-test",
+                "  type:            exitcode-stdio-1.0",
+                "  hs-source-dirs:  test",
+                "  main-is:         Main.hs",
+                "  other-modules:  TestA",
+                "  build-depends:  base",
+                "  buildable: False",
+                ""
+                ]
         configure api root Source
         (cps2,nsOK2)<-getCabalComponents api root
         assertBool ("errors or warnings on getCabalComponents:"++show nsOK2) (null nsOK2)
@@ -710,7 +710,7 @@ testCabalDependencies api= TestLabel "testCabalDependencies" (TestCase ( do
         assertEqual "not library true" (CCLibrary True) l
         assertEqual "not executable true" (CCExecutable "BWTest" True) ex
         assertEqual "not test suite true" (CCTestSuite "BWTest-test" True) ts
-		))
+                ))
 
 testProjectName :: String
 testProjectName="BWTest"         
