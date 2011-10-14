@@ -1,4 +1,15 @@
 {-# LANGUAGE CPP, ScopedTypeVariables #-}
+-- |
+-- Module      : Language.Haskell.BuildWrapper.API
+-- Author      : JP Moresmau
+-- Copyright   : (c) JP Moresmau 2011
+-- License     : BSD3
+-- 
+-- Maintainer  : jpmoresmau@gmail.com
+-- Stability   : beta
+-- Portability : portable
+-- 
+-- API entry point, with all exposed methods
 module Language.Haskell.BuildWrapper.API where
 
 import Language.Haskell.BuildWrapper.Base

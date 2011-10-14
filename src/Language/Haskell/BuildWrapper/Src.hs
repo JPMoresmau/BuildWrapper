@@ -1,5 +1,16 @@
 {-# LANGUAGE TypeSynonymInstances,OverloadedStrings #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+-- |
+-- Module      : Language.Haskell.BuildWrapper.Src
+-- Author      : JP Moresmau
+-- Copyright   : (c) JP Moresmau 2011
+-- License     : BSD3
+-- 
+-- Maintainer  : jpmoresmau@gmail.com
+-- Stability   : beta
+-- Portability : portable
+-- 
+-- Use haskell-src-exts to get a module outline
 module Language.Haskell.BuildWrapper.Src where
 
 import Language.Haskell.BuildWrapper.Base

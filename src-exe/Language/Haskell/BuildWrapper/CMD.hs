@@ -1,4 +1,15 @@
 {-# LANGUAGE DeriveDataTypeable,OverloadedStrings #-}
+-- |
+-- Module      : Language.Haskell.BuildWrapper.CMD
+-- Author      : JP Moresmau
+-- Copyright   : (c) JP Moresmau 2011
+-- License     : BSD3
+-- 
+-- Maintainer  : jpmoresmau@gmail.com
+-- Stability   : beta
+-- Portability : portable
+-- 
+-- CmdArgs configuration for executable option handling
 module Language.Haskell.BuildWrapper.CMD where
 
 import Language.Haskell.BuildWrapper.API

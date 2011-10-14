@@ -1,15 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
+-- |
+-- Module      : Language.Haskell.BuildWrapper.APITest
+-- Author      : JP Moresmau
+-- Copyright   : (c) JP Moresmau 2011
+-- License     : BSD3
+-- 
+-- Maintainer  : jpmoresmau@gmail.com
+-- Stability   : beta
+-- Portability : portable
+-- 
+-- Direct tests on the API code
 module Language.Haskell.BuildWrapper.APITest where
 
-import Language.Haskell.BuildWrapper.Base
-import qualified Language.Haskell.BuildWrapper.API as API
 import qualified Language.Haskell.BuildWrapper.Cabal as Cabal
-import Language.Haskell.BuildWrapper.Tests
-
 
 import Test.HUnit
 
-import Control.Monad.State
 
 unitTests :: Test
 unitTests=TestList [testGetBuiltPath]

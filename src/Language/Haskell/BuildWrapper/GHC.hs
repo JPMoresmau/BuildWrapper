@@ -1,5 +1,16 @@
 {-# LANGUAGE CPP, OverloadedStrings, TypeSynonymInstances,StandaloneDeriving,DeriveDataTypeable,ScopedTypeVariables, MultiParamTypeClasses, PatternGuards  #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
+-- |
+-- Module      : Language.Haskell.BuildWrapper.GHC
+-- Author      : JP Moresmau
+-- Copyright   : (c) JP Moresmau 2011
+-- License     : BSD3
+-- 
+-- Maintainer  : jpmoresmau@gmail.com
+-- Stability   : beta
+-- Portability : portable
+-- 
+-- Load relevant module in the GHC AST and get GHC messages and thing at point info.
 module Language.Haskell.BuildWrapper.GHC where
 import Language.Haskell.BuildWrapper.Base hiding (Target)
 import Language.Haskell.BuildWrapper.Find

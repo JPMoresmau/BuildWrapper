@@ -1,4 +1,14 @@
-
+-- |
+-- Module      : Language.Haskell.BuildWrapper.CMDTests
+-- Author      : JP Moresmau
+-- Copyright   : (c) JP Moresmau 2011
+-- License     : BSD3
+-- 
+-- Maintainer  : jpmoresmau@gmail.com
+-- Stability   : beta
+-- Portability : portable
+-- 
+-- Testing via the executable interface
 module Language.Haskell.BuildWrapper.CMDTests where
 
 import Language.Haskell.BuildWrapper.Tests

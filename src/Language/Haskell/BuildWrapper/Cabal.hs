@@ -1,4 +1,15 @@
 {-# LANGUAGE PatternGuards,ScopedTypeVariables #-}
+-- |
+-- Module      : Language.Haskell.BuildWrapper.Cabal
+-- Author      : JP Moresmau
+-- Copyright   : (c) JP Moresmau 2011
+-- License     : BSD3
+-- 
+-- Maintainer  : jpmoresmau@gmail.com
+-- Stability   : beta
+-- Portability : portable
+-- 
+-- Cabal operations: configure, build, retrieve information from build info, parse errors and warnings
 module Language.Haskell.BuildWrapper.Cabal where
 
 import Language.Haskell.BuildWrapper.Base
@@ -35,7 +46,7 @@ import System.Directory
 import System.Exit
 import System.FilePath
 import System.Process
-import System.Time
+--import System.Time
 
 
 

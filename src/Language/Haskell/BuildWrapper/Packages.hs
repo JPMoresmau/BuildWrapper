@@ -3,14 +3,14 @@
 -- Module      : Language.Haskell.BuildWrapper.Packages
 -- Author      : Thiago Arrais
 -- Copyright   : (c) Thiago Arrais 2009
--- License     : BSD-style
+-- License     : BSD3
 -- Url         : http://stackoverflow.com/questions/1522104/how-to-programmatically-retrieve-ghc-package-information
 -- 
--- Maintainer  : nominolo@gmail.com
--- Stability   : experimental
+-- Maintainer  : jpmoresmau@gmail.com
+-- Stability   : beta
 -- Portability : portable
 -- 
--- Cabal-related functionality.
+-- Packages from packages databases (global, user).
 module Language.Haskell.BuildWrapper.Packages ( getPkgInfos ) where
 
 

@@ -2,12 +2,12 @@
 {-# LANGUAGE TypeSynonymInstances, MultiParamTypeClasses #-}
 {-# LANGUAGE PatternGuards, FlexibleInstances, CPP #-}
 -- |
--- Module      : Scion.Inspect.Search
--- Copyright   : (c) Thomas Schilling 2008
+-- Module      : Language.Haskell.BuildWrapper.Find
+-- Copyright   : (c) Thomas Schilling 2008, JP Moresmau 2011
 -- License     : BSD-style
 --
--- Maintainer  : nominolo@gmail.com
--- Stability   : experimental
+-- Maintainer  : jpmoresmau@gmail.com
+-- Stability   : beta
 -- Portability : portable
 --
 -- Find things in a syntax tree.
@@ -29,8 +29,12 @@ import Name hiding (varName)
 import BasicTypes ( IPName(..) )
 import Bag
 import Var ( varName,varType )
-import TypeRep ( Type(..), PredType(..) )
 
+#if __GLASGOW_HASKELL__ < 720
+import TypeRep ( Type(..), PredType(..) )
+#else 
+import TypeRep ( Type(..), Pred(..) )
+#endif
 import Data.Monoid ( mempty, mappend, mconcat )
 import Data.Foldable as F ( maximumBy )
 import Data.Ord    ( comparing )

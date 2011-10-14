@@ -1,4 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
+-- |
+-- Module      : Language.Haskell.BuildWrapper.Tests
+-- Author      : JP Moresmau
+-- Copyright   : (c) JP Moresmau 2011
+-- License     : BSD3
+-- 
+-- Maintainer  : jpmoresmau@gmail.com
+-- Stability   : beta
+-- Portability : portable
+-- 
+-- Abstract tests of the behavior
 module Language.Haskell.BuildWrapper.Tests where
 
 import Language.Haskell.BuildWrapper.Base

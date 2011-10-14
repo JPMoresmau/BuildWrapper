@@ -1,4 +1,15 @@
 {-# LANGUAGE DeriveDataTypeable,OverloadedStrings,PatternGuards #-}
+-- |
+-- Module      : Language.Haskell.BuildWrapper.GHC
+-- Author      : JP Moresmau
+-- Copyright   : (c) JP Moresmau 2011
+-- License     : BSD3
+-- 
+-- Maintainer  : jpmoresmau@gmail.com
+-- Stability   : beta
+-- Portability : portable
+-- 
+-- Data types, State Monad, utility functions
 module Language.Haskell.BuildWrapper.Base where
 
 import Control.Applicative
