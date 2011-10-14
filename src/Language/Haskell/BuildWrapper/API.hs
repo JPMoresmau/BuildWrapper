@@ -13,7 +13,7 @@ import Language.Haskell.Exts.Annotated
 import Language.Preprocessor.Cpphs
 import Data.Maybe
 import System.FilePath
-import System.Time
+--import System.Time
 import GHC (TypecheckedSource)
 
 synchronize ::  Bool -> BuildWrapper(OpResult [FilePath])

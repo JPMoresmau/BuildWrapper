@@ -3,15 +3,12 @@ module Language.Haskell.BuildWrapper.CMD where
 
 import Language.Haskell.BuildWrapper.API
 import Language.Haskell.BuildWrapper.Base
-import Control.Monad
 import Control.Monad.State
 import System.Console.CmdArgs hiding (Verbosity(..))
 
 import Data.Aeson
 import qualified Data.ByteString.Lazy as BS
-import qualified Data.Text as T
 
-import System.FilePath
 
 type CabalFile = FilePath
 type CabalPath = FilePath

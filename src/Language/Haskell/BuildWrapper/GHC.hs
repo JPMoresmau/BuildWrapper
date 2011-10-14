@@ -1,12 +1,9 @@
-{-# LANGUAGE CPP, OverloadedStrings, TypeSynonymInstances,StandaloneDeriving,DeriveDataTypeable,ScopedTypeVariables,TypeFamilies,RankNTypes, FlexibleContexts  #-}
+{-# LANGUAGE CPP, OverloadedStrings, TypeSynonymInstances,StandaloneDeriving,DeriveDataTypeable,ScopedTypeVariables, MultiParamTypeClasses, PatternGuards  #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 module Language.Haskell.BuildWrapper.GHC where
 import Language.Haskell.BuildWrapper.Base hiding (Target)
 import Language.Haskell.BuildWrapper.Find
 
-
-import Control.Monad
-import Control.Monad.State
 
 -- import Text.JSON
 -- import Data.DeriveTH
@@ -14,15 +11,11 @@ import Control.Monad.State
 import Data.Generics hiding (Fixity, typeOf)
 import Data.Maybe
 import Data.Monoid
-import qualified Data.Foldable as F
-
 
 import Data.IORef
 import qualified Data.List as List
 import Data.Ord (comparing)
 import qualified Data.Text as T
-
-import qualified Data.Sequence as Seq
 
 import DynFlags
 import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,WarningMessages )
@@ -40,8 +33,7 @@ import StringBuffer
 #endif
 
 import System.FilePath
-import System.Time
---import Unsafe.Coerce
+--import System.Time
 
 import qualified MonadUtils as GMU
 
@@ -57,7 +49,9 @@ withAST f fp base_dir mod options= do
 
 withASTNotes ::  (TypecheckedModule -> Ghc a) -> FilePath -> FilePath -> String -> [String] -> IO (OpResult (Maybe a))
 withASTNotes f fp base_dir mod options=do
-    --putStrLn $ show options
+    putStrLn $ ("base_dir: " ++ base_dir)
+    putStrLn $ ("file: " ++ fp)
+    putStrLn $ ("options: " ++ (show options))
     let lflags=map noLoc options
     (_leftovers, _) <- parseStaticFlags lflags
     runGhc (Just libdir) $ do
@@ -296,16 +290,22 @@ ghcSpanToLocation baseDir sp
   | otherwise = mkFileSpan 0 0 0 0
 
    
+   
 ghcSpanToBWLocation :: FilePath -- ^ Base directory
                   -> GHC.SrcSpan
                   -> BWLocation
 ghcSpanToBWLocation baseDir sp
   | GHC.isGoodSrcSpan sp =
-      BWLocation (makeRelative baseDir $ unpackFS (GHC.srcSpanFile sp))
+      BWLocation (makeRelative baseDir $ foldr f [] $ normalise $ unpackFS (GHC.srcSpanFile sp))
                  (GHC.srcSpanStartLine sp)
                  (ghcColToScionCol $ GHC.srcSpanStartCol sp)
   | otherwise = BWLocation "" 1 1
-        
+        where   
+                f c (x:xs) 
+                        | c=='\\' && x=='\\'=x:xs   -- WHY do we get two slashed after the drive sometimes?
+                        | otherwise=c:x:xs
+                f c s=c:s 
+                        
 ghcColToScionCol :: Int -> Int
 #if __GLASGOW_HASKELL__ < 700
 ghcColToScionCol c=c+1 -- GHC 6.x starts at 0 for columns

@@ -5,11 +5,7 @@ module Language.Haskell.BuildWrapper.Src where
 import Language.Haskell.BuildWrapper.Base
 
 import Language.Haskell.Exts.Annotated
-import Language.Haskell.Exts.Extension
-import Language.Haskell.Exts.SrcLoc
 
-import Data.List
-import Data.Maybe
 
 import qualified Data.Text as T
 --import Text.JSON
