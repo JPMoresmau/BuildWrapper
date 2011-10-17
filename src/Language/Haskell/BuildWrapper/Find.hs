@@ -30,11 +30,12 @@ import BasicTypes ( IPName(..) )
 import Bag
 import Var ( varName,varType )
 
-#if __GLASGOW_HASKELL__ < 720
+#if __GLASGOW_HASKELL__ < 702
 import TypeRep ( Type(..), PredType(..) )
 #else 
 import TypeRep ( Type(..), Pred(..) )
 #endif
+
 import Data.Monoid ( mempty, mappend, mconcat )
 import Data.Foldable as F ( maximumBy )
 import Data.Ord    ( comparing )
@@ -230,10 +231,17 @@ cmpOverlap sp1 sp2
  where
    -- At this point we assume that both spans are good.  We also ignore the
    -- file names since faststrings seem to be rather unreliable.
-   start1 = (srcSpanStartLine sp1, srcSpanStartCol sp1)
-   end1   = (srcSpanEndLine sp1, srcSpanEndCol sp1)
-   start2 = (srcSpanStartLine sp2, srcSpanStartCol sp2)
-   end2   = (srcSpanEndLine sp2, srcSpanEndCol sp2)
+   start1 = start sp1
+   end1   = end sp1
+   start2 = start sp2
+   end2   = end sp2
+#if __GLASGOW_HASKELL__ < 702   
+   start ss= (srcSpanStartLine ss, srcSpanStartCol ss)
+   end ss= (srcSpanEndLine ss, srcSpanEndCol ss)
+#else 
+   start (RealSrcSpan ss)= (srcSpanStartLine ss, srcSpanStartCol ss)
+   end (RealSrcSpan ss)= (srcSpanEndLine ss, srcSpanEndCol ss)   
+#endif
 
 surrounds :: SrcSpan -> SrcSpan -> Bool
 surrounds outer inner = start1 <= start2 && end2 <= end1
@@ -364,7 +372,11 @@ instance (Search id id) => Search id (Pat id) where
       search_inside = 
         case pat0 of
           VarPat i              -> search p s i
+#if __GLASGOW_HASKELL__ < 702          
           VarPatOut i _         -> search p s i
+          TypePat t             -> search p s t
+#endif          
+          LitPat pat            -> search p s pat
           LazyPat pat           -> search p s pat
           AsPat i pat           -> search p s i `mappend` search p s pat
           ParPat pat            -> search p s pat
@@ -375,10 +387,11 @@ instance (Search id id) => Search id (Pat id) where
           ConPatIn i d          -> search p s i `mappend` search p s d
           ConPatOut c _ _ _ d _ -> search p s c `mappend` search p s d
           ViewPat e pt _        -> search p s e `mappend` search p s pt
-          TypePat t             -> search p s t
           SigPatIn pt t         -> search p s pt `mappend` search p s t
           SigPatOut pt _        -> search p s pt
           NPlusKPat n _ _ _     -> search p s n
+          QuasiQuotePat qq      -> search p s qq
+          CoPat _ pt _          -> search p s pt
           _ -> mempty
 
 -- type HsConPatDetails id = HsConDetails (LPat id) (HsRecFields id (LPat id))
@@ -404,7 +417,7 @@ instance (Search id id) => Search id (GRHS id) where
   search p s (GRHS _guards rhs) =
     -- guards look like statements, but we should probably treat them
     -- differently
-    search p s rhs
+    search p s _guards `mappend` search p s rhs
 
 instance (Search id id) => Search id (HsExpr id) where
   search p s e0 = FoundExpr s e0 `above` search_inside
@@ -433,7 +446,11 @@ instance (Search id id) => Search id (HsExpr id) where
                                         `mappend` search p s e
 #endif
           HsLet bs e    -> search p s bs `mappend` search p s e
+#if  __GLASGOW_HASKELL__ < 702
           HsDo _ ss e _ -> search p s ss `mappend` search p s e
+#else 
+          HsDo _ ss _ -> search p s ss
+#endif          
           ExplicitList _ es     -> search p s es
           ExplicitPArr _ es     -> search p s es
           ExplicitTuple es _    -> search p s es
@@ -484,18 +501,28 @@ instance (Search id id) => Search id (StmtLR id id) where
       search_inside =
         case st of
           BindStmt pat e _ _ -> search p s pat `mappend` search p s e
+#if __GLASGOW_HASKELL__ < 702          
           ExprStmt e _ _     -> search p s e
-          LetStmt bs         -> search p s bs
           ParStmt ss         -> search p s (concatMap fst ss)
+#else
+          ExprStmt e _ _ _   -> search p s e
+          ParStmt ss _ _ _   -> search p s (concatMap fst ss)
+#endif
+          LetStmt bs         -> search p s bs
+          
 #if __GLASGOW_HASKELL__ < 700
           TransformStmt (ss,_) f e -> search p s ss `mappend` search p s f
                                                     `mappend` search p s e
           GroupStmt (ss, _) g -> search p s ss `mappend` search p s g
-#else
+#elif __GLASGOW_HASKELL__ < 702
           TransformStmt ss _ f e -> search p s ss `mappend` search p s f
                                                   `mappend` search p s e
           GroupStmt ss _ g gg -> search p s ss `mappend` search p s g
                                                `mappend` either (search p s) (const mempty) gg
+#else
+          LastStmt e _ -> search p s e
+          TransStmt _ ss _ f e _ _ _-> search p s ss `mappend` search p s f
+                                                  `mappend` search p s e
 #endif
           RecStmt{recS_stmts=sts} -> search p s sts
 
