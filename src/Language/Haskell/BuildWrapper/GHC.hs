@@ -19,6 +19,7 @@ import Language.Haskell.BuildWrapper.Find
 -- import Text.JSON
 -- import Data.DeriveTH
 -- import Data.Derive.JSON
+import Data.Char
 import Data.Generics hiding (Fixity, typeOf)
 import Data.Maybe
 import Data.Monoid
@@ -29,8 +30,9 @@ import Data.Ord (comparing)
 import qualified Data.Text as T
 
 import DynFlags
-import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,WarningMessages )
+import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,WarningMessages, Message )
 import GHC
+import SrcLoc 
 import GHC.Paths ( libdir )
 import HscTypes ( srcErrorMessages, SourceError)
 import Outputable
@@ -58,26 +60,26 @@ withAST f fp base_dir mod options= do
         (a,_)<-withASTNotes f fp base_dir mod options
         return a
 
+
 withASTNotes ::  (TypecheckedModule -> Ghc a) -> FilePath -> FilePath -> String -> [String] -> IO (OpResult (Maybe a))
 withASTNotes f fp base_dir mod options=do
-    putStrLn $ ("base_dir: " ++ base_dir)
-    putStrLn $ ("file: " ++ fp)
-    putStrLn $ ("options: " ++ (show options))
     let lflags=map noLoc options
     (_leftovers, _) <- parseStaticFlags lflags
     runGhc (Just libdir) $ do
         flg <- getSessionDynFlags
         (flg', _, _) <- parseDynamicFlags flg _leftovers
-        setSessionDynFlags flg'  { hscTarget = HscNothing, ghcLink = NoLink , ghcMode = OneShot }
+        ref <- GMU.liftIO $ newIORef []
+        setSessionDynFlags flg'  { hscTarget = HscNothing, ghcLink = NoLink , ghcMode = OneShot, log_action = logAction ref }
         -- $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
         addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }
         --c1<-GMU.liftIO getClockTime
         let modName=mkModuleName mod
-        ref <- GMU.liftIO $ newIORef (mempty, mempty)
-        res<-loadWithLogger (logWarnErr ref) (LoadUpTo modName) -- LoadAllTargets
+        -- loadWithLogger (logWarnErr ref)
+        res<- load (LoadUpTo modName) -- LoadAllTargets
                    `gcatch` (\(e :: SourceError) -> handle_error ref e)
-        (warns, errs) <- GMU.liftIO $ readIORef ref
-        let notes = ghcMessagesToNotes base_dir (warns, errs)
+        --(warns, errs) <- GMU.liftIO $ readIORef ref
+        --let notes = ghcMessagesToNotes base_dir (warns, errs)
+        notes <- GMU.liftIO $ readIORef ref
         --c2<-GMU.liftIO getClockTime
         --GMU.liftIO $ putStrLn ("load all targets: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
         case res of 
@@ -86,37 +88,63 @@ withASTNotes f fp base_dir mod options=do
                         p <- parseModule modSum
                         --return $ showSDocDump $ ppr $ pm_mod_summary p
                         t <- typecheckModule p
-                        --d <- desugarModule t
-                        l <- loadModule t
+                        d <- desugarModule t -- to get warnings
+                        l <- loadModule d
                         --c3<-GMU.liftIO getClockTime
                         setContext [ms_mod modSum] []
                         --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
-                        a<-f l
+                        a<-f (dm_typechecked_module l)
+#if __GLASGOW_HASKELL__ < 702                           
+                        warns <- getWarnings
+                        return $ (Just a,notes++ (reverse $ ghcMessagesToNotes base_dir (warns, emptyBag)))
+#else
                         return $ (Just a,notes)
+#endif
                 Failed -> return $ (Nothing,notes)
         where
-            logWarnErr :: GhcMonad m => IORef (WarningMessages,ErrorMessages) -> Maybe SourceError -> m ()
-            logWarnErr ref err = do
-              let errs = case err of
-                           Nothing -> mempty
-                           Just exc -> srcErrorMessages exc
-              warns <- getWarnings
-              clearWarnings
-              add_warn_err ref warns errs
+--            logWarnErr :: GhcMonad m => IORef [BWNote] -> Maybe SourceError -> m ()
+--            logWarnErr ref err = do
+--              let errs = case err of
+--                           Nothing -> mempty
+--                           Just exc -> srcErrorMessages exc
+--              warns <- getWarnings
+--              clearWarnings
+--              add_warn_err ref warns errs
         
-            add_warn_err :: GhcMonad m => IORef (WarningMessages,ErrorMessages) -> WarningMessages -> ErrorMessages -> m()
-            add_warn_err ref warns errs =
+            add_warn_err :: GhcMonad m => IORef [BWNote] -> WarningMessages -> ErrorMessages -> m()
+            add_warn_err ref warns errs = do
+              let notes = ghcMessagesToNotes base_dir (warns, errs)
               GMU.liftIO $ modifyIORef ref $
-                         \(warns', errs') -> ( warns `mappend` warns'
-                                             , errs `mappend` errs')
+                         \ns -> ( ns ++ notes)
         
-            handle_error :: GhcMonad m => IORef (WarningMessages,ErrorMessages) -> SourceError -> m SuccessFlag
+            handle_error :: GhcMonad m => IORef [BWNote] -> SourceError -> m SuccessFlag
             handle_error ref e = do
                let errs = srcErrorMessages e
-               warns <- getWarnings
-               add_warn_err ref warns errs
-               clearWarnings
+               add_warn_err ref emptyBag errs
+--               warns <- getWarnings
+--               add_warn_err ref warns errs
+--               clearWarnings
                return Failed
+               
+            logAction :: IORef [BWNote] -> Severity -> SrcSpan -> PprStyle -> Message -> IO ()
+            logAction ref s loc ppr msg
+                | (Just status)<-bwSeverity s=do
+                        putStrLn "in logAction"
+                        let n=BWNote { bwn_location = ghcSpanToBWLocation base_dir loc
+                                 , bwn_status = status
+                                 , bwn_title = showSDocForUser (qualName ppr,qualModule ppr) msg
+                                 }
+                        modifyIORef ref $   \ns -> ( ns ++ [n])
+                | otherwise=do
+                        putStrLn "unhandled severity"
+                        return ()
+            
+            bwSeverity :: Severity -> Maybe BWNoteStatus
+            bwSeverity SevWarning = Just BWWarning       
+            bwSeverity SevError   = Just BWError
+            bwSeverity SevFatal   = Just BWError
+            bwSeverity _          = Nothing
+            
         --f $ tm_typechecked_source t
         --return $ showSDocDump $ ppr $ pm_parsed_source p
         --return $ showSDocDump $ ppr $ tm_typechecked_source t
@@ -292,12 +320,14 @@ ghcSpanToLocation :: FilePath -- ^ Base directory
                   -> GHC.SrcSpan
                   -> InFileSpan
 ghcSpanToLocation baseDir sp
-  | GHC.isGoodSrcSpan sp =
-      mkFileSpan 
-                 (GHC.srcSpanStartLine sp)
-                 (ghcColToScionCol $ GHC.srcSpanStartCol sp)
-                 (GHC.srcSpanEndLine sp)
-                 (ghcColToScionCol $ GHC.srcSpanEndCol sp)
+  | GHC.isGoodSrcSpan sp =let
+      (stl,stc)=start sp
+      (enl,enc)=end sp
+      in mkFileSpan 
+                 stl
+                 (ghcColToScionCol stc)
+                 (enl)
+                 (ghcColToScionCol enc)
   | otherwise = mkFileSpan 0 0 0 0
 
    
@@ -307,15 +337,21 @@ ghcSpanToBWLocation :: FilePath -- ^ Base directory
                   -> BWLocation
 ghcSpanToBWLocation baseDir sp
   | GHC.isGoodSrcSpan sp =
-      BWLocation (makeRelative baseDir $ foldr f [] $ normalise $ unpackFS (GHC.srcSpanFile sp))
-                 (GHC.srcSpanStartLine sp)
-                 (ghcColToScionCol $ GHC.srcSpanStartCol sp)
+      let (stl,stc)=start sp
+      in BWLocation (makeRelative baseDir $ foldr f [] $ normalise $ unpackFS (sfile sp))
+                 stl
+                 (ghcColToScionCol $stc)
   | otherwise = BWLocation "" 1 1
         where   
                 f c (x:xs) 
                         | c=='\\' && x=='\\'=x:xs   -- WHY do we get two slashed after the drive sometimes?
                         | otherwise=c:x:xs
-                f c s=c:s 
+                f c s=c:s
+#if __GLASGOW_HASKELL__ < 702   
+                sfile ss= GHC.srcSpanFile ss
+#else 
+                sfile (RealSrcSpan ss)= GHC.srcSpanFile ss
+#endif 
                         
 ghcColToScionCol :: Int -> Int
 #if __GLASGOW_HASKELL__ < 700
@@ -337,7 +373,11 @@ ghctokensArbitrary :: FilePath -- ^ The file path to the document
                    -> [String] -- ^ The options
                    -> IO (Either BWNote [Located Token])
 ghctokensArbitrary base_dir contents options= do
+#if __GLASGOW_HASKELL__ < 702
         sb <- stringToStringBuffer contents
+#else
+        let sb=stringToStringBuffer contents
+#endif
         let lflags=map noLoc options
         (_leftovers, _) <- parseStaticFlags lflags
         runGhc (Just libdir) $ do
@@ -354,8 +394,14 @@ ghctokensArbitrary base_dir contents options= do
                         POk _ toks      -> return $ Right $ (filter ofInterest toks)
                         PFailed loc msg -> return $ Left $ ghcErrMsgToNote base_dir $ mkPlainErrMsg loc msg
 
+#if __GLASGOW_HASKELL__ < 702
 lexLoc :: SrcLoc
 lexLoc = mkSrcLoc (mkFastString "<interactive>") 1 (scionColToGhcCol 1)
+#else
+lexLoc :: RealSrcLoc
+lexLoc = mkRealSrcLoc  (mkFastString "<interactive>") 1 (scionColToGhcCol 1)
+#endif
+
 
 #if __GLASGOW_HASKELL__ >= 700
 lexerFlags :: [ExtensionFlag]
@@ -364,8 +410,12 @@ lexerFlags :: [DynFlag]
 #endif
 lexerFlags =
         [ Opt_ForeignFunctionInterface
-        , Opt_PArr
         , Opt_Arrows
+#if __GLASGOW_HASKELL__ < 702        
+        , Opt_PArr
+#else
+        , Opt_ParallelArrays
+#endif        
         , Opt_TemplateHaskell
         , Opt_QuasiQuotes
         , Opt_ImplicitParams
@@ -381,7 +431,9 @@ lexerFlags =
         , Opt_UnboxedTuples
         , Opt_StandaloneDeriving
         , Opt_TransformListComp
+#if __GLASGOW_HASKELL__ < 702          
         , Opt_NewQualifiedOperators
+#endif        
 #if GHC_VERSION > 611       
         , Opt_ExplicitForAll -- 6.12
         , Opt_DoRec -- 6.12
@@ -392,10 +444,8 @@ lexerFlags =
 -- less than end column.)
 ofInterest :: Located Token -> Bool
 ofInterest (L span _) =
-  let  sl = srcSpanStartLine span
-       sc = srcSpanStartCol span
-       el = srcSpanEndLine span
-       ec = srcSpanEndCol span
+  let  (sl,sc) = start span
+       (el,ec) = end span
   in (sl < el) || (sc < ec)
 
 --toInteractive ::  Location -> Location
@@ -520,14 +570,19 @@ ghcMsgToNote :: BWNoteStatus -> FilePath -> ErrMsg -> BWNote
 ghcMsgToNote note_kind base_dir msg =
     BWNote { bwn_location = ghcSpanToBWLocation base_dir loc
          , bwn_status = note_kind
-         , bwn_title = show_msg (errMsgShortDoc msg)
+         , bwn_title = removeStatus note_kind $ show_msg (errMsgShortDoc msg)
          }
   where
     loc | (s:_) <- errMsgSpans msg = s
         | otherwise                    = GHC.noSrcSpan
     unqual = errMsgContext msg
     show_msg = showSDocForUser unqual
-
+    removeStatus BWWarning s 
+        | List.isPrefixOf "Warning:" s = List.dropWhile isSpace $ drop 8 s
+        | otherwise = s
+    removeStatus BWError s 
+        | List.isPrefixOf "Error:" s = List.dropWhile isSpace $ drop 6 s
+        | otherwise = s        
 
 #if CABAL_VERSION == 106
 deriving instance Typeable StringBuffer
@@ -593,7 +648,9 @@ tokenType  ITexport= "EK"
 tokenType  ITlabel= "EK"
 tokenType  ITdynamic= "EK"
 tokenType  ITsafe= "EK"
+#if __GLASGOW_HASKELL__ < 702
 tokenType  ITthreadsafe= "EK"
+#endif
 tokenType  ITunsafe= "EK"
 tokenType  ITstdcallconv= "EK"
 tokenType  ITccallconv= "EK"
@@ -731,6 +788,14 @@ tokenType  (ITdocOptions {})="D"    -- doc options (prune, ignore-exports, etc)
 tokenType  (ITdocOptionsOld {})="D"     -- doc options declared "-- # ..."-style
 tokenType  (ITlineComment {})="D"     -- comment starting by "--"
 tokenType  (ITblockComment {})="D"     -- comment in {- -}
+
+  -- 7.2 new token types 
+#if __GLASGOW_HASKELL__ >= 702
+tokenType  (ITinterruptible {})="EK"
+tokenType  (ITvect_prag {})="P"
+tokenType  (ITvect_scalar_prag {})="P"
+tokenType  (ITnovect_prag {})="P"
+#endif
 
 dotFS :: FastString
 dotFS = fsLit "."

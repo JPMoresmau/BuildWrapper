@@ -15,7 +15,7 @@
 module Language.Haskell.BuildWrapper.Find
   ( findHsThing, SearchResult(..), SearchResults, Search
   , PosTree(..), PosForest, deepestLeaf, pathToDeepest, searchBindBag
-  , surrounds, overlaps, haddockType, prettyResult, qualifiedResult, typeOf
+  , surrounds, overlaps, haddockType, prettyResult, qualifiedResult, typeOf, start, end
 #ifdef SCION_DEBUG
   , prop_invCmpOverlap
 #endif
@@ -235,12 +235,16 @@ cmpOverlap sp1 sp2
    end1   = end sp1
    start2 = start sp2
    end2   = end sp2
+   
+start, end :: SrcSpan -> (Int,Int)   
 #if __GLASGOW_HASKELL__ < 702   
-   start ss= (srcSpanStartLine ss, srcSpanStartCol ss)
-   end ss= (srcSpanEndLine ss, srcSpanEndCol ss)
+start ss= (srcSpanStartLine ss, srcSpanStartCol ss)
+end ss= (srcSpanEndLine ss, srcSpanEndCol ss)
 #else 
-   start (RealSrcSpan ss)= (srcSpanStartLine ss, srcSpanStartCol ss)
-   end (RealSrcSpan ss)= (srcSpanEndLine ss, srcSpanEndCol ss)   
+start (RealSrcSpan ss)= (srcSpanStartLine ss, srcSpanStartCol ss)
+start (UnhelpfulSpan _)=error "UnhelpfulSpan in cmpOverlap start"
+end (RealSrcSpan ss)= (srcSpanEndLine ss, srcSpanEndCol ss)   
+end (UnhelpfulSpan _)=error "UnhelpfulSpan in cmpOverlap start"   
 #endif
 
 surrounds :: SrcSpan -> SrcSpan -> Bool

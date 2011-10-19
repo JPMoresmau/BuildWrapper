@@ -22,8 +22,8 @@ import Data.List
 import System.Exit
 import System.Process
 
-cmdTests::Test
-cmdTests=TestList $ map (\f->f CMDAPI) tests
+cmdTests::[Test]
+cmdTests= map (\f->f CMDAPI) tests
 
 data CMDAPI=CMDAPI
 
@@ -45,7 +45,7 @@ instance APIFacade CMDAPI where
 runAPI:: (FromJSON a,Show a) => FilePath -> String -> [String] -> IO a
 runAPI root command args= do
         let fullargs=[command,"--tempfolder=.dist-buildwrapper","--cabalpath=cabal","--cabalfile="++(testCabalFile root)] ++ args
-        (ex,out,err)<-readProcessWithExitCode "dist/build/buildwrapper/buildwrapper" fullargs ""
+        (ex,out,err)<-readProcessWithExitCode ".dist-buildwrapper/dist/build/buildwrapper/buildwrapper" fullargs ""
         putStrLn ("out:"++out)
         putStrLn ("err:"++err)
         assertEqual ("returned error: "++show fullargs++"\n:"++show err) ExitSuccess ex

@@ -17,8 +17,8 @@ import qualified Language.Haskell.BuildWrapper.Cabal as Cabal
 import Test.HUnit
 
 
-unitTests :: Test
-unitTests=TestList [testGetBuiltPath]
+unitTests :: [Test]
+unitTests=[testGetBuiltPath]
 
 --apiTests::Test
 --apiTests=TestList $ map (\f->f DirectAPI) tests

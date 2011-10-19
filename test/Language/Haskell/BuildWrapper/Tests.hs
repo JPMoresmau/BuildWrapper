@@ -31,7 +31,8 @@ tests :: (APIFacade a)=> [(a -> Test)]
 tests=  [
         testSynchronizeAll,
         testConfigureWarnings , testConfigureErrors ,
-        testBuildErrors ,testBuildWarnings,
+        testBuildErrors ,
+        testBuildWarnings,
         testBuildOutput,
         testModuleNotInCabal,
         testOutline,
@@ -256,7 +257,7 @@ testBuildErrors api = TestLabel "testBuildErrors" (TestCase ( do
         assertBool ("no errors or warnings on nsErrors3") (not $ null nsErrors3)
         -- assertBool ("no rel in fps2: "++(show fps2)) (elem rel fps1)
         let (nsError3:[])=nsErrors3
-        assertEqual "not proper error 3" (BWNote BWError "Could not find module `Toto':\n   Use -v to see a list of the files searched for.\n" (BWLocation rel 2 8)) nsError3
+        assertEqual "not proper error 3" (BWNote BWError "Could not find module `Toto':\n  Use -v to see a list of the files searched for." (BWLocation rel 2 8)) nsError3
         
         ))        
         
@@ -281,6 +282,8 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         assertBool ("errors or warnings:"++show nsOK) (null nsOK)
         let rel="src"</>"A.hs"
         writeFile (root </> rel) $ unlines ["module A where","import Data.List","fA=undefined"] 
+        mf2<-synchronize1 api root True rel
+        assertBool ("mf2 not just") (isJust mf2)
         (BuildResult bool1 fps1,nsErrors1)<-build api root False Source
         assertBool ("returned false on bool1") bool1
         assertBool ("no errors or warnings on nsErrors1") (not $ null nsErrors1)
@@ -288,6 +291,12 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         let (nsError1:nsError2:[])=nsErrors1
         assertEqual "not proper error 1" (BWNote BWWarning "The import of `Data.List' is redundant\n               except perhaps to import instances from `Data.List'\n             To import instances alone, use: import Data.List()\n" (BWLocation rel 2 1)) nsError1
         assertEqual "not proper error 2" (BWNote BWWarning "Top-level binding with no type signature:\n               fA :: forall a. a\n" (BWLocation rel 3 1)) nsError2
+        (bool3,nsErrors3)<-build1 api root rel
+        assertBool ("returned false on bool3") bool3
+        assertBool ("no errors or warnings on nsErrors3") (not $ null nsErrors3)
+        let (nsError3:nsError4:[])=nsErrors3
+        assertEqual "not proper error 3" (BWNote BWWarning "The import of `Data.List' is redundant\n           except perhaps to import instances from `Data.List'\n         To import instances alone, use: import Data.List()" (BWLocation rel 2 1)) nsError3
+        assertEqual "not proper error 4" (BWNote BWWarning "Top-level binding with no type signature:\n           fA :: forall a. a" (BWLocation rel 3 1)) nsError4
         
         )) 
         
