@@ -98,7 +98,8 @@ withASTNotes f fp base_dir mod options=do
                         warns <- getWarnings
                         return $ (Just a,notes++ (reverse $ ghcMessagesToNotes base_dir (warns, emptyBag)))
 #else
-                        return $ (Just a,notes)
+                        notes2 <- GMU.liftIO $ readIORef ref
+                        return $ (Just a,notes2)
 #endif
                 Failed -> return $ (Nothing,notes)
         where
@@ -129,14 +130,12 @@ withASTNotes f fp base_dir mod options=do
             logAction :: IORef [BWNote] -> Severity -> SrcSpan -> PprStyle -> Message -> IO ()
             logAction ref s loc ppr msg
                 | (Just status)<-bwSeverity s=do
-                        putStrLn "in logAction"
                         let n=BWNote { bwn_location = ghcSpanToBWLocation base_dir loc
                                  , bwn_status = status
-                                 , bwn_title = showSDocForUser (qualName ppr,qualModule ppr) msg
+                                 , bwn_title = removeStatus status $ showSDocForUser (qualName ppr,qualModule ppr) msg
                                  }
-                        modifyIORef ref $   \ns -> ( ns ++ [n])
+                        modifyIORef ref $  \ns -> ( ns ++ [n])
                 | otherwise=do
-                        putStrLn "unhandled severity"
                         return ()
             
             bwSeverity :: Severity -> Maybe BWNoteStatus
@@ -577,10 +576,12 @@ ghcMsgToNote note_kind base_dir msg =
         | otherwise                    = GHC.noSrcSpan
     unqual = errMsgContext msg
     show_msg = showSDocForUser unqual
-    removeStatus BWWarning s 
+    
+removeStatus :: BWNoteStatus -> String -> String
+removeStatus BWWarning s 
         | List.isPrefixOf "Warning:" s = List.dropWhile isSpace $ drop 8 s
         | otherwise = s
-    removeStatus BWError s 
+removeStatus BWError s 
         | List.isPrefixOf "Error:" s = List.dropWhile isSpace $ drop 6 s
         | otherwise = s        
 

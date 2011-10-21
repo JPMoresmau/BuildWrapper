@@ -16,6 +16,7 @@ import Language.Haskell.BuildWrapper.Base
 
 import Data.Maybe
 import Data.Aeson
+import Data.Char
 
 import Test.HUnit
 
@@ -241,7 +242,7 @@ testBuildErrors api = TestLabel "testBuildErrors" (TestCase ( do
         assertBool ("no errors or warnings on nsErrors") (not $ null nsErrors1)
         -- assertBool ("no rel in fps1: "++(show fps1)) (elem rel fps1)
         let (nsError1:[])=nsErrors1
-        assertEqual "not proper error 1" (BWNote BWError "parse error on input `toto'\n" (BWLocation rel 2 8)) nsError1
+        assertEqualNotesWithoutSpaces "not proper error 1" (BWNote BWError "parse error on input `toto'\n" (BWLocation rel 2 8)) nsError1
         -- write file and synchronize
         writeFile (root </> "src"</>"A.hs")$ unlines ["module A where","import Toto","fA=undefined"]
         mf2<-synchronize1 api root True rel
@@ -251,13 +252,13 @@ testBuildErrors api = TestLabel "testBuildErrors" (TestCase ( do
         assertBool ("no errors or warnings on nsErrors2") (not $ null nsErrors2)
         -- assertBool ("no rel in fps2: "++(show fps2)) (elem rel fps1)
         let (nsError2:[])=nsErrors2
-        assertEqual "not proper error 2" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" (BWLocation rel 2 8)) nsError2
+        assertEqualNotesWithoutSpaces "not proper error 2" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" (BWLocation rel 2 8)) nsError2
         (bool3,nsErrors3)<-build1 api root ("src"</>"A.hs")
         assertBool ("returned true on bool3") (not bool3)
         assertBool ("no errors or warnings on nsErrors3") (not $ null nsErrors3)
         -- assertBool ("no rel in fps2: "++(show fps2)) (elem rel fps1)
         let (nsError3:[])=nsErrors3
-        assertEqual "not proper error 3" (BWNote BWError "Could not find module `Toto':\n  Use -v to see a list of the files searched for." (BWLocation rel 2 8)) nsError3
+        assertEqualNotesWithoutSpaces "not proper error 3" (BWNote BWError "Could not find module `Toto':\n  Use -v to see a list of the files searched for." (BWLocation rel 2 8)) nsError3
         
         ))        
         
@@ -289,14 +290,14 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         assertBool ("no errors or warnings on nsErrors1") (not $ null nsErrors1)
         assertBool ("no rel in fps1: "++(show fps1)) (elem rel fps1)
         let (nsError1:nsError2:[])=nsErrors1
-        assertEqual "not proper error 1" (BWNote BWWarning "The import of `Data.List' is redundant\n               except perhaps to import instances from `Data.List'\n             To import instances alone, use: import Data.List()\n" (BWLocation rel 2 1)) nsError1
-        assertEqual "not proper error 2" (BWNote BWWarning "Top-level binding with no type signature:\n               fA :: forall a. a\n" (BWLocation rel 3 1)) nsError2
+        assertEqualNotesWithoutSpaces "not proper error 1" (BWNote BWWarning "The import of `Data.List' is redundant\n               except perhaps to import instances from `Data.List'\n             To import instances alone, use: import Data.List()\n" (BWLocation rel 2 1)) nsError1
+        assertEqualNotesWithoutSpaces "not proper error 2" (BWNote BWWarning "Top-level binding with no type signature:\n               fA :: forall a. a\n" (BWLocation rel 3 1)) nsError2
         (bool3,nsErrors3)<-build1 api root rel
         assertBool ("returned false on bool3") bool3
         assertBool ("no errors or warnings on nsErrors3") (not $ null nsErrors3)
         let (nsError3:nsError4:[])=nsErrors3
-        assertEqual "not proper error 3" (BWNote BWWarning "The import of `Data.List' is redundant\n           except perhaps to import instances from `Data.List'\n         To import instances alone, use: import Data.List()" (BWLocation rel 2 1)) nsError3
-        assertEqual "not proper error 4" (BWNote BWWarning "Top-level binding with no type signature:\n           fA :: forall a. a" (BWLocation rel 3 1)) nsError4
+        assertEqualNotesWithoutSpaces "not proper error 3" (BWNote BWWarning "The import of `Data.List' is redundant\n           except perhaps to import instances from `Data.List'\n         To import instances alone, use: import Data.List()" (BWLocation rel 2 1)) nsError3
+        assertEqualNotesWithoutSpaces "not proper error 4" (BWNote BWWarning "Top-level binding with no type signature:\n           fA :: forall a. a" (BWLocation rel 3 1)) nsError4
         
         )) 
         
@@ -805,3 +806,12 @@ createTestProject = do
         writeFile (testF </> "TestA.hs") testTestAContents
         return root
         
+removeSpaces :: String -> String
+removeSpaces = (filter (/=':')) . (filter (not . isSpace))
+
+assertEqualNotesWithoutSpaces :: String -> BWNote -> BWNote -> IO()
+assertEqualNotesWithoutSpaces msg n1 n2=do
+        let
+                n1'=n1{bwn_title=removeSpaces $ bwn_title n1}
+                n2'=n1{bwn_title=removeSpaces $ bwn_title n2}
+        assertEqual msg n1' n2'
