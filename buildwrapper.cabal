@@ -5,7 +5,7 @@ build-type:     Simple
 license:        BSD3
 license-file:   LICENSE
 synopsis:       A library and an executable that provide an easy API for a Haskell IDE
-description:    Buildwrapper is a replacement for scion. 
+description:    Buildwrapper is an alternative to scion. 
   It provides services to configure, build and give information on source files to help IDEs manage Haskell projects.
   You can use buildwrapper to build project and retrieve errors, get outline for each module source, get the type of something inside a source file, get lexer tokens, etc.
   Buildwrapper is used in the EclipseFP project (Eclipse plugins for Haskell development)
@@ -17,7 +17,7 @@ homepage:       https://github.com/JPMoresmau/BuildWrapper
 
 library
   hs-source-dirs:  src
-  build-depends:   base, filepath, mtl, directory, Cabal, process, regex-tdfa, ghc, ghc-paths, syb, ghc-syb-utils, 
+  build-depends:   base < 5 , filepath, mtl, directory, Cabal, process, regex-tdfa, ghc, ghc-paths, syb, ghc-syb-utils, 
                    text, containers, vector, haskell-src-exts, cpphs, old-time, aeson
   ghc-options:     -Wall -fno-warn-unused-do-bind
   exposed-modules: Language.Haskell.BuildWrapper.API,Language.Haskell.BuildWrapper.Base,Language.Haskell.BuildWrapper.Cabal
@@ -27,7 +27,7 @@ library
 executable buildwrapper
   hs-source-dirs:  src-exe
   main-is:         Main.hs
-  build-depends:   base, buildwrapper, cmdargs, filepath, Cabal, directory, mtl, ghc, cpphs,haskell-src-exts, old-time, ghc-syb-utils, ghc-paths
+  build-depends:   base < 5, buildwrapper, cmdargs, filepath, Cabal, directory, mtl, ghc, cpphs,haskell-src-exts, old-time, ghc-syb-utils, ghc-paths
                    ,vector, containers, syb, process, regex-tdfa, text, aeson, bytestring
   ghc-options:     -Wall -fno-warn-unused-do-bind
   other-modules:   Language.Haskell.BuildWrapper.CMD
@@ -35,7 +35,7 @@ executable buildwrapper
 test-suite buildwrapper-test
   type:            exitcode-stdio-1.0
   hs-source-dirs:  test
-  build-depends:   base, buildwrapper, HUnit, mtl, filepath, directory, Cabal, old-time, aeson, text, process, bytestring, attoparsec, test-framework, test-framework-hunit
+  build-depends:   base < 5, buildwrapper, HUnit, mtl, filepath, directory, Cabal, old-time, aeson, text, process, bytestring, attoparsec, test-framework, test-framework-hunit
   main-is:         Main.hs
   ghc-options:     -Wall -fno-warn-unused-do-bind
   x-uses-tf:       true
