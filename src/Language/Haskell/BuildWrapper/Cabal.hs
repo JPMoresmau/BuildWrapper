@@ -104,12 +104,12 @@ cabalV =do
 
 cabalBuild :: Bool -> WhichCabal -> BuildWrapper (OpResult BuildResult)
 cabalBuild output srcOrTgt= do
+        dist_dir<-getDistDir
         (mr,n)<-withCabal srcOrTgt (\_->do
                 cf<-getCabalFile srcOrTgt
                 cp<-gets cabalPath
                 v<-cabalV
-                dist_dir<-getDistDir
-               
+                
                 let args=[
                         "build",
                         "--verbose="++(show $ fromEnum v),
@@ -127,17 +127,26 @@ cabalBuild output srcOrTgt= do
                         -- putStrLn "cabal build start"
                         (ex,out,err)<-readProcessWithExitCode cp args ""
                         putStrLn err
-                        --putStrLn ("build out:" ++ out)
-                        let fps=catMaybes $ map getBuiltPath $ lines out
-                        -- c2<-getClockTime
-                        -- putStrLn ("cabal build end" ++ (timeDiffToString  $ diffClockTimes c2 c1))
-                        let ret=parseBuildMessages err
-                        setCurrentDirectory cd
-                        return (ex==ExitSuccess,ret,fps)
+                        if (isInfixOf  "cannot satisfy -package-id" err) || (isInfixOf  "re-run the 'configure'" err)
+                                then 
+                                        return Nothing
+                                else
+                                        do
+                                        --putStrLn ("build out:" ++ out)
+                                        let fps=catMaybes $ map getBuiltPath $ lines out
+                                        -- c2<-getClockTime
+                                        -- putStrLn ("cabal build end" ++ (timeDiffToString  $ diffClockTimes c2 c1))
+                                        let ret=parseBuildMessages err
+                                        setCurrentDirectory cd
+                                        return $ Just (ex==ExitSuccess,ret,fps)
             )
-        return $ case mr of
-                Nothing -> ((BuildResult False []),n)
-                Just (r,n2,fps) -> ((BuildResult r fps),n++n2)
+        case mr of
+                Nothing -> return ((BuildResult False []),n)
+                Just Nothing->do
+                                let setup_config = DSC.localBuildInfoFile dist_dir
+                                liftIO $ removeFile setup_config
+                                cabalBuild output srcOrTgt
+                Just (Just (r,n2,fps)) -> return ((BuildResult r fps),n++n2)
 
 cabalConfigure :: WhichCabal-> BuildWrapper (OpResult (Maybe LocalBuildInfo))
 cabalConfigure srcOrTgt= do

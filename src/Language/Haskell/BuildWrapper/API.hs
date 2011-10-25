@@ -130,6 +130,7 @@ getGHCAST fp = do
                         (pr,bwns2)<- liftIO $ BwGHC.getAST tgt temp modS (opts++opts2)
                         return (pr,bwns2)
                 Nothing-> return (Nothing,bwns)
+   
 
 withGHCAST :: FilePath -> (FilePath -> FilePath -> String -> [String] -> IO a) -> BuildWrapper (OpResult (Maybe a))
 withGHCAST fp f= do
