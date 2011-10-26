@@ -323,7 +323,7 @@ parseBuildMessages s=let
                 parseBuildLine :: (Maybe (BWNote,[String]),[BWNote]) -> String ->(Maybe (BWNote,[String]),[BWNote])
                 parseBuildLine (currentNote,ls) l  
                         | Just (jcn,msgs)<-currentNote=
-                                if (not $ null l)
+                                if (not $ null l) && (' ' ==(head l))
                                        then (Just (jcn,l:msgs),ls)
                                        else (Nothing,ls++[makeNote jcn msgs])
                         -- | Just fp<-getBuiltPath l=(currentNote,ls,fp:fps)             

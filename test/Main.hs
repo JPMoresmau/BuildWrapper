@@ -15,13 +15,16 @@ module Main where
 import Language.Haskell.BuildWrapper.APITest
 import Language.Haskell.BuildWrapper.CMDTests
 
-import Test.Framework (defaultMain, testGroup)
+import Test.Framework (defaultMain, testGroup,Test)
 import Test.Framework.Providers.HUnit
 
+main :: IO()
 main = defaultMain tests
 
-tests = [testGroup "Unit Tests" (concatMap (hUnitTestToTests) unitTests),
-        testGroup "Command Tests" (concatMap (hUnitTestToTests) cmdTests)]
+tests :: [Test]
+tests = [testGroup "Unit Tests" (concatMap (hUnitTestToTests) unitTests)
+        ,testGroup "Command Tests" (concatMap (hUnitTestToTests) cmdTests)
+        ]
 
 --import Language.Haskell.BuildWrapper.APITest
 --import Language.Haskell.BuildWrapper.CMDTests
