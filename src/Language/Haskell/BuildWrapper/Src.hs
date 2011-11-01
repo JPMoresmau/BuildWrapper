@@ -26,7 +26,8 @@ import qualified Data.Text as T
 getHSEAST :: String -> [String] -> IO (ParseResult (Module SrcSpanInfo, [Comment]))
 getHSEAST input options=do
         let exts=map classifyExtension options
-        -- putStrLn $ show exts
+        putStrLn input
+        putStrLn $ show exts
         let mode=defaultParseMode {extensions=exts,ignoreLinePragmas=False,ignoreLanguagePragmas=False} 
         return $ parseFileContentsWithComments mode input
         --return $ makeObj  [("parse" , (showJSON $ pr))]
@@ -47,6 +48,7 @@ getHSEOutline (Module _ _ _ _ decls,comments)=concat $ map declOutline decls
                 declOutline (FunBind l matches) = [OutlineDef (matchDecl $ head matches) [Function] (makeSpan l) []]
                 declOutline (PatBind l (PVar _ n) _ _ _)=[OutlineDef (nameDecl n) [Function] (makeSpan l) []]
                 declOutline (InstDecl l _ h idecls)=[OutlineDef (iheadDecl h) [Instance] (makeSpan l) (maybe [] (concatMap instDecl) idecls)]
+                declOutline (SpliceDecl l e)=[OutlineDef (spliceDecl e) [Splice] (makeSpan l) []]
                 declOutline _ = []
                 qualConDeclOutline :: QualConDecl SrcSpanInfo-> OutlineDef
                 qualConDeclOutline (QualConDecl l _ _ con)=let
@@ -93,6 +95,14 @@ getHSEOutline (Module _ _ _ _ decls,comments)=concat $ map declOutline decls
                 instDecl :: InstDecl SrcSpanInfo -> [OutlineDef]
                 instDecl (InsDecl _ d) = declOutlineInClass d
                 instDecl _ = []
+                spliceDecl :: Exp SrcSpanInfo -> T.Text
+                spliceDecl (SpliceExp _ sp)= spliceName sp
+                spliceDecl (App _ e1 _)=spliceDecl e1
+                spliceDecl (Var _ qn)=qnameDecl qn
+                spliceDecl _ = ""
+                spliceName :: Splice SrcSpanInfo -> T.Text
+                spliceName (IdSplice _ n)=T.pack n
+                spliceName (ParenSplice  _ e)=spliceDecl e
 
 getHSEOutline _ = []
 

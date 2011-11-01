@@ -106,7 +106,8 @@ data OutlineDefType =
                 Type |
                 Instance |
                 Field |
-                Constructor
+                Constructor |
+                Splice
         deriving (Show,Read,Eq,Ord,Enum)
  
 instance ToJSON OutlineDefType  where
