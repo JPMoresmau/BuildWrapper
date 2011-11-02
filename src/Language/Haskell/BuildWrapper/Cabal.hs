@@ -273,6 +273,13 @@ parseCabalMessages cf cabalExe s=let
                 Nothing -> ls
                 Just (bwn,msgs)->ls++[makeNote bwn msgs] 
         where 
+                setupExe :: String
+                setupExe=addExtension "setup" $ takeExtension cabalExe
+                dropPrefixes :: [String] -> String -> Maybe String
+                dropPrefixes prfxs s=foldr (stripPrefixIfNeeded s) Nothing prfxs
+                stripPrefixIfNeeded :: String -> String -> Maybe String -> Maybe String
+                stripPrefixIfNeeded _ _ j@(Just r)=j
+                stripPrefixIfNeeded s prfx  _=stripPrefix prfx s
                 parseCabalLine :: (Maybe (BWNote,[String]),[BWNote]) -> String ->(Maybe (BWNote,[String]),[BWNote])
                 parseCabalLine (currentNote,ls) l 
                         | isPrefixOf "Error:" l=(Just (BWNote BWError "" (BWLocation cf 1 1),[dropWhile isSpace $ drop 6 l]),addCurrent currentNote ls)
@@ -282,9 +289,9 @@ parseCabalMessages cf cabalExe s=let
                                         then dropWhile isSpace $ drop ((length cf) + 1) msg
                                         else msg
                                 in (Just (BWNote BWWarning "" (BWLocation cf (extractLine msg2) 1),[msg2]),addCurrent currentNote ls)
-                        | isPrefixOf (cabalExe++":") l=
+                        | Just s <- dropPrefixes [cabalExe,setupExe] l=
                                 let 
-                                        s2=(dropWhile isSpace $ drop ((length cabalExe)+1) l)
+                                        s2=dropWhile isSpace $ drop 1 s -- drop 1 for ":" that follows file name
                                 in if isPrefixOf "At least the following" s2
                                                 then (Just $ (BWNote BWError "" (BWLocation cf 1 1),[s2]),addCurrent currentNote ls)
                                                 else 
