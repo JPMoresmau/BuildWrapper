@@ -25,10 +25,14 @@ import qualified Data.Text as T
 
 getHSEAST :: String -> [String] -> IO (ParseResult (Module SrcSpanInfo, [Comment]))
 getHSEAST input options=do
+        --putStrLn $ show options
         let exts=map classifyExtension options
-        putStrLn input
-        putStrLn $ show exts
-        let mode=defaultParseMode {extensions=exts,ignoreLinePragmas=False,ignoreLanguagePragmas=False} 
+        let extsFull=if elem "-fglasgow-exts" options
+                then exts ++ glasgowExts
+                else exts
+        --putStrLn input
+        --putStrLn $ show exts
+        let mode=defaultParseMode {extensions=extsFull,ignoreLinePragmas=False,ignoreLanguagePragmas=False} 
         return $ parseFileContentsWithComments mode input
         --return $ makeObj  [("parse" , (showJSON $ pr))]
         
