@@ -64,12 +64,13 @@ withAST f fp base_dir mod options= do
 withASTNotes ::  (TypecheckedModule -> Ghc a) -> FilePath -> FilePath -> String -> [String] -> IO (OpResult (Maybe a))
 withASTNotes f fp base_dir mod options=do
     let lflags=map noLoc options
+    --putStrLn $ show options
     (_leftovers, _) <- parseStaticFlags lflags
     runGhc (Just libdir) $ do
         flg <- getSessionDynFlags
         (flg', _, _) <- parseDynamicFlags flg _leftovers
         ref <- GMU.liftIO $ newIORef []
-        setSessionDynFlags flg'  { hscTarget = HscNothing, ghcLink = NoLink , ghcMode = OneShot, log_action = logAction ref }
+        setSessionDynFlags flg'  { hscTarget = HscNothing, ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref }
         -- $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
         addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }
         --c1<-GMU.liftIO getClockTime

@@ -23,6 +23,7 @@ import Control.Monad.State
 import Language.Haskell.Exts.Annotated
 import Language.Preprocessor.Cpphs
 import Data.Maybe
+import System.Directory
 import System.FilePath
 --import System.Time
 import GHC (TypecheckedSource)
@@ -101,10 +102,11 @@ getAST fp = do
         case mcbi of
                 Just(cbi)->do
                         let (_,opts)=cabalExtensions $ snd  cbi
+                        (_,opts2)<-fileGhcOptions cbi
                         tgt<-getTargetPath fp
                         --let modS=moduleToString modName
                         input<-liftIO $ preproc (snd cbi) tgt
-                        pr<- liftIO $ getHSEAST input opts
+                        pr<- liftIO $ getHSEAST input (opts++opts2)
                         --let json=makeObj  [("parse" , (showJSON $ pr))]
                         return (Just pr,bwns)
                 Nothing-> do
@@ -118,22 +120,41 @@ getAST fp = do
                         return (Just pr,[])
 
 getGHCAST :: FilePath -> BuildWrapper (OpResult (Maybe TypecheckedSource))
-getGHCAST fp = do
-        (mcbi,bwns)<-getBuildInfo fp
-        case mcbi of
-                Just(cbi)->do
-                        let (modName,opts)=cabalExtensions $ snd cbi
-                        (_,opts2)<-fileGhcOptions cbi
-                        tgt<-getTargetPath fp
-                        temp<-getFullTempDir
-                        let modS=moduleToString modName
-                        (pr,bwns2)<- liftIO $ BwGHC.getAST tgt temp modS (opts++opts2)
-                        return (pr,bwns2)
-                Nothing-> return (Nothing,bwns)
+getGHCAST fp = withGHCAST' fp (\_->BwGHC.getAST)
+--do
+--        (mcbi,bwns)<-getBuildInfo fp
+--        case mcbi of
+--                Just(cbi)->do
+--                        let (modName,opts)=cabalExtensions $ snd cbi
+--                        (_,opts2)<-fileGhcOptions cbi
+--                        tgt<-getTargetPath fp
+--                        temp<-getFullTempDir
+--                        let modS=moduleToString modName
+--                        (pr,bwns2)<- liftIO $ BwGHC.getAST tgt temp modS (opts++opts2)
+--                        return (pr,bwns2)
+--                Nothing-> return (Nothing,bwns)
    
 
 withGHCAST :: FilePath -> (FilePath -> FilePath -> String -> [String] -> IO a) -> BuildWrapper (OpResult (Maybe a))
-withGHCAST fp f= do
+withGHCAST fp f=withGHCAST' fp (\n a b c d->do
+        r<- f a b c d
+        return $ ((Just r),n))
+--do
+--        (mcbi,bwns)<-getBuildInfo fp
+--        case mcbi of
+--                Just(cbi)->do
+--                        let (modName,opts)=cabalExtensions $ snd cbi
+--                        (_,opts2)<-fileGhcOptions cbi
+--                        tgt<-getTargetPath fp
+--                        temp<-getFullTempDir
+--                        let modS=moduleToString modName
+--                        pr<- liftIO $ f tgt temp modS (opts++opts2)
+--                        return (Just pr,bwns)
+--                Nothing-> return (Nothing,bwns)
+
+
+withGHCAST' :: FilePath -> ([BWNote] -> FilePath -> FilePath -> String -> [String] ->  IO (OpResult (Maybe a))) -> BuildWrapper (OpResult (Maybe a))
+withGHCAST' fp f= do
         (mcbi,bwns)<-getBuildInfo fp
         case mcbi of
                 Just(cbi)->do
@@ -141,9 +162,13 @@ withGHCAST fp f= do
                         (_,opts2)<-fileGhcOptions cbi
                         tgt<-getTargetPath fp
                         temp<-getFullTempDir
-                        let modS=moduleToString modName
-                        pr<- liftIO $ f tgt temp modS (opts++opts2)
-                        return (Just pr,bwns)
+                        liftIO $ do
+                                cd<-getCurrentDirectory
+                                setCurrentDirectory temp
+                                let modS=moduleToString modName
+                                (pr,bwns2)<- f bwns tgt temp modS (opts++opts2)
+                                setCurrentDirectory cd
+                                return (pr,bwns2)
                 Nothing-> return (Nothing,bwns)
 
 getOutline :: FilePath -> BuildWrapper (OpResult [OutlineDef])
