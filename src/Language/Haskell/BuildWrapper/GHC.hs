@@ -535,27 +535,37 @@ preprocessSource contents literate=
                 (ts1,s2)=if literate then ppSF contents ppSLit else ([],contents) 
                 (ts2,s3)=ppSF s2 ppSCpp
         in (ts1++ts2,s3)
-        where 
+        where
                 ppSF contents2 p= let
                         linesWithCount=zip (lines contents2) [1..]
-                        (ts,nc,_)= List.foldl' p ([],[],False) linesWithCount
+                        (ts,nc,_)= List.foldl' p ([],[],Start) linesWithCount
                         in (reverse ts, unlines $ reverse nc)
-                ppSCpp :: ([TokenDef],[String],Bool) -> (String,Int) -> ([TokenDef],[String],Bool)
+                ppSCpp :: ([TokenDef],[String],PPBehavior) -> (String,Int) -> ([TokenDef],[String],PPBehavior)
                 ppSCpp (ts2,l2,f) (l,c) 
-                        | f = addPPToken "PP" (l,c) (ts2,l2,'\\' == (last l))
-                        | ('#':_)<-l =addPPToken "PP" (l,c) (ts2,l2,'\\' == (last l)) 
-                        | ("{-# " `List.isPrefixOf` l)=addPPToken "D" (l,c) (ts2,l2,False) 
-                        | otherwise =(ts2,l:l2,False)
-                ppSLit :: ([TokenDef],[String],Bool) -> (String,Int) -> ([TokenDef],[String],Bool)
+                        | (Continue _)<-f = addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f)
+                        | ('#':_)<-l =addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f) 
+                        | ("{-# " `List.isPrefixOf` l)=addPPToken "D" (l,c) (ts2,"":l2,Start) 
+                        | (Indent n)<-f=(ts2,l:((replicate n (takeWhile (==' ') l))++l2),Start)
+                        | otherwise =(ts2,l:l2,Start)
+                ppSLit :: ([TokenDef],[String],PPBehavior) -> (String,Int) -> ([TokenDef],[String],PPBehavior)
                 ppSLit (ts2,l2,f) (l,c) 
-                        | "\\begin{code}" `List.isPrefixOf` l=addPPToken "DL" ("\\begin{code}",c) (ts2,l2,True)
-                        | "\\end{code}" `List.isPrefixOf` l=addPPToken "DL" ("\\end{code}",c) (ts2,l2,False)
-                        | f = (ts2,l:l2,True)
+                        | "\\begin{code}" `List.isPrefixOf` l=addPPToken "DL" ("\\begin{code}",c) (ts2,"":l2,Continue 1)
+                        | "\\end{code}" `List.isPrefixOf` l=addPPToken "DL" ("\\end{code}",c) (ts2,"":l2,Start)
+                        | (Continue n)<-f = (ts2,l:l2,Continue (n+1))
                         | ('>':lCode)<-l=(ts2, (' ':lCode ):l2,f)
-                        | otherwise =addPPToken "DL" (l,c) (ts2,l2,f)  
-                addPPToken :: T.Text -> (String,Int) -> ([TokenDef],[String],Bool) -> ([TokenDef],[String],Bool)
-                addPPToken name (l,c) (ts2,l2,f) =((TokenDef name (mkFileSpan c 1 c ((length l)+1))):ts2 ,"":l2,f)
+                        | otherwise =addPPToken "DL" (l,c) (ts2,"":l2,f)  
+                addPPToken :: T.Text -> (String,Int) -> ([TokenDef],[String],PPBehavior) -> ([TokenDef],[String],PPBehavior)
+                addPPToken name (l,c) (ts2,l2,f) =((TokenDef name (mkFileSpan c 1 c ((length l)+1))):ts2 ,l2,f)
+                lineBehavior l f 
+                        | '\\' == (last l) = case f of
+                                Continue n->Continue (n+1)
+                                _ -> Continue 1
+                        | otherwise = case f of
+                                Continue n->Indent (n+1)
+                                _ -> Indent 1
 
+data PPBehavior=Continue Int | Indent Int | Start
+        deriving Eq
 
 ghcErrMsgToNote :: FilePath -> ErrMsg -> BWNote
 ghcErrMsgToNote = ghcMsgToNote BWError

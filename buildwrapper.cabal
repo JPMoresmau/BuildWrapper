@@ -1,5 +1,5 @@
 name:           buildwrapper
-version:        0.2
+version:        0.2.1
 cabal-version:  >= 1.8
 build-type:     Simple
 license:        BSD3
@@ -17,29 +17,55 @@ homepage:       https://github.com/JPMoresmau/BuildWrapper
 
 library
   hs-source-dirs:  src
-  build-depends:   base < 5 , filepath, mtl, directory, Cabal, process, regex-tdfa, ghc, ghc-paths, syb, ghc-syb-utils, 
-                   text, containers, vector, haskell-src-exts, cpphs, old-time, aeson
+  build-depends:   
+                   base < 5,
+                   filepath,
+                   mtl,
+                   directory,
+                   Cabal,
+                   process,
+                   regex-tdfa,
+                   ghc,
+                   ghc-paths,
+                   syb,
+                   ghc-syb-utils,
+                   text,
+                   containers,
+                   vector,
+                   haskell-src-exts,
+                   cpphs,
+                   old-time,
+                   aeson-native
   ghc-options:     -Wall -fno-warn-unused-do-bind
-  exposed-modules: Language.Haskell.BuildWrapper.API,Language.Haskell.BuildWrapper.Base,Language.Haskell.BuildWrapper.Cabal
+  exposed-modules: 
+                   Language.Haskell.BuildWrapper.API,
+                   Language.Haskell.BuildWrapper.Base,
+                   Language.Haskell.BuildWrapper.Cabal,
+                   Language.Haskell.BuildWrapper.GHC
   extensions:      CPP
-  other-modules:   Language.Haskell.BuildWrapper.GHC, Language.Haskell.BuildWrapper.Src, Language.Haskell.BuildWrapper.Find, Language.Haskell.BuildWrapper.Packages
+  other-modules:   
+                   Language.Haskell.BuildWrapper.Find,
+                   Language.Haskell.BuildWrapper.Packages,
+                   Language.Haskell.BuildWrapper.Src
 
 executable buildwrapper
   hs-source-dirs:  src-exe
   main-is:         Main.hs
   build-depends:   base < 5, buildwrapper, cmdargs, filepath, Cabal, directory, mtl, ghc, cpphs,haskell-src-exts, old-time, ghc-syb-utils, ghc-paths
-                   ,vector, containers, syb, process, regex-tdfa, text, aeson, bytestring
+                   ,vector, containers, syb, process, regex-tdfa, text, aeson-native, bytestring
   ghc-options:     -Wall -fno-warn-unused-do-bind
   other-modules:   Language.Haskell.BuildWrapper.CMD
   
 test-suite buildwrapper-test
   type:            exitcode-stdio-1.0
   hs-source-dirs:  test
-  build-depends:   base < 5, buildwrapper, HUnit, mtl, filepath, directory, Cabal, old-time, aeson, text, process, bytestring, attoparsec, test-framework, test-framework-hunit
+  build-depends:   base < 5, buildwrapper, HUnit, mtl, filepath, directory, Cabal, old-time, aeson-native, text, process, bytestring, attoparsec, test-framework, test-framework-hunit
   main-is:         Main.hs
   ghc-options:     -Wall -fno-warn-unused-do-bind
   x-uses-tf:       true
-  other-modules:   Language.Haskell.BuildWrapper.APITest, Language.Haskell.BuildWrapper.Tests, Language.Haskell.BuildWrapper.CMDTests
+  other-modules:   
+                   Language.Haskell.BuildWrapper.APITest, Language.Haskell.BuildWrapper.Tests, Language.Haskell.BuildWrapper.CMDTests,
+                   Language.Haskell.BuildWrapper.GHCTests
 
 source-repository head
   type:     git

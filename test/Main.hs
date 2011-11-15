@@ -14,6 +14,7 @@ module Main where
 
 import Language.Haskell.BuildWrapper.APITest
 import Language.Haskell.BuildWrapper.CMDTests
+import Language.Haskell.BuildWrapper.GHCTests
 
 import Test.Framework (defaultMain, testGroup,Test)
 import Test.Framework.Providers.HUnit
@@ -22,8 +23,9 @@ main :: IO()
 main = defaultMain tests
 
 tests :: [Test]
-tests = [testGroup "Unit Tests" (concatMap (hUnitTestToTests) unitTests)
-        ,testGroup "Command Tests" (concatMap (hUnitTestToTests) cmdTests)
+tests = [testGroup "Unit Tests" (concatMap hUnitTestToTests unitTests)
+        ,testGroup "GHC Tests" (concatMap hUnitTestToTests ghcTests)
+        ,testGroup "Command Tests" (concatMap hUnitTestToTests cmdTests)
         ]
 
 --import Language.Haskell.BuildWrapper.APITest
