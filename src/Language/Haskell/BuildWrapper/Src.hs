@@ -32,7 +32,8 @@ getHSEAST input options=do
                 else exts
         --putStrLn input
         --putStrLn $ show exts
-        let mode=defaultParseMode {extensions=extsFull,ignoreLinePragmas=False,ignoreLanguagePragmas=False} 
+        -- fixities necessary (see http://trac.haskell.org/haskell-src-exts/ticket/189 and https://sourceforge.net/projects/eclipsefp/forums/forum/371922/topic/4808590)
+        let mode=defaultParseMode {extensions=extsFull,ignoreLinePragmas=False,ignoreLanguagePragmas=False,fixities = Just baseFixities} 
         return $ parseFileContentsWithComments mode input
         --return $ makeObj  [("parse" , (showJSON $ pr))]
         
