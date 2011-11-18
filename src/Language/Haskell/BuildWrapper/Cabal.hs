@@ -297,13 +297,13 @@ parseCabalMessages cf cabalExe s=let
                                                 else 
                                                         let
                                                                 (loc,rest)=span (/= ':') s2
-                                                                (realloc,line,msg)=if null rest
-                                                                        then    ("","0",s2)
+                                                                (realloc,line,msg)=if null rest || ":"==rest
+                                                                        then    (cf,"1",s2)
                                                                         else 
                                                                                 let tr=tail rest
                                                                                     (line',msg')=span (/= ':') tr
                                                                                 in if null msg'
-                                                                                        then (loc,"0",tr)
+                                                                                        then (loc,"1",tr)
                                                                                         else (loc,line',tail msg')
                                                         in (Just (BWNote BWError "" (BWLocation realloc (read line) 1),[msg]),addCurrent currentNote ls)
                         | Just (jcn,msgs)<-currentNote=
@@ -316,7 +316,7 @@ parseCabalMessages cf cabalExe s=let
                 extractLine el=let
                         (_,_,_,ls)=el =~ "\\(line ([0-9]*)\\)" :: (String,String,String,[String])
                         in if null ls
-                                then 0
+                                then 1
                                 else (read $ head ls)
  
 

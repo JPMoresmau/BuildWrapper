@@ -200,7 +200,7 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
         assertBool ("returned false 2 "++ (show ns2)) bool2
         assertEqual ("didn't return 1 warning") 1 (length ns2)
         let (nsWarning2:[])=ns2
-        assertEqual "not proper warning 2" (BWNote BWWarning "A package using section syntax must specify at least\n'cabal-version: >= 1.2'.\n" (BWLocation cfn 0 1)) nsWarning2
+        assertEqual "not proper warning 2" (BWNote BWWarning "A package using section syntax must specify at least\n'cabal-version: >= 1.2'.\n" (BWLocation cfn 1 1)) nsWarning2
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.2",
@@ -217,7 +217,7 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
         assertBool ("returned false 3 "++ (show ns3)) bool3
         assertEqual ("didn't return 1 warning") 1 (length ns3)
         let (nsWarning3:[])=ns3
-        assertEqual "not proper warning 3" (BWNote BWWarning "No 'build-type' specified. If you do not need a custom Setup.hs or\n./configure script then use 'build-type: Simple'.\n" (BWLocation cfn 0 1)) nsWarning3
+        assertEqual "not proper warning 3" (BWNote BWWarning "No 'build-type' specified. If you do not need a custom Setup.hs or\n./configure script then use 'build-type: Simple'.\n" (BWLocation cfn 1 1)) nsWarning3
 
         ))   
         

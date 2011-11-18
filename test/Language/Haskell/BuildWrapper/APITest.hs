@@ -19,7 +19,7 @@ import Test.HUnit
 
 
 unitTests :: [Test]
-unitTests=[testGetBuiltPath,testParseBuildMessages]
+unitTests=[testGetBuiltPath,testParseBuildMessages,testParseConfigureMessages]
 
 --apiTests::Test
 --apiTests=TestList $ map (\f->f DirectAPI) tests
@@ -57,4 +57,12 @@ testParseBuildMessages = TestLabel "testParseBuildMessages" (TestCase (do
         let notes=Cabal.parseBuildMessages s
         assertEqual "not 1 note" 1 (length notes)
         assertEqual ("not expected note") (BWNote BWWarning "Top-level binding with no type signature:\n           tests :: [test-framework-0.4.1.1:Test.Framework.Core.Test]\n" (BWLocation "Main.hs" 2 3)) (head notes)
+        ))
+        
+testParseConfigureMessages :: Test
+testParseConfigureMessages = TestLabel "testParseConfigureMessages" (TestCase (do
+        let s="cabal.exe: Missing dependencies on foreign libraries:\n* Missing C libraries: tinfo, tinfo\n"
+        let notes=Cabal.parseCabalMessages "test.cabal" "cabal.exe" s
+        assertEqual "not 1 note" 1 (length notes)   
+        assertEqual ("not expected note") (BWNote BWError "Missing dependencies on foreign libraries:\n* Missing C libraries: tinfo, tinfo\n" (BWLocation "test.cabal" 1 1)) (head notes)
         ))
