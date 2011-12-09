@@ -19,7 +19,7 @@ import Control.Monad.State
 import Data.Data
 import Data.Aeson
 import qualified Data.Text as T
-import qualified Data.Map as M
+import qualified Data.HashMap.Lazy as M
 import qualified Data.Vector as V
 
 import System.Directory
@@ -169,7 +169,7 @@ instance ToJSON TokenDef where
   
 instance FromJSON TokenDef where
     parseJSON (Object o) |
-        ((a,b):[])<-M.assocs o,
+        ((a,b):[])<-M.toList o,
         Success v0 <- fromJSON b=return $ TokenDef a v0
     parseJSON _= mzero          
 --withCabal :: (GenericPackageDescription -> BuildWrapper a) -> BuildWrapper (Either BWNote a)
