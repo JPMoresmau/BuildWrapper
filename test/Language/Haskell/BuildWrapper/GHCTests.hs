@@ -7,7 +7,7 @@ import Language.Haskell.BuildWrapper.GHC
 
 
 ghcTests :: [Test]
-ghcTests=[testNoPreproc,testPreproc,testPreproc2Lines,testLiterate,testLiterateLatex
+ghcTests=[testNoPreproc,testPreproc,testPreprocContiguous,testPreproc2Lines,testLiterate,testLiterateLatex
         ,testKeepIndent]
 
 testNoPreproc:: Test
@@ -30,6 +30,20 @@ testPreproc=TestLabel "testPreproc" (TestCase (
         assertEqual "second tt is not correct" (TokenDef "PP" (mkLocation 6 1 6 7)) (t2)
         assertEqual ("content is not what expected: "++ s2) "\nmodule Main\nwhere\n\nimport Data.Map\n\nmain=undefined\n" s2
         ))       
+
+testPreprocContiguous:: Test
+testPreprocContiguous=TestLabel "testPreprocContiguous" (TestCase (
+        do
+        let s="\nmodule Main\nwhere\n#if GHC_VERSION=612\nimport Data.Map\n#endif\n#if GHC_VERSION=612\nimport Data.Maybe\n#endif\nmain=undefined\n"
+        let (tt,s2)=preprocessSource s False
+        assertEqual "tt is not 4" 4 (length tt)
+        let (t1:t2:t3:t4:[])=tt
+        assertEqual "first tt is not correct" (TokenDef "PP" (mkLocation 4 1 4 20)) (t1)
+        assertEqual "second tt is not correct" (TokenDef "PP" (mkLocation 6 1 6 7)) (t2)
+        assertEqual "third tt is not correct" (TokenDef "PP" (mkLocation 7 1 7 20)) (t3)
+        assertEqual "fourth tt is not correct" (TokenDef "PP" (mkLocation 9 1 9 7)) (t4)
+        assertEqual ("content is not what expected: "++ s2) "\nmodule Main\nwhere\n\nimport Data.Map\n\n\nimport Data.Maybe\n\nmain=undefined\n" s2
+        ))  
 
 testPreproc2Lines:: Test
 testPreproc2Lines=TestLabel "testPreproc2Lines" (TestCase (

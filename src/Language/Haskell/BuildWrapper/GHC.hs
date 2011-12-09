@@ -562,6 +562,7 @@ preprocessSource contents literate=
                                 _ -> Continue 1
                         | otherwise = case f of
                                 Continue n->Indent (n+1)
+                                Indent n->Indent (n+1)
                                 _ -> Indent 1
 
 data PPBehavior=Continue Int | Indent Int | Start
