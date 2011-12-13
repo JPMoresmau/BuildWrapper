@@ -27,7 +27,6 @@ import System.Info
 import Control.Monad
 
 --import System.Time
-
 tests :: (APIFacade a)=> [(a -> Test)]
 tests=  [
         testSynchronizeAll,
@@ -40,6 +39,7 @@ tests=  [
         testOutlinePreproc,
         testPreviewTokenTypes,
         testThingAtPoint,
+        testThingAtPointNotInCabal,
         testNamesInScope,
         testInPlaceReference,
         testCabalComponents,
@@ -327,13 +327,9 @@ testModuleNotInCabal api = TestLabel "testModuleNotInCabal" (TestCase ( do
         let rel="src"</>"A.hs"
         writeFile (root </> rel) $ unlines ["module A where","import Auto","fA=undefined"] 
         let rel2="src"</>"Auto.hs"
-        putStrLn (root </> rel2) 
         writeFile (root </> rel2) $ unlines ["module Auto where","fAuto=undefined"] 
         (fps,ns)<-synchronize api root False
-        putStrLn $ show fps
-        putStrLn $ show ns
         (BuildResult bool1 _,nsErrors1)<-build api root True Source
-        putStrLn $ show nsErrors1
         assertBool ("returned false on bool1") bool1
         assertBool ("errors or warnings on nsErrors1") (null nsErrors1)
         (bool2, nsErrors2)<-build1 api root rel
@@ -576,6 +572,20 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         (tap4,nsErrors4)<-getThingAtPoint api root rel 2 16 False False
         assertBool ("errors or warnings on getThingAtPoint4:"++show nsErrors4) (null nsErrors4)
         assertEqual "not just untyped unqualified" (Just "map v") tap4
+        
+        )) 
+
+testThingAtPointNotInCabal :: (APIFacade a)=> a -> Test
+testThingAtPointNotInCabal api= TestLabel "testThingAtPointNotInCabal" (TestCase ( do
+        root<-createTestProject
+        synchronize api root False
+        configure api root Target        
+        let rel2="src"</>"Auto.hs"
+        writeFile (root </> rel2) $ unlines ["module Auto where","fAuto=head [2,3,4]"] 
+        (fps,ns)<-synchronize api root False
+        (tap1,nsErrors1)<-getThingAtPoint api root rel2 2 8 True True
+        assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors1) (null nsErrors1)
+        assertEqual "not just typed qualified" (Just "GHC.List.head :: [GHC.Integer.Type.Integer]\n                 -> GHC.Integer.Type.Integer") tap1
         
         )) 
 

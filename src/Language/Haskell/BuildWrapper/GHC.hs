@@ -184,7 +184,7 @@ getThingAtPoint line col qual typed fp base_dir mod options= do
               --(if typed then (doThingAtPointTyped $ typecheckedSource tcm)
               -- else doThingAtPointTyped (renamedSource tcm) loc qual tcm
               return tap) fp base_dir mod options
-        return $ fromMaybe "" t
+        return $ fromMaybe "no info" t
       where
             doThingAtPointTyped :: TypecheckedSource -> SrcSpan -> Bool -> TypecheckedModule -> PrintUnqualified -> String
             doThingAtPointTyped src loc qual tcm uq=let

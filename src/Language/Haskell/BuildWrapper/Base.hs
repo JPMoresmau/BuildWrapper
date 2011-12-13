@@ -299,4 +299,9 @@ getRecursiveContents topdir = do
     if isDirectory
       then getRecursiveContents path
       else return [path]
-  return (concat paths)                    
+  return (concat paths)         
+  
+  
+fromJustDebug :: String -> Maybe a -> a
+fromJustDebug s Nothing=error ("fromJust:" ++ s)
+fromJustDebug _ (Just a)=a

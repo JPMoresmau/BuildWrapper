@@ -155,9 +155,9 @@ readContents pkgdb =
     convertPackageInfoIn
         (pkgconf@(InstalledPackageInfo { exposedModules = e,
                                          hiddenModules = h })) =
-            pkgconf{ exposedModules = map convert e,
-                     hiddenModules  = map convert h }
-        where convert = fromJust . simpleParse
+            pkgconf{ exposedModules = convert e,
+                     hiddenModules  = convert h }
+        where convert = mapMaybe simpleParse
 
     -- | Utility function that just flips the arguments to Control.Exception.catch
     catchError :: IO a -> (String -> IO a) -> IO a
