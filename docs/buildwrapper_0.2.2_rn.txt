@@ -1,0 +1,13 @@
+Buildwrapper 0.2.2: release notes
+
+- use aeson since aeson-native has been deprecated
+	(http://www.haskell.org/pipermail/haskell-cafe/2011-November/097126.html)
+
+- preprocess files correctly when 2 consecutive lines have preprocessor directive
+	(https://sourceforge.net/projects/eclipsefp/forums/forum/371922/topic/4654268)
+
+- show tooltips and go to definition in files not directly referenced by Cabal
+	(https://sourceforge.net/projects/eclipsefp/forums/forum/371922/topic/4864722)
+
+- remove full paths from GHC messages, display only path relative to project root
+	(https://sourceforge.net/projects/eclipsefp/forums/forum/371922/topic/4864722)
