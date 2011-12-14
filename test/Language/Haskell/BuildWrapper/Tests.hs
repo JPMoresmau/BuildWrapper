@@ -32,7 +32,7 @@ tests=  [
         testSynchronizeAll,
         testConfigureWarnings , testConfigureErrors ,
         testBuildErrors ,
-        testBuildWarnings,
+        testBuildWarnings ,
         testBuildOutput,
         testModuleNotInCabal,
         testOutline,
@@ -298,7 +298,14 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         let (nsError3:nsError4:[])=nsErrors3
         assertEqualNotesWithoutSpaces "not proper error 3" (BWNote BWWarning "The import of `Data.List' is redundant\n           except perhaps to import instances from `Data.List'\n         To import instances alone, use: import Data.List()" (BWLocation rel 2 1)) nsError3
         assertEqualNotesWithoutSpaces "not proper error 4" (BWNote BWWarning "Top-level binding with no type signature:\n           fA :: forall a. a" (BWLocation rel 3 1)) nsError4
-        
+        writeFile (root </> rel) $ unlines ["module A where","pats:: String -> String","pats a=reverse a","fB:: String -> Char","fB pats=head pats"] 
+        mf3<-synchronize1 api root True rel
+        assertBool ("mf3 not just") (isJust mf2)
+        (bool4,nsErrors4)<-build1 api root rel
+        assertBool ("returned false on bool4") bool4
+        assertBool ("no errors or warnings on nsErrors4") (not $ null nsErrors4)
+        let (nsError5:[])=nsErrors4
+        assertEqualNotesWithoutSpaces "not proper error 5" (BWNote BWWarning "This binding for `pats' shadows the existing binding\n           defined at src\\A.hs:3:1" (BWLocation rel 4 5)) nsError5
         )) 
         
 testBuildOutput :: (APIFacade a)=> a -> Test

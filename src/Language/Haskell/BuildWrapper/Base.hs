@@ -305,3 +305,17 @@ getRecursiveContents topdir = do
 fromJustDebug :: String -> Maybe a -> a
 fromJustDebug s Nothing=error ("fromJust:" ++ s)
 fromJustDebug _ (Just a)=a
+
+
+removeBaseDir :: FilePath -> String -> String
+removeBaseDir base_dir s= loop s
+  where
+    loop [] = []
+    loop str =
+      let (prefix, rest) = splitAt n str
+      in
+        if base_dir_sep == prefix                -- found an occurrence?
+        then loop rest                       -- yes: drop it
+        else head str : loop (tail str)      -- no: keep looking
+    n = length base_dir_sep
+    base_dir_sep=base_dir ++ [pathSeparator] 

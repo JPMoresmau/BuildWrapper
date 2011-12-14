@@ -97,7 +97,7 @@ withASTNotes f fp base_dir mod options=do
                         a<-f (dm_typechecked_module l)
 #if __GLASGOW_HASKELL__ < 702                           
                         warns <- getWarnings
-                        return $ (Just a,notes++ (reverse $ ghcMessagesToNotes base_dir (warns, emptyBag)))
+                        return $ (Just a,List.nub $ notes++ (reverse $ ghcMessagesToNotes base_dir (warns, emptyBag)))
 #else
                         notes2 <- GMU.liftIO $ readIORef ref
                         return $ (Just a,notes2)
@@ -133,7 +133,7 @@ withASTNotes f fp base_dir mod options=do
                 | (Just status)<-bwSeverity s=do
                         let n=BWNote { bwn_location = ghcSpanToBWLocation base_dir loc
                                  , bwn_status = status
-                                 , bwn_title = removeStatus status $ showSDocForUser (qualName ppr,qualModule ppr) msg
+                                 , bwn_title = removeBaseDir base_dir $ removeStatus status $ showSDocForUser (qualName ppr,qualModule ppr) msg
                                  }
                         modifyIORef ref $  \ns -> ( ns ++ [n])
                 | otherwise=do
@@ -581,14 +581,14 @@ ghcMsgToNote :: BWNoteStatus -> FilePath -> ErrMsg -> BWNote
 ghcMsgToNote note_kind base_dir msg =
     BWNote { bwn_location = ghcSpanToBWLocation base_dir loc
          , bwn_status = note_kind
-         , bwn_title = removeStatus note_kind $ show_msg (errMsgShortDoc msg)
+         , bwn_title = removeBaseDir base_dir $ removeStatus note_kind $ show_msg (errMsgShortDoc msg)
          }
   where
     loc | (s:_) <- errMsgSpans msg = s
         | otherwise                    = GHC.noSrcSpan
     unqual = errMsgContext msg
     show_msg = showSDocForUser unqual
-    
+
 removeStatus :: BWNoteStatus -> String -> String
 removeStatus BWWarning s 
         | List.isPrefixOf "Warning:" s = List.dropWhile isSpace $ drop 8 s
