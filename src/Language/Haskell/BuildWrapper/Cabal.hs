@@ -371,9 +371,9 @@ getBuildInfo fp=do
         where go f=withCabal Source (\lbi->do
                 fps<-f lbi
                 --liftIO $ putStrLn $ (show $ length fps)
-                --liftIO $ mapM_ (\(_,_,_,_,ls)->mapM_ (putStrLn . snd) ls) fps
+                -- liftIO $ mapM_ (\(_,_,_,_,ls)->mapM_ (putStrLn . snd) ls) fps
                 let ok=filter (\(_,_,_,_,ls)->not $ null ls ) $
-                        map (\(n1,n2,n3,n4,ls)->(n1,n2,n3,n4,filter (\(_,b)->b==fp) ls) ) 
+                        map (\(n1,n2,n3,n4,ls)->(n1,n2,n3,n4,filter (\(_,b)->b==fp || b==("." </> fp)) ls) ) 
                                 fps
                 --liftIO $ putStrLn $ (show $ length ok)      
                 --liftIO $ mapM_ (\(_,_,_,_,ls)->mapM_ (putStrLn . snd) ls) ok          
@@ -411,6 +411,13 @@ fileCppOptions (bi,_,_,_,_)=cppOptions bi
 cabalExtensions :: CabalBuildInfo -> (ModuleName,[String])
 cabalExtensions (bi,_,_,_,ls)=(fst $ head ls,map show $ ((otherExtensions bi) ++ (defaultExtensions bi) ++ (oldExtensions bi)))      
        
+getSourceDirs :: BuildInfo -> [FilePath]       
+getSourceDirs bi=let
+        hsd=hsSourceDirs bi
+        in case hsd of
+                [] -> ["."]
+                _ -> hsd 
+       
 getAllFiles :: LocalBuildInfo -> BuildWrapper [CabalBuildInfo]
 getAllFiles lbi= do
                 let pd=localPkgDescr lbi
@@ -424,20 +431,20 @@ getAllFiles lbi= do
         extractFromLib :: Library -> [(BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath])]
         extractFromLib l=let
                 lib=libBuildInfo l
-                in [(lib,fromJustDebug "extractFromLibAll" $ libraryConfig lbi,buildDir lbi,True,(hsSourceDirs lib))]
+                in [(lib,fromJustDebug "extractFromLibAll" $ libraryConfig lbi,buildDir lbi,True,(getSourceDirs lib))]
         extractFromExe :: Executable -> (BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath])
         extractFromExe e@Executable{exeName=exeName'}=let
                 ebi=buildInfo e
                 targetDir = buildDir lbi </> exeName'
                 exeDir    = targetDir </> (exeName' ++ "-tmp")
-                hsd=hsSourceDirs ebi
+                hsd=getSourceDirs ebi
                 in (ebi,fromJustDebug "extractFromExeAll" $ lookup exeName' $ executableConfigs lbi,exeDir,False, hsd) 
         extractFromTest :: TestSuite -> (BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath])
         extractFromTest t@TestSuite {testName=testName'} =let
                 tbi=testBuildInfo t
                 targetDir = buildDir lbi </> testName'
                 testDir    = targetDir </> (testName' ++ "-tmp")
-                hsd=hsSourceDirs tbi
+                hsd=getSourceDirs tbi
                 in (tbi,fromJustDebug "extractFromTestAll" $ lookup testName' $ testSuiteConfigs lbi,testDir,False,hsd)
         copyAll :: [FilePath] -> BuildWrapper [(ModuleName,FilePath)]
         copyAll fps= do 
@@ -473,14 +480,14 @@ getReferencedFiles lbi= do
         extractFromLib l=let
                 lib=libBuildInfo l
                 modules=(PD.exposedModules l) ++ (otherModules lib)
-                in [(lib,fromJustDebug "extractFromLibRef" $ libraryConfig lbi,buildDir lbi,True,(copyModules modules (hsSourceDirs lib)))]
+                in [(lib,fromJustDebug "extractFromLibRef" $ libraryConfig lbi,buildDir lbi,True,(copyModules modules (getSourceDirs lib)))]
         extractFromExe :: Executable ->CabalBuildInfo
         extractFromExe e@Executable{exeName=exeName'}=let
                 ebi=buildInfo e
                 targetDir = buildDir lbi </> exeName'
                 exeDir    = targetDir </> (exeName' ++ "-tmp")
                 modules= (otherModules ebi)
-                hsd=hsSourceDirs ebi
+                hsd=getSourceDirs ebi
                 in (ebi,fromJustDebug "extractFromExeRef" $ lookup exeName' $ executableConfigs lbi,exeDir,False, copyFiles [modulePath e] hsd++ (copyModules modules hsd) ) 
         extractFromTest :: TestSuite -> CabalBuildInfo
         extractFromTest t@TestSuite {testName=testName'} =let
@@ -488,7 +495,7 @@ getReferencedFiles lbi= do
                 targetDir = buildDir lbi </> testName'
                 testDir    = targetDir </> (testName' ++ "-tmp")
                 modules= (otherModules tbi )
-                hsd=hsSourceDirs tbi
+                hsd=getSourceDirs tbi
                 extras=case testInterface t of
                        (TestSuiteExeV10 _ mp)->(copyFiles [mp] hsd)
                        (TestSuiteLibV09 _ mn)->copyModules [mn] hsd

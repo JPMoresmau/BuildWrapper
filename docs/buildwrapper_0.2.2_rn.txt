@@ -11,3 +11,6 @@ Buildwrapper 0.2.2: release notes
 
 - remove full paths from GHC messages, display only path relative to project root
 	(https://sourceforge.net/projects/eclipsefp/forums/forum/371922/topic/4864722)
+
+- exclude temp folder from copy
+	(https://sourceforge.net/projects/eclipsefp/forums/forum/371922/topic/4829001)
