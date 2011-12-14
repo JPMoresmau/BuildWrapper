@@ -367,7 +367,7 @@ getBuildInfo fp=do
                         (mmr2,bwns2)<-go getAllFiles
                         return $ case mmr2 of
                                 Just (Just a)-> (Just a,bwns2)
-                                Nothing-> (Nothing,bwns)
+                                _-> (Nothing,bwns)
         where go f=withCabal Source (\lbi->do
                 fps<-f lbi
                 --liftIO $ putStrLn $ (show $ length fps)
@@ -455,7 +455,11 @@ getAllFiles lbi= do
                 let dir=(takeDirectory cf)
                 fullFP<-getFullSrc fp
                 allF<-liftIO $ getRecursiveContents fullFP
-                return $ map (\f->(fromString $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) allF
+                tf<-gets tempFolder
+                -- exclude every file containing the temp folder name (".buildwrapper" by default)
+                -- which may happen if . is a source path
+                let notMyself=filter (\f->(not $ isInfixOf tf f)) allF
+                return $ map (\f->(fromString $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) notMyself
      
 getReferencedFiles :: LocalBuildInfo -> BuildWrapper [CabalBuildInfo]
 getReferencedFiles lbi= do
