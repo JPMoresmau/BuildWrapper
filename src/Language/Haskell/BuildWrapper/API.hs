@@ -19,6 +19,10 @@ import Language.Haskell.BuildWrapper.Src
 
 import qualified Data.Text as T
 
+import Prelude hiding (readFile, writeFile)
+
+import System.IO.UTF8
+
 import Control.Monad.State
 import Language.Haskell.Exts.Annotated
 import Language.Preprocessor.Cpphs

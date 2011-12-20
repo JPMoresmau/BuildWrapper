@@ -3,7 +3,7 @@ Buildwrapper 0.2.2: release notes
 - use aeson since aeson-native has been deprecated
 	(http://www.haskell.org/pipermail/haskell-cafe/2011-November/097126.html)
 
-- preprocess files correctly when 2 consecutive lines have preprocessor directive
+- preprocess files correctly when 2 consecutive lines have preprocessor directives
 	(https://sourceforge.net/projects/eclipsefp/forums/forum/371922/topic/4654268)
 
 - show tooltips and go to definition in files not directly referenced by Cabal
@@ -14,3 +14,6 @@ Buildwrapper 0.2.2: release notes
 
 - exclude temp folder from copy
 	(https://sourceforge.net/projects/eclipsefp/forums/forum/371922/topic/4829001)
+
+- use UTF-8 to read and write file
+	'http://sourceforge.net/projects/eclipsefp/forums/forum/371922/topic/4654268)

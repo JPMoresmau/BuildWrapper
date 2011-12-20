@@ -36,7 +36,8 @@ library
                    cpphs,
                    old-time,
                    aeson >=0.4,
-                   unordered-containers
+                   unordered-containers,
+                   utf8-string
   ghc-options:     -Wall -fno-warn-unused-do-bind
   exposed-modules: 
                    Language.Haskell.BuildWrapper.API,
