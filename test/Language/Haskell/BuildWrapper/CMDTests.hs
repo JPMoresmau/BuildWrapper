@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.CMDTests
 -- Author      : JP Moresmau
@@ -14,6 +15,8 @@ module Language.Haskell.BuildWrapper.CMDTests where
 import Language.Haskell.BuildWrapper.Tests
 import Test.HUnit
 
+import Control.Monad
+
 import Data.Attoparsec
 import Data.Aeson
 import Data.Aeson.Parser
@@ -21,6 +24,8 @@ import qualified Data.ByteString.Char8 as BS
 import Data.List
 import System.Exit
 import System.Process
+import System.FilePath
+import System.Directory
 
 cmdTests::[Test]
 cmdTests= map (\f->f CMDAPI) tests
@@ -42,10 +47,18 @@ instance APIFacade CMDAPI where
         getCabalDependencies _ r= runAPI r "dependencies" []
         getCabalComponents _ r= runAPI r "components" []
         
+exeExtension :: String
+#ifdef mingw32_HOST_OS
+exeExtension = "exe"
+#else
+exeExtension = ""
+#endif        
+        
 runAPI:: (FromJSON a,Show a) => FilePath -> String -> [String] -> IO a
 runAPI root command args= do
         let fullargs=[command,"--tempfolder=.dist-buildwrapper","--cabalpath=cabal","--cabalfile="++(testCabalFile root)] ++ args
-        (ex,out,err)<-readProcessWithExitCode ".dist-buildwrapper/dist/build/buildwrapper/buildwrapper" fullargs ""
+        exePath<-filterM doesFileExist [".dist-buildwrapper/dist/build/buildwrapper/buildwrapper" <.> exeExtension,"dist/build/buildwrapper/buildwrapper" <.> exeExtension]
+        (ex,out,err)<-readProcessWithExitCode (head exePath) fullargs ""
         putStrLn ("out:"++out)
         putStrLn ("err:"++err)
         assertEqual ("returned error: "++show fullargs++"\n:"++show err) ExitSuccess ex
