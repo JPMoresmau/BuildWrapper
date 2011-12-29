@@ -488,7 +488,7 @@ getReferencedFiles lbi= do
                 exeDir    = targetDir </> (exeName' ++ "-tmp")
                 modules= (otherModules ebi)
                 hsd=getSourceDirs ebi
-                in (ebi,fromJustDebug "extractFromExeRef" $ lookup exeName' $ executableConfigs lbi,exeDir,False, copyFiles [modulePath e] hsd++ (copyModules modules hsd) ) 
+                in (ebi,fromJustDebug "extractFromExeRef" $ lookup exeName' $ executableConfigs lbi,exeDir,False, copyMain (modulePath e) hsd++ (copyModules modules hsd) ) 
         extractFromTest :: TestSuite -> CabalBuildInfo
         extractFromTest t@TestSuite {testName=testName'} =let
                 tbi=testBuildInfo t
@@ -504,7 +504,9 @@ getReferencedFiles lbi= do
         copyModules :: [ModuleName] -> [FilePath] -> [(ModuleName,FilePath)]
         copyModules mods=copyFiles (concatMap (\m->[(toFilePath m) <.> "hs",((toFilePath m) <.> "lhs")]) mods)
         copyFiles :: [FilePath] -> [FilePath] -> [(ModuleName,FilePath)]
-        copyFiles mods dirs=[(fromString $ fileToModule m,d </> m)  | m<-mods, d<-dirs]     
+        copyFiles mods dirs=[(fromString $ fileToModule m,d </> m)  | m<-mods, d<-dirs]    
+        copyMain :: FilePath  ->[FilePath] ->  [(ModuleName,FilePath)]
+        copyMain fs dirs=map (\d->(fromString "Main",d </> fs)) dirs 
         
 moduleToString :: ModuleName -> String
 moduleToString = concat . intersperse ['.'] . components

@@ -40,10 +40,12 @@ tests=  [
         testPreviewTokenTypes,
         testThingAtPoint,
         testThingAtPointNotInCabal,
+        testThingAtPointMain,
         testNamesInScope,
         testInPlaceReference,
         testCabalComponents,
         testCabalDependencies
+          
         ]
 
 class APIFacade a where
@@ -595,6 +597,34 @@ testThingAtPointNotInCabal api= TestLabel "testThingAtPointNotInCabal" (TestCase
         assertEqual "not just typed qualified" (Just "GHC.List.head :: [GHC.Integer.Type.Integer]\n                 -> GHC.Integer.Type.Integer") tap1
         
         )) 
+
+testThingAtPointMain :: (APIFacade a)=> a -> Test
+testThingAtPointMain api= TestLabel "testThingAtPointMain" (TestCase ( do
+        root<-createTestProject
+        let cf=testCabalFile root
+        let cfn=takeFileName cf
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "executable BWTest",
+                "  hs-source-dirs:  src",
+                "  main-is:         A.hs",
+                "  other-modules:  B.D",
+                "  build-depends:  base"]
+        let rel="src"</>"A.hs"        
+        writeFile (root </> rel) $ unlines [  
+                  "module Main where",
+                  "import B.D",
+                  "main=return $ head [2,3,4]"
+                  ]
+        synchronize api root False
+        configure api root Target          
+        (tap1,nsErrors1)<-getThingAtPoint api root rel 3 16 True True
+        assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors1) (null nsErrors1)
+        assertEqual "not just typed qualified" (Just "GHC.List.head :: [GHC.Integer.Type.Integer]\n                 -> GHC.Integer.Type.Integer") tap1
+        ))  
 
 testNamesInScope :: (APIFacade a)=> a -> Test
 testNamesInScope api= TestLabel "testNamesInScope" (TestCase ( do
