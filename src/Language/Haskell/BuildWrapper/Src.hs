@@ -66,9 +66,6 @@ getHSEOutline (Module _ _ _ _ decls,comments)=concat $ map declOutline decls
                 headDecl (DHead _ n  _)=nameDecl n
                 headDecl (DHInfix _ _ n _)=nameDecl n
                 headDecl (DHParen _ h)=headDecl h
-                nameDecl :: Name a -> T.Text
-                nameDecl (Ident _ s)=T.pack s
-                nameDecl (Symbol _ s)=T.pack s
                 typeDecl :: Type a -> T.Text
                 typeDecl (TyForall _ _ _ t)=typeDecl t
                 typeDecl (TyVar _ n )=nameDecl n
@@ -77,10 +74,6 @@ getHSEOutline (Module _ _ _ _ decls,comments)=concat $ map declOutline decls
                 typeDecl (TyParen _ t )=typeDecl t
                 typeDecl (TyApp _ t1 t2)=T.concat  [(typeDecl t1) , " ",(typeDecl t2)]
                 typeDecl _ = ""
-                qnameDecl :: QName a -> T.Text
-                qnameDecl (Qual _ _ n)=nameDecl n
-                qnameDecl (UnQual _ n)=nameDecl n
-                qnameDecl _ =""
                 matchDecl :: Match a -> T.Text
                 matchDecl (Match _ n _ _ _)=nameDecl n     
                 matchDecl (InfixMatch _ _ n _ _ _)=nameDecl n    
@@ -111,6 +104,50 @@ getHSEOutline (Module _ _ _ _ decls,comments)=concat $ map declOutline decls
 
 getHSEOutline _ = []
 
+getHSEImportExport :: (Module SrcSpanInfo, [Comment]) -> ([ExportDef],[ImportDef])
+getHSEImportExport (Module _ mhead _ imps _,_)=(headExp mhead,impDefs imps)
+        where
+                headExp :: Maybe (ModuleHead SrcSpanInfo) ->[ExportDef] 
+                headExp (Just (ModuleHead  _ _ _ (Just (ExportSpecList _ exps))))=map expExp exps
+                headExp _ = [] 
+                expExp :: ExportSpec SrcSpanInfo -> ExportDef
+                expExp (EVar l qn) = ExportDef (qnameDecl qn) IEVar (makeSpan l) []
+                expExp (EAbs l qn) = ExportDef (qnameDecl qn) IEAbs (makeSpan l) []
+                expExp (EThingAll l qn) = ExportDef (qnameDecl qn) IEThingAll (makeSpan l) []
+                expExp (EThingWith l qn cns) = ExportDef (qnameDecl qn) IEThingWith (makeSpan l) (map cnameDecl cns)
+                expExp (EModuleContents l mn) = ExportDef (mnnameDecl mn) IEModule (makeSpan l) []
+                impDefs :: [ImportDecl SrcSpanInfo] -> [ImportDef]
+                impDefs=map impDef
+                impDef :: ImportDecl SrcSpanInfo -> ImportDef
+                impDef (ImportDecl l m qual _ _ al specs)=ImportDef (mnnameDecl m) (makeSpan l) qual (hide specs) (alias al) (children specs)
+                hide :: Maybe (ImportSpecList a)-> Bool
+                hide  (Just (ImportSpecList _ b _))=b
+                hide _=False
+                alias :: Maybe (ModuleName a) -> T.Text
+                alias (Just mn)=mnnameDecl mn
+                alias Nothing =""
+                children :: Maybe (ImportSpecList SrcSpanInfo) -> Maybe [ImportSpecDef]
+                children (Just (ImportSpecList _ _ ss))=Just $ map child ss
+                children Nothing = Nothing
+                child :: ImportSpec SrcSpanInfo -> ImportSpecDef
+                child (IVar l n)=ImportSpecDef (nameDecl n) IEVar (makeSpan l) []
+                child (IAbs l n)=ImportSpecDef (nameDecl n) IEAbs (makeSpan l) []
+                child (IThingAll l n) = ImportSpecDef (nameDecl n) IEThingAll (makeSpan l) []
+                child (IThingWith l n cns) = ImportSpecDef (nameDecl n) IEThingWith (makeSpan l) (map cnameDecl cns)
+                
+
+nameDecl :: Name a -> T.Text
+nameDecl (Ident _ s)=T.pack s
+nameDecl (Symbol _ s)=T.pack s
+cnameDecl :: CName a -> T.Text
+cnameDecl (VarName _ s)=nameDecl s
+cnameDecl (ConName _ s)=nameDecl s
+qnameDecl :: QName a -> T.Text
+qnameDecl (Qual _ _ n)=nameDecl n
+qnameDecl (UnQual _ n)=nameDecl n
+qnameDecl _ ="" 
+mnnameDecl :: ModuleName a -> T.Text
+mnnameDecl (ModuleName _ s)=T.pack s
  
 makeSpan :: SrcSpanInfo -> InFileSpan
 makeSpan si=let

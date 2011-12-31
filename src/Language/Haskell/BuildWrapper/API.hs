@@ -175,15 +175,17 @@ withGHCAST' fp f= do
                                 return (pr,bwns2)
                 Nothing-> return (Nothing,bwns)
 
-getOutline :: FilePath -> BuildWrapper (OpResult [OutlineDef])
+getOutline :: FilePath -> BuildWrapper (OpResult OutlineResult)
 getOutline fp=do
        (mast,bwns)<-getAST fp
        --liftIO $ putStrLn $ show mast
        case mast of
         Just (ParseOk ast)->do
-                return (getHSEOutline ast,bwns)
-        Just (ParseFailed loc err)->return ([],(BWNote BWError err (BWLocation fp (srcLine loc) (srcColumn loc))):bwns)
-        _ -> return ([],bwns)
+                let ods=getHSEOutline ast
+                let (es,is)=getHSEImportExport ast
+                return (OutlineResult ods es is,bwns)
+        Just (ParseFailed loc err)->return (OutlineResult [] [] [],(BWNote BWError err (BWLocation fp (srcLine loc) (srcColumn loc))):bwns)
+        _ -> return (OutlineResult [] [] [],bwns)
  
 getTokenTypes :: FilePath -> BuildWrapper (OpResult [TokenDef])
 getTokenTypes fp=do

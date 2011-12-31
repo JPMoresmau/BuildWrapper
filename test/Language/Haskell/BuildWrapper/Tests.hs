@@ -55,7 +55,7 @@ class APIFacade a where
         configure :: a -> FilePath -> WhichCabal -> IO (OpResult Bool)
         build :: a -> FilePath -> Bool -> WhichCabal -> IO (OpResult BuildResult)
         build1 :: a -> FilePath -> FilePath -> IO (OpResult Bool)
-        getOutline :: a -> FilePath -> FilePath -> IO (OpResult [OutlineDef])
+        getOutline :: a -> FilePath -> FilePath -> IO (OpResult OutlineResult)
         getTokenTypes :: a -> FilePath -> FilePath -> IO (OpResult [TokenDef])
         getOccurrences :: a -> FilePath -> FilePath -> String -> IO (OpResult [TokenDef])
         getThingAtPoint :: a -> FilePath -> FilePath -> Int -> Int -> Bool -> Bool -> IO (OpResult (Maybe String))
@@ -415,7 +415,7 @@ testOutline api= TestLabel "testOutline" (TestCase ( do
                 "        mkt2_s :: String,",
                 "        mkt2_i :: Int",
                 "        }" ]
-        (defs,nsErrors1)<-getOutline api root rel
+        (OutlineResult defs es is,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
         let expected=[
                 OutlineDef "XList" [Data,Family] (InFileSpan (InFileLoc 8 1)(InFileLoc 8 20))  []
@@ -447,6 +447,8 @@ testOutline api= TestLabel "testOutline" (TestCase ( do
                 ]
         assertEqual "length" (length expected) (length defs)
         mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected defs)
+        assertEqual "exports" [] es
+        assertEqual "imports" [ImportDef "Data.Char" (InFileSpan (InFileLoc 5 1)(InFileLoc 5 17)) False False "" Nothing] is
       ))   
         
 testOutlinePreproc :: (APIFacade a)=> a -> Test
@@ -478,7 +480,7 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
                 "#endif",
                 ""
                  ]
-        (defs1,nsErrors1)<-getOutline api root rel
+        (OutlineResult defs1 _ _,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on getOutlinePreproc 1:"++show nsErrors1) (null nsErrors1)
         let expected1=[
                 OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25))  []
@@ -500,7 +502,7 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
                 "#endif",
                 ""
                  ]
-        (defs2,nsErrors2)<-getOutline api root rel
+        (OutlineResult defs2 _ _,nsErrors2)<-getOutline api root rel
         assertBool ("errors or warnings on getOutlinePreproc:"++show nsErrors2) (null nsErrors2)
         let expected2=[
                 OutlineDef "Name" [Data] (InFileSpan (InFileLoc 5 1)(InFileLoc 9 38))  [
@@ -522,7 +524,7 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
                 "#endif",
                 ""
                  ]
-        (defs3,nsErrors3)<-getOutline api root rel
+        (OutlineResult defs3 _ _,nsErrors3)<-getOutline api root rel
         assertBool ("errors or warnings on getOutlinePreproc 3:"++show nsErrors3) (null nsErrors3)
         let expected3=[
                 OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25))  []

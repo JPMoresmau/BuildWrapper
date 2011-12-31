@@ -171,7 +171,97 @@ instance FromJSON TokenDef where
     parseJSON (Object o) |
         ((a,b):[])<-M.toList o,
         Success v0 <- fromJSON b=return $ TokenDef a v0
+    parseJSON _= mzero         
+    
+data ImportExportType = IEVar 
+        | IEAbs 
+        | IEThingAll 
+        | IEThingWith 
+        | IEModule 
+      deriving (Show,Read,Eq,Ord,Enum)
+ 
+instance ToJSON ImportExportType  where
+    toJSON = toJSON . show
+ 
+instance FromJSON ImportExportType where
+    parseJSON (String s) =return $ read $ T.unpack s
+    parseJSON _= mzero
+    
+data ExportDef = ExportDef {
+        e_name :: T.Text,
+        e_type :: ImportExportType,
+        e_loc  :: InFileSpan,
+        e_children :: [T.Text]
+    }   deriving (Show,Eq)     
+     
+instance ToJSON ExportDef where
+        toJSON (ExportDef n t l c)=  object ["n" .= n , "t" .= t, "l" .= l, "c" .= map toJSON c]
+     
+instance FromJSON ExportDef where
+    parseJSON (Object v) =ExportDef <$>
+                         v .: "n" <*>
+                         v .: "t" <*>
+                         v .: "l" <*>
+                         v .: "c"
     parseJSON _= mzero          
+     
+data ImportSpecDef = ImportSpecDef {
+        is_name :: T.Text,
+        is_type :: ImportExportType,
+        is_loc  :: InFileSpan,
+        is_children :: [T.Text]
+        }  deriving (Show,Eq)        
+     
+instance ToJSON ImportSpecDef where
+        toJSON (ImportSpecDef n t l c)=  object ["n" .= n , "t" .= t, "l" .= l, "c" .= map toJSON c]
+     
+instance FromJSON ImportSpecDef where
+    parseJSON (Object v) =ImportSpecDef <$>
+                         v .: "n" <*>
+                         v .: "t" <*>
+                         v .: "l" <*>
+                         v .: "c"
+    parseJSON _= mzero     
+     
+data ImportDef = ImportDef {
+        i_module :: T.Text,
+        i_loc  :: InFileSpan,
+        i_qualified :: Bool,
+        i_hiding :: Bool,
+        i_alias :: T.Text,
+        i_children :: Maybe [ImportSpecDef]
+        }  deriving (Show,Eq)    
+    
+instance ToJSON ImportDef where
+        toJSON (ImportDef m l q h a c)=  object ["m" .= m , "l" .= l, "q" .= q, "h" .= h, "a" .= a, "c" .=  c]
+     
+instance FromJSON ImportDef where
+    parseJSON (Object v) =ImportDef <$>
+                         v .: "m" <*>
+                         v .: "l" <*>
+                         v .: "q" <*>
+                         v .: "h" <*>
+                         v .: "a" <*>
+                         v .: "c"
+    parseJSON _= mzero     
+    
+data OutlineResult = OutlineResult {
+        or_outline :: [OutlineDef],
+        or_exports :: [ExportDef],
+        or_imports :: [ImportDef]
+        }    
+        deriving (Show,Eq)
+        
+instance ToJSON OutlineResult where
+        toJSON (OutlineResult o e i)=  object ["o" .= map toJSON o,"e" .= map toJSON e,"i" .= map toJSON i]
+     
+instance FromJSON OutlineResult where
+    parseJSON (Object v) =OutlineResult <$>
+                         v .: "o" <*>
+                         v .: "e" <*>
+                         v .: "i"
+    parseJSON _= mzero  
+       
 --withCabal :: (GenericPackageDescription -> BuildWrapper a) -> BuildWrapper (Either BWNote a)
 --withCabal f =do
 --        cf<-gets cabalFile
