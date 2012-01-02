@@ -497,7 +497,7 @@ getReferencedFiles lbi= do
                 modules= (otherModules tbi )
                 hsd=getSourceDirs tbi
                 extras=case testInterface t of
-                       (TestSuiteExeV10 _ mp)->(copyFiles [mp] hsd)
+                       (TestSuiteExeV10 _ mp)->(copyMain mp hsd)
                        (TestSuiteLibV09 _ mn)->copyModules [mn] hsd
                        _->[]
                 in (tbi,fromJustDebug ("extractFromTestRef:"++testName'++(show $ testSuiteConfigs lbi)) $ lookup testName' $ testSuiteConfigs lbi,testDir,False,extras++ (copyModules modules hsd)       )

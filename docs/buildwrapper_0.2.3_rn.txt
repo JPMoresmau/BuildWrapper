@@ -1,5 +1,5 @@
 Buildwrapper 0.2.3: release notes
 
-- use Main as module name for main executables
+- use Main as module name for main executables and test suites
 
 
