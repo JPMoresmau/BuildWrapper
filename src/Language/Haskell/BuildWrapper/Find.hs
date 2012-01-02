@@ -187,6 +187,7 @@ haddockType (FoundName n)
 haddockType (FoundId i)
         | isValOcc (nameOccName (Var.varName i))="v"
         | otherwise= "t"
+haddockType (FoundModule _)="m"
 haddockType _="t"
 
 data SearchResult id
@@ -199,6 +200,7 @@ data SearchResult id
   | FoundName Name
   | FoundCon  SrcSpan DataCon
   | FoundLit  SrcSpan HsLit
+  | FoundModule ModuleName
 
 resLoc :: SearchResult id -> SrcSpan
 resLoc (FoundId i) = nameSrcSpan (varName i)
@@ -408,7 +410,13 @@ instance (Search id arg, Search id rec) => Search id (HsConDetails arg rec) wher
 --  search p s m =search p s (hsmodDecls m)
 
 instance Search Name (RenamedSource) where
-  search p s (b,_,_,_) = search p s b
+  search p s (b,d,_,_) = search p s d `mappend` search p s b
+
+instance (Search id id) => Search id (ImportDecl id) where
+  search p s id=search p s (ideclName id)
+
+instance Search id ModuleName where
+  search _ _ mn = only (FoundModule mn)
 
 instance (Search id id) => Search id (HsType id) where
   search _ s t = only (FoundType s t)
