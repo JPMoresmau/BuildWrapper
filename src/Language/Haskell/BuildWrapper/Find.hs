@@ -63,6 +63,7 @@ prettyResult :: OutputableBndr id => SearchResult id -> SDoc
 prettyResult (FoundId i) = ppr i
 prettyResult (FoundName n) = ppr n
 prettyResult (FoundCon _ c) = ppr c
+prettyResult (FoundModule m) = ppr m
 prettyResult r = ppr r
 
 -- | Pretty-print a search result as qualified name 
@@ -70,6 +71,7 @@ qualifiedResult :: OutputableBndr id => SearchResult id -> SDoc
 qualifiedResult (FoundId i) = qualifiedName $ getName  i
 qualifiedResult (FoundName n) = qualifiedName n
 qualifiedResult (FoundCon _ c) = qualifiedName $ getName c
+qualifiedResult (FoundModule m) = ppr m
 qualifiedResult r = ppr r
 
 qualifiedName :: Name -> SDoc
@@ -212,6 +214,7 @@ resLoc (FoundExpr s _) = s
 resLoc (FoundStmt s _) = s
 resLoc (FoundCon s _)  = s
 resLoc (FoundLit s _)  = s
+resLoc (FoundModule _)  = noSrcSpan
 
 instance Eq (SearchResult id) where
   a == b = resLoc a == resLoc b   -- TODO: sufficient?
@@ -288,6 +291,7 @@ instance (OutputableBndr id, Outputable id)
   ppr (FoundName n)   = text "name:" <+> ppr n
   ppr (FoundCon s c)  = text "con: " <+> ppr s $$ nest 4 (ppr c)
   ppr (FoundLit s l)  = text "lit: " <+> ppr s $$ nest 4 (ppr l)
+  ppr (FoundModule m) = text "mod: " <+> ppr m
 
 instance Outputable a => Outputable (PosTree a) where
   ppr (Node v cs) = ppr v $$ nest 2 (vcat (map ppr (S.toList cs)))
