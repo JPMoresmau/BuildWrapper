@@ -14,6 +14,9 @@ module Language.Haskell.BuildWrapper.Tests where
 
 import Language.Haskell.BuildWrapper.Base
 
+import Data.ByteString.Lazy ()
+import Data.ByteString.Lazy.Char8()
+
 import Data.Maybe
 import Data.Aeson
 import Data.Char
@@ -37,6 +40,7 @@ tests=  [
         testModuleNotInCabal,
         testOutline,
         testOutlinePreproc,
+        testOutlineImportExport,
         testPreviewTokenTypes,
         testThingAtPoint,
         testThingAtPointNotInCabal,
@@ -532,7 +536,40 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
         assertEqual "length of expected3" (length expected3) (length defs3)
         mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected3 defs3)
       ))      
+                       
+       
+testOutlineImportExport :: (APIFacade a)=> a -> Test
+testOutlineImportExport api= TestLabel "testOutlineImportExport" (TestCase ( do
+        root<-createTestProject
+        synchronize api root False
+        let rel="src"</>"A.hs"
+        -- use api to write temp file
+        write api root rel $ unlines [
+                "module Module1 (dummy,module Data.Char,MkTest(..)) where",
+                 "",
+                "import Data.Char",
+                "import Data.Map as DM (empty) ",
+                "import Data.List hiding (orderBy,groupBy)",
+                "import qualified Data.Maybe (Maybe(Just))"
+                ]
+        (OutlineResult _ es is,nsErrors1)<-getOutline api root rel
+        assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
+        let exps=[
+                ExportDef "dummy" IEVar (InFileSpan (InFileLoc 1 17)(InFileLoc 1 22)) [],
+                ExportDef "Data.Char" IEModule (InFileSpan (InFileLoc 1 23)(InFileLoc 1 39)) [],
+                ExportDef "MkTest" IEThingAll (InFileSpan (InFileLoc 1 40)(InFileLoc 1 50)) []
+                ]
+        mapM_ (\(e,c)->assertEqual "exports" e c) (zip exps es)
+        let imps=[
+                ImportDef "Data.Char" (InFileSpan (InFileLoc 3 1)(InFileLoc 3 17)) False False "" Nothing,
+                ImportDef "Data.Map" (InFileSpan (InFileLoc 4 1)(InFileLoc 4 30)) False False "DM" (Just [ImportSpecDef "empty" IEVar (InFileSpan (InFileLoc 4 24)(InFileLoc 4 29)) []]),
+                ImportDef "Data.List" (InFileSpan (InFileLoc 5 1)(InFileLoc 5 42)) False True "" (Just [ImportSpecDef "orderBy" IEVar (InFileSpan (InFileLoc 5 26)(InFileLoc 5 33)) [],ImportSpecDef "groupBy" IEVar (InFileSpan (InFileLoc 5 34)(InFileLoc 5 41)) []]),
+                ImportDef "Data.Maybe" (InFileSpan (InFileLoc 6 1)(InFileLoc 6 42)) True False "" (Just [ImportSpecDef "Maybe" IEThingWith (InFileSpan (InFileLoc 6 30)(InFileLoc 6 41)) ["Just"]])
+                ] 
+        mapM_ (\(e,c)->assertEqual "imports" e c) (zip imps is)
         
+        ))
+                
 testPreviewTokenTypes :: (APIFacade a)=> a -> Test
 testPreviewTokenTypes api= TestLabel "testPreviewTokenTypes" (TestCase ( do
         root<-createTestProject
