@@ -17,8 +17,11 @@ import Language.Haskell.BuildWrapper.Base
 import Control.Monad.State
 import System.Console.CmdArgs hiding (Verbosity(..))
 
+import Paths_buildwrapper
+
 import Data.Aeson
 import qualified Data.ByteString.Lazy as BS
+import Data.Version (showVersion)
 
 
 type CabalFile = FilePath
@@ -74,6 +77,7 @@ cmdMain = (cmdArgs $
                 &= helpArg [explicit, name "help", name "h"]
                 &= help "buildwrapper executable"
                 &= program "buildwrapper"
+                &= summary ("buildwrapper executable, version " ++ (showVersion version))
                 )
         >>= handle
         where 
