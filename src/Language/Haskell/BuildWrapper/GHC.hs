@@ -544,7 +544,7 @@ preprocessSource contents literate=
                 ppSCpp (ts2,l2,f) (l,c) 
                         | (Continue _)<-f = addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f)
                         | ('#':_)<-l =addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f) 
-                        | ("{-# " `List.isPrefixOf` l)=addPPToken "D" (l,c) (ts2,"":l2,Start) 
+                        | ("{-# " `List.isPrefixOf` l)=addPPToken "D" (l,c) (ts2,"":l2,f) 
                         | (Indent n)<-f=(ts2,l:((replicate n (takeWhile (==' ') l))++l2),Start)
                         | otherwise =(ts2,l:l2,Start)
                 ppSLit :: ([TokenDef],[String],PPBehavior) -> (String,Int) -> ([TokenDef],[String],PPBehavior)
