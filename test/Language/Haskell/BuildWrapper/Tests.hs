@@ -41,6 +41,7 @@ tests=  [
         testOutline,
         testOutlinePreproc,
         testOutlineImportExport,
+        testOutlineLiterate,
         testPreviewTokenTypes,
         testThingAtPoint,
         testThingAtPointNotInCabal,
@@ -189,7 +190,7 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
         synchronize api root False
         (bool1,ns1)<- configure api root Target
         assertBool ("returned false 1 "++ (show ns1)) bool1
-        assertEqual ("didn't return 1 warning") 1 (length ns1)
+        assertEqual ("didn't return 1 warning: "++(show ns1)) 1 (length ns1)
         let (nsWarning1:[])=ns1
         assertEqual "not proper warning 1" (BWNote BWWarning "Unknown fields: field1 (line 5)\nFields allowed in this section:\nname, version, cabal-version, build-type, license, license-file,\ncopyright, maintainer, build-depends, stability, homepage,\npackage-url, bug-reports, synopsis, description, category, author,\ntested-with, data-files, data-dir, extra-source-files,\nextra-tmp-files\n" (BWLocation cfn 5 1)) nsWarning1
         writeFile cf $ unlines ["name: "++testProjectName,
@@ -204,7 +205,7 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
         synchronize api root False
         (bool2,ns2)<- configure api root Target
         assertBool ("returned false 2 "++ (show ns2)) bool2
-        assertEqual ("didn't return 1 warning") 1 (length ns2)
+        assertEqual ("didn't return 1 warning: "++(show ns1)) 1 (length ns2)
         let (nsWarning2:[])=ns2
         assertEqual "not proper warning 2" (BWNote BWWarning "A package using section syntax must specify at least\n'cabal-version: >= 1.2'.\n" (BWLocation cfn 1 1)) nsWarning2
         writeFile cf $ unlines ["name: "++testProjectName,
@@ -221,7 +222,7 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
         synchronize api root False
         (bool3,ns3)<- configure api root Target
         assertBool ("returned false 3 "++ (show ns3)) bool3
-        assertEqual ("didn't return 1 warning") 1 (length ns3)
+        assertEqual ("didn't return 1 warning: "++(show ns1)) 1 (length ns3)
         let (nsWarning3:[])=ns3
         assertEqual "not proper warning 3" (BWNote BWWarning "No 'build-type' specified. If you do not need a custom Setup.hs or\n./configure script then use 'build-type: Simple'.\n" (BWLocation cfn 1 1)) nsWarning3
 
@@ -537,6 +538,31 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
         mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected3 defs3)
       ))      
                        
+       
+testOutlineLiterate :: (APIFacade a)=> a -> Test
+testOutlineLiterate api= TestLabel "testOutlineLiterate" (TestCase ( do
+        root<-createTestProject
+        synchronize api root False
+        let rel="src"</>"A.lhs"
+        -- use api to write temp file
+        write api root rel $ unlines [
+                "comment 1",
+                "",
+                "> module Module1 where",
+                "",
+                "",
+                "> testfunc1=reverse \"test\"",
+                "",
+                ""
+                 ]
+        (OutlineResult defs1 _ _,nsErrors1)<-getOutline api root rel
+        assertBool ("errors or warnings on testOutlineLiterate 1:"++show nsErrors1) (null nsErrors1)
+        let expected1=[
+                OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 3)(InFileLoc 6 27))  []
+                ]
+        assertEqual "length of expected1" (length expected1) (length defs1)
+        mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected1 defs1)
+        ))       
        
 testOutlineImportExport :: (APIFacade a)=> a -> Test
 testOutlineImportExport api= TestLabel "testOutlineImportExport" (TestCase ( do

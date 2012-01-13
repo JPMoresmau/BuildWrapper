@@ -90,12 +90,17 @@ preproc :: CabalBuildInfo -> FilePath -> IO String
 preproc cbi tgt= do
         inputOrig<-readFile tgt
         let cppo=fileCppOptions cbi ++ ["-D__GLASGOW_HASKELL__=" ++ show (__GLASGOW_HASKELL__::Int)]
-        --putStrLn $ "cppo=" ++ (show cppo)
+        --Prelude.putStrLn $ "cppo=" ++ (show cppo)
         if not $ null cppo 
             then do
                 let epo=parseOptions cppo
                 case epo of
-                    Right opts2->liftIO $ runCpphs opts2 tgt inputOrig
+                    Right opts2->do
+                        let bo=boolopts opts2
+                        let opts3=if (".lhs" == takeExtension tgt)
+                                then opts2 {boolopts=bo{literate=True}}
+                                else opts2
+                        runCpphs opts3 tgt inputOrig
                     Left _->return inputOrig
             else return inputOrig
 
