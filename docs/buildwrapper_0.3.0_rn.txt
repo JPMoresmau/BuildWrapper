@@ -3,3 +3,5 @@ Buildwrapper 0.3.0: release notes
 - use Main as module name for main executables and test suites
 
 - return imports and exports in outline call
+
+- outline works on literate files
