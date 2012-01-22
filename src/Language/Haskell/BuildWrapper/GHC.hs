@@ -69,40 +69,41 @@ withASTNotes f fp base_dir mod options=do
     runGhc (Just libdir) $ do
         flg <- getSessionDynFlags
         (flg', _, _) <- parseDynamicFlags flg _leftovers
-        ref <- GMU.liftIO $ newIORef []
-        setSessionDynFlags flg'  { hscTarget = HscNothing, ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref }
-        -- $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
-        addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }
-        --c1<-GMU.liftIO getClockTime
-        let modName=mkModuleName mod
-        -- loadWithLogger (logWarnErr ref)
-        res<- load (LoadUpTo modName) -- LoadAllTargets
-                   `gcatch` (\(e :: SourceError) -> handle_error ref e)
-        --(warns, errs) <- GMU.liftIO $ readIORef ref
-        --let notes = ghcMessagesToNotes base_dir (warns, errs)
-        notes <- GMU.liftIO $ readIORef ref
-        --c2<-GMU.liftIO getClockTime
-        --GMU.liftIO $ putStrLn ("load all targets: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
-        case res of 
-                Succeeded -> do
-                        modSum <- getModSummary $ modName
-                        p <- parseModule modSum
-                        --return $ showSDocDump $ ppr $ pm_mod_summary p
-                        t <- typecheckModule p
-                        d <- desugarModule t -- to get warnings
-                        l <- loadModule d
-                        --c3<-GMU.liftIO getClockTime
-                        setContext [ms_mod modSum] []
-                        --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
-                        a<-f (dm_typechecked_module l)
+        GHC.defaultCleanupHandler flg' $ do
+                ref <- GMU.liftIO $ newIORef []
+                setSessionDynFlags flg'  { hscTarget = HscNothing, ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref }
+                -- $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
+                addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }
+                --c1<-GMU.liftIO getClockTime
+                let modName=mkModuleName mod
+                -- loadWithLogger (logWarnErr ref)
+                res<- load (LoadUpTo modName) -- LoadAllTargets
+                           `gcatch` (\(e :: SourceError) -> handle_error ref e)
+                --(warns, errs) <- GMU.liftIO $ readIORef ref
+                --let notes = ghcMessagesToNotes base_dir (warns, errs)
+                notes <- GMU.liftIO $ readIORef ref
+                --c2<-GMU.liftIO getClockTime
+                --GMU.liftIO $ putStrLn ("load all targets: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
+                case res of 
+                        Succeeded -> do
+                                modSum <- getModSummary $ modName
+                                p <- parseModule modSum
+                                --return $ showSDocDump $ ppr $ pm_mod_summary p
+                                t <- typecheckModule p
+                                d <- desugarModule t -- to get warnings
+                                l <- loadModule d
+                                --c3<-GMU.liftIO getClockTime
+                                setContext [ms_mod modSum] []
+                                --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
+                                a<-f (dm_typechecked_module l)
 #if __GLASGOW_HASKELL__ < 702                           
-                        warns <- getWarnings
-                        return $ (Just a,List.nub $ notes++ (reverse $ ghcMessagesToNotes base_dir (warns, emptyBag)))
+                                warns <- getWarnings
+                                return $ (Just a,List.nub $ notes++ (reverse $ ghcMessagesToNotes base_dir (warns, emptyBag)))
 #else
-                        notes2 <- GMU.liftIO $ readIORef ref
-                        return $ (Just a,notes2)
+                                notes2 <- GMU.liftIO $ readIORef ref
+                                return $ (Just a,notes2)
 #endif
-                Failed -> return $ (Nothing,notes)
+                        Failed -> return $ (Nothing,notes)
         where
 --            logWarnErr :: GhcMonad m => IORef [BWNote] -> Maybe SourceError -> m ()
 --            logWarnErr ref err = do
