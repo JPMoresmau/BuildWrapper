@@ -34,7 +34,7 @@ tests :: (APIFacade a)=> [(a -> Test)]
 tests=  [
         testSynchronizeAll,
         testConfigureWarnings , testConfigureErrors ,
-        testBuildErrors ,
+        testBuildErrors  ,
         testBuildWarnings ,
         testBuildOutput,
         testModuleNotInCabal,
@@ -59,11 +59,12 @@ class APIFacade a where
         write :: a -> FilePath -> FilePath -> String -> IO ()
         configure :: a -> FilePath -> WhichCabal -> IO (OpResult Bool)
         build :: a -> FilePath -> Bool -> WhichCabal -> IO (OpResult BuildResult)
-        build1 :: a -> FilePath -> FilePath -> IO (OpResult Bool)
-        getOutline :: a -> FilePath -> FilePath -> IO (OpResult OutlineResult)
+        build1 :: a -> FilePath -> BuildFlags -> FilePath -> IO (OpResult Bool)
+        getBuildFlags :: a -> FilePath -> FilePath -> IO (OpResult BuildFlags)
+        getOutline :: a -> FilePath -> BuildFlags -> FilePath -> IO (OpResult OutlineResult)
         getTokenTypes :: a -> FilePath -> FilePath -> IO (OpResult [TokenDef])
-        getOccurrences :: a -> FilePath -> FilePath -> String -> IO (OpResult [TokenDef])
-        getThingAtPoint :: a -> FilePath -> FilePath -> Int -> Int -> Bool -> Bool -> IO (OpResult (Maybe String))
+        getOccurrences :: a -> FilePath -> BuildFlags -> FilePath -> String -> IO (OpResult [TokenDef])
+        getThingAtPoint :: a -> FilePath -> BuildFlags -> FilePath -> Int -> Int -> Bool -> Bool -> IO (OpResult (Maybe String))
         getNamesInScope :: a -> FilePath -> FilePath-> IO (OpResult (Maybe [String]))
         getCabalDependencies :: a -> FilePath -> IO (OpResult [(FilePath,[CabalPackage])])
         getCabalComponents :: a -> FilePath -> IO (OpResult [CabalComponent])
@@ -260,7 +261,9 @@ testBuildErrors api = TestLabel "testBuildErrors" (TestCase ( do
         -- assertBool ("no rel in fps2: "++(show fps2)) (elem rel fps1)
         let (nsError2:[])=nsErrors2
         assertEqualNotesWithoutSpaces "not proper error 2" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" (BWLocation rel 2 8)) nsError2
-        (bool3,nsErrors3)<-build1 api root ("src"</>"A.hs")
+        (bf3,nsErrors3f)<- getBuildFlags api root ("src"</>"A.hs")
+        assertBool ("errors or warnings on nsErrors3f:"++ (show nsErrors3f)) (null nsErrors3f)
+        (bool3,nsErrors3)<-build1 api root bf3 ("src"</>"A.hs")
         assertBool ("returned true on bool3") (not bool3)
         assertBool ("no errors or warnings on nsErrors3") (not $ null nsErrors3)
         -- assertBool ("no rel in fps2: "++(show fps2)) (elem rel fps1)
@@ -299,7 +302,9 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         let (nsError1:nsError2:[])=nsErrors1
         assertEqualNotesWithoutSpaces "not proper error 1" (BWNote BWWarning "The import of `Data.List' is redundant\n               except perhaps to import instances from `Data.List'\n             To import instances alone, use: import Data.List()\n" (BWLocation rel 2 1)) nsError1
         assertEqualNotesWithoutSpaces "not proper error 2" (BWNote BWWarning "Top-level binding with no type signature:\n               fA :: forall a. a\n" (BWLocation rel 3 1)) nsError2
-        (bool3,nsErrors3)<-build1 api root rel
+        (bf3,nsErrors3f)<-getBuildFlags api root rel
+        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
+        (bool3,nsErrors3)<-build1 api root bf3 rel
         assertBool ("returned false on bool3") bool3
         assertBool ("no errors or warnings on nsErrors3") (not $ null nsErrors3)
         let (nsError3:nsError4:[])=nsErrors3
@@ -308,7 +313,7 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         writeFile (root </> rel) $ unlines ["module A where","pats:: String -> String","pats a=reverse a","fB:: String -> Char","fB pats=head pats"] 
         mf3<-synchronize1 api root True rel
         assertBool ("mf3 not just") (isJust mf2)
-        (bool4,nsErrors4)<-build1 api root rel
+        (bool4,nsErrors4)<-build1 api root bf3 rel
         assertBool ("returned false on bool4") bool4
         assertBool ("no errors or warnings on nsErrors4") (not $ null nsErrors4)
         let (nsError5:[])=nsErrors4
@@ -346,7 +351,9 @@ testModuleNotInCabal api = TestLabel "testModuleNotInCabal" (TestCase ( do
         (BuildResult bool1 _,nsErrors1)<-build api root True Source
         assertBool ("returned false on bool1") bool1
         assertBool ("errors or warnings on nsErrors1") (null nsErrors1)
-        (bool2, nsErrors2)<-build1 api root rel
+        (bf2,nsErrors2f)<-getBuildFlags api root rel
+        assertBool ("no errors or warnings on nsErrors2f") (null nsErrors2f)
+        (bool2, nsErrors2)<-build1 api root bf2 rel
         assertBool ("returned false on bool2: "++(show nsErrors2)) bool2
         assertBool ("errors or warnings on nsErrors2: "++(show nsErrors2)) (null nsErrors2)
         
@@ -420,7 +427,9 @@ testOutline api= TestLabel "testOutline" (TestCase ( do
                 "        mkt2_s :: String,",
                 "        mkt2_i :: Int",
                 "        }" ]
-        (OutlineResult defs es is,nsErrors1)<-getOutline api root rel
+        (bf3,nsErrors3f)<-getBuildFlags api root rel
+        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)        
+        (OutlineResult defs es is,nsErrors1)<-getOutline api root bf3 rel
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
         let expected=[
                 OutlineDef "XList" [Data,Family] (InFileSpan (InFileLoc 8 1)(InFileLoc 8 20))  []
@@ -485,7 +494,9 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
                 "#endif",
                 ""
                  ]
-        (OutlineResult defs1 _ _,nsErrors1)<-getOutline api root rel
+        (bf3,nsErrors3f)<-getBuildFlags api root rel
+        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)         
+        (OutlineResult defs1 _ _,nsErrors1)<-getOutline api root bf3 rel
         assertBool ("errors or warnings on getOutlinePreproc 1:"++show nsErrors1) (null nsErrors1)
         let expected1=[
                 OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25))  []
@@ -507,7 +518,7 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
                 "#endif",
                 ""
                  ]
-        (OutlineResult defs2 _ _,nsErrors2)<-getOutline api root rel
+        (OutlineResult defs2 _ _,nsErrors2)<-getOutline api root bf3 rel
         assertBool ("errors or warnings on getOutlinePreproc:"++show nsErrors2) (null nsErrors2)
         let expected2=[
                 OutlineDef "Name" [Data] (InFileSpan (InFileLoc 5 1)(InFileLoc 9 38))  [
@@ -529,7 +540,7 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
                 "#endif",
                 ""
                  ]
-        (OutlineResult defs3 _ _,nsErrors3)<-getOutline api root rel
+        (OutlineResult defs3 _ _,nsErrors3)<-getOutline api root bf3 rel
         assertBool ("errors or warnings on getOutlinePreproc 3:"++show nsErrors3) (null nsErrors3)
         let expected3=[
                 OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25))  []
@@ -555,7 +566,9 @@ testOutlineLiterate api= TestLabel "testOutlineLiterate" (TestCase ( do
                 "",
                 ""
                  ]
-        (OutlineResult defs1 _ _,nsErrors1)<-getOutline api root rel
+        (bf3,nsErrors3f)<-getBuildFlags api root rel
+        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
+        (OutlineResult defs1 _ _,nsErrors1)<-getOutline api root bf3 rel
         assertBool ("errors or warnings on testOutlineLiterate 1:"++show nsErrors1) (null nsErrors1)
         let expected1=[
                 OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 3)(InFileLoc 6 27))  []
@@ -578,7 +591,9 @@ testOutlineImportExport api= TestLabel "testOutlineImportExport" (TestCase ( do
                 "import Data.List hiding (orderBy,groupBy)",
                 "import qualified Data.Maybe (Maybe(Just))"
                 ]
-        (OutlineResult _ es is,nsErrors1)<-getOutline api root rel
+        (bf3,nsErrors3f)<-getBuildFlags api root rel
+        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
+        (OutlineResult _ es is,nsErrors1)<-getOutline api root bf3 rel
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
         let exps=[
                 ExportDef "dummy" IEVar (InFileSpan (InFileLoc 1 17)(InFileLoc 1 22)) [],
@@ -633,17 +648,19 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
                   "module Main where",
                   "main=return $ map id \"toto\""
                   ] 
-        (tap1,nsErrors1)<-getThingAtPoint api root rel 2 16 True True
+        (bf3,nsErrors3f)<-getBuildFlags api root rel
+        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)          
+        (tap1,nsErrors1)<-getThingAtPoint api root bf3 rel 2 16 True True
         assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors1) (null nsErrors1)
         assertEqual "not just typed qualified" (Just "GHC.Base.map :: forall a b.\n                (a -> b) -> [a] -> [b] GHC.Types.Char GHC.Types.Char") tap1
-        (tap2,nsErrors2)<-getThingAtPoint api root rel 2 16 False True
+        (tap2,nsErrors2)<-getThingAtPoint api root bf3 rel 2 16 False True
         assertBool ("errors or warnings on getThingAtPoint2:"++show nsErrors2) (null nsErrors2)
         assertEqual "not just typed unqualified" (Just "map :: forall a b. (a -> b) -> [a] -> [b] Char Char") tap2
-        (tap3,nsErrors3)<-getThingAtPoint api root rel 2 16 True False
+        (tap3,nsErrors3)<-getThingAtPoint api root bf3 rel 2 16 True False
         assertBool ("errors or warnings on getThingAtPoint3:"++show nsErrors3) (null nsErrors3)
         assertEqual "not just untyped qualified" (Just "GHC.Base.map v") tap3
        
-        (tap4,nsErrors4)<-getThingAtPoint api root rel 2 16 False False
+        (tap4,nsErrors4)<-getThingAtPoint api root bf3 rel 2 16 False False
         assertBool ("errors or warnings on getThingAtPoint4:"++show nsErrors4) (null nsErrors4)
         assertEqual "not just untyped unqualified" (Just "map v") tap4
         
@@ -657,7 +674,9 @@ testThingAtPointNotInCabal api= TestLabel "testThingAtPointNotInCabal" (TestCase
         let rel2="src"</>"Auto.hs"
         writeFile (root </> rel2) $ unlines ["module Auto where","fAuto=head [2,3,4]"] 
         (fps,ns)<-synchronize api root False
-        (tap1,nsErrors1)<-getThingAtPoint api root rel2 2 8 True True
+        (bf3,nsErrors3f)<-getBuildFlags api root rel2
+        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
+        (tap1,nsErrors1)<-getThingAtPoint api root bf3 rel2 2 8 True True
         assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors1) (null nsErrors1)
         assertEqual "not just typed qualified" (Just "GHC.List.head :: [GHC.Integer.Type.Integer]\n                 -> GHC.Integer.Type.Integer") tap1
         
@@ -686,7 +705,9 @@ testThingAtPointMain api= TestLabel "testThingAtPointMain" (TestCase ( do
                   ]
         synchronize api root False
         configure api root Target          
-        (tap1,nsErrors1)<-getThingAtPoint api root rel 3 16 True True
+        (bf3,nsErrors3f)<-getBuildFlags api root rel
+        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
+        (tap1,nsErrors1)<-getThingAtPoint api root bf3 rel 3 16 True True
         assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors1) (null nsErrors1)
         assertEqual "not just typed qualified" (Just "GHC.List.head :: [GHC.Integer.Type.Integer]\n                 -> GHC.Integer.Type.Integer") tap1
         ))  
@@ -767,7 +788,9 @@ testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
         let tts=fromJust mtts
         assertBool "getNamesInScope in place 1 does not contain Main.main" (elem "Main.main" tts)
         assertBool "getNamesInScope in place 1 does not contain B.C.fC" (elem "B.C.fC" tts)
-        (tap1,nsErrorsTap1)<-getThingAtPoint api root rel 3 16 True True
+        (bf3,nsErrors3f)<-getBuildFlags api root rel
+        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
+        (tap1,nsErrorsTap1)<-getThingAtPoint api root bf3 rel 3 16 True True
         assertBool ("errors or warnings on getThingAtPoint1 in place:"++show nsErrorsTap1) (null nsErrorsTap1)
         assertEqual "not just typed qualified" (Just "GHC.Base.map :: forall a b.\n                (a -> b) -> [a] -> [b] GHC.Types.Char GHC.Types.Char") tap1
         (mtts2,nsErrors2)<-getNamesInScope api root rel2

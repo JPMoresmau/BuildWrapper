@@ -68,6 +68,8 @@ data BWNote=BWNote {
         bwn_location :: BWLocation
         }
         deriving (Show,Read,Eq)
+      
+        
         
 instance ToJSON BWNote  where
     toJSON (BWNote s t l)= object ["s" .= s, "t" .= t, "l" .= l]       
@@ -261,7 +263,29 @@ instance FromJSON OutlineResult where
                          v .: "e" <*>
                          v .: "i"
     parseJSON _= mzero  
-       
+      
+        
+data BuildFlags = BuildFlags {
+        bf_ast :: [String],
+        bf_preproc :: [String],
+        bg_modName :: Maybe String
+        }  
+        deriving (Show,Read,Eq,Data,Typeable)
+        
+instance ToJSON BuildFlags where
+        toJSON=  String . T.pack . show 
+        --object ["a" .= map toJSON a,"p" .= map toJSON p,"m" .= toJSON m]              
+        
+
+instance FromJSON BuildFlags where
+   parseJSON (String s)=return $ (read . T.unpack) s
+--   parseJSON (String s)=read $ T.unpack <$> s
+--    parseJSON (Object v) =BuildFlags <$>
+--                         v .: "a" <*>
+--                         v .: "p" <*>
+--                         v .: "m"
+   parseJSON _= mzero  
+           
 --withCabal :: (GenericPackageDescription -> BuildWrapper a) -> BuildWrapper (Either BWNote a)
 --withCabal f =do
 --        cf<-gets cabalFile

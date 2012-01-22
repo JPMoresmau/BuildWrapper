@@ -73,6 +73,11 @@ build1 fp=do
         (mtm,msgs)<-getGHCAST fp
         return (isJust mtm,msgs)
 
+build1F :: BuildFlags -> FilePath -> BuildWrapper (OpResult Bool)
+build1F bf fp=do
+        (mtm,msgs)<-getGHCASTF bf fp
+        return (isJust mtm,msgs)
+
 --        (bool,bwns)<-configure
 --        if bool
 --                then do
@@ -89,21 +94,49 @@ build1 fp=do
 preproc :: CabalBuildInfo -> FilePath -> IO String
 preproc cbi tgt= do
         inputOrig<-readFile tgt
-        let cppo=fileCppOptions cbi ++ ["-D__GLASGOW_HASKELL__=" ++ show (__GLASGOW_HASKELL__::Int)]
+        let lit=".lhs" == takeExtension tgt
+        let cppo=fileCppOptions cbi ++ ["-D__GLASGOW_HASKELL__=" ++ show (__GLASGOW_HASKELL__::Int)] ++ (if lit then ["--unlit"] else [])
         --Prelude.putStrLn $ "cppo=" ++ (show cppo)
         if not $ null cppo 
             then do
                 let epo=parseOptions cppo
                 case epo of
                     Right opts2->do
-                        let bo=boolopts opts2
-                        let opts3=if (".lhs" == takeExtension tgt)
-                                then opts2 {boolopts=bo{literate=True}}
-                                else opts2
-                        runCpphs opts3 tgt inputOrig
+--                        let bo=boolopts opts2
+--                        let opts3=if (".lhs" == takeExtension tgt)
+--                                then opts2 {boolopts=bo{literate=True}}
+--                                else opts2
+                        runCpphs opts2 tgt inputOrig
                     Left _->return inputOrig
             else return inputOrig
 
+preprocF :: BuildFlags -> FilePath -> IO String
+preprocF bf tgt= do
+        inputOrig<-readFile tgt
+        let epo=parseOptions $ bf_preproc bf
+        case epo of
+                    Right opts2->runCpphs opts2 tgt inputOrig
+                    Left _->return inputOrig
+
+getBuildFlags :: FilePath -> BuildWrapper (OpResult BuildFlags)
+getBuildFlags fp=do
+        (mcbi,bwns)<-getBuildInfo fp
+        case mcbi of
+                Just(cbi)->do
+                        let (modName,opts)=cabalExtensions $ snd cbi
+                        (_,opts2)<-fileGhcOptions cbi
+                        let lit=".lhs" == takeExtension fp
+                        let cppo=(fileCppOptions $ snd cbi) ++ ["-D__GLASGOW_HASKELL__=" ++ show (__GLASGOW_HASKELL__::Int)] ++ (if lit then ["--unlit"] else [])
+                        let modS=moduleToString modName
+                        return (BuildFlags  (opts ++ opts2) cppo  (Just modS),bwns)
+                Nothing -> return (BuildFlags knownExtensionNames  []  Nothing,[])
+
+getASTF :: BuildFlags -> FilePath -> BuildWrapper (OpResult (Maybe (ParseResult (Module SrcSpanInfo, [Comment]))))
+getASTF bf fp=do
+        tgt<-getTargetPath fp
+        input<-liftIO $ preprocF bf tgt
+        pr<- liftIO $ getHSEAST input (bf_ast bf)
+        return (Just pr,[])
 
 getAST :: FilePath -> BuildWrapper (OpResult (Maybe (ParseResult (Module SrcSpanInfo, [Comment]))))
 getAST fp = do
@@ -130,6 +163,10 @@ getAST fp = do
 
 getGHCAST :: FilePath -> BuildWrapper (OpResult (Maybe TypecheckedSource))
 getGHCAST fp = withGHCAST' fp (\_->BwGHC.getAST)
+
+getGHCASTF :: BuildFlags -> FilePath -> BuildWrapper (OpResult (Maybe TypecheckedSource))
+getGHCASTF bf fp = withGHCASTF' bf fp (\_->BwGHC.getAST)
+
 --do
 --        (mcbi,bwns)<-getBuildInfo fp
 --        case mcbi of
@@ -161,6 +198,22 @@ withGHCAST fp f=withGHCAST' fp (\n a b c d->do
 --                        return (Just pr,bwns)
 --                Nothing-> return (Nothing,bwns)
 
+withGHCASTF :: BuildFlags -> FilePath -> (FilePath -> FilePath -> String -> [String] -> IO a) -> BuildWrapper (OpResult (Maybe a))
+withGHCASTF bf fp f=withGHCASTF' bf fp (\n a b c d->do
+        r<- f a b c d
+        return $ ((Just r),n))
+
+withGHCASTF' :: BuildFlags -> FilePath -> ([BWNote] -> FilePath -> FilePath -> String -> [String] ->  IO (OpResult (Maybe a))) -> BuildWrapper (OpResult (Maybe a))
+withGHCASTF' (BuildFlags opts _ (Just modS)) fp f= do
+        tgt<-getTargetPath fp
+        temp<-getFullTempDir
+        liftIO $ do
+                cd<-getCurrentDirectory
+                setCurrentDirectory temp
+                (pr,bwns2)<- f [] tgt temp modS opts
+                setCurrentDirectory cd
+                return (pr,bwns2)
+withGHCASTF' _ _ _= return (Nothing,[])
 
 withGHCAST' :: FilePath -> ([BWNote] -> FilePath -> FilePath -> String -> [String] ->  IO (OpResult (Maybe a))) -> BuildWrapper (OpResult (Maybe a))
 withGHCAST' fp f= do
@@ -183,6 +236,18 @@ withGHCAST' fp f= do
 getOutline :: FilePath -> BuildWrapper (OpResult OutlineResult)
 getOutline fp=do
        (mast,bwns)<-getAST fp
+       --liftIO $ putStrLn $ show mast
+       case mast of
+        Just (ParseOk ast)->do
+                let ods=getHSEOutline ast
+                let (es,is)=getHSEImportExport ast
+                return (OutlineResult ods es is,bwns)
+        Just (ParseFailed loc err)->return (OutlineResult [] [] [],(BWNote BWError err (BWLocation fp (srcLine loc) (srcColumn loc))):bwns)
+        _ -> return (OutlineResult [] [] [],bwns)
+
+getOutlineF :: BuildFlags-> FilePath -> BuildWrapper (OpResult OutlineResult)
+getOutlineF bf fp=do
+       (mast,bwns)<-getASTF bf fp
        --liftIO $ putStrLn $ show mast
        case mast of
         Just (ParseOk ast)->do
@@ -242,8 +307,23 @@ getOccurrences fp query=do
                                 Left bw -> return ([],bw:bwns)
                 Nothing-> return ([],bwns)
 
+getOccurrencesF :: BuildFlags-> FilePath -> String -> BuildWrapper (OpResult [TokenDef])
+getOccurrencesF (BuildFlags opts _ _) fp query=do
+        tgt<-getTargetPath fp
+        input<-liftIO $ readFile tgt
+        ett<-liftIO $ BwGHC.occurrences tgt input (T.pack query) (".lhs" == (takeExtension fp)) opts
+        case ett of
+                Right tt->return (tt,[])
+                Left bw -> return ([],[bw])
+
+
+
 getThingAtPoint :: FilePath -> Int -> Int -> Bool -> Bool -> BuildWrapper (OpResult (Maybe String))
 getThingAtPoint fp line col qual typed=withGHCAST fp $ BwGHC.getThingAtPoint line col qual typed
+
+
+getThingAtPointF :: BuildFlags -> FilePath -> Int -> Int -> Bool -> Bool -> BuildWrapper (OpResult (Maybe String))
+getThingAtPointF bf fp line col qual typed=withGHCASTF bf fp $ BwGHC.getThingAtPoint line col qual typed
                 
 getNamesInScope :: FilePath-> BuildWrapper (OpResult (Maybe [String]))
 getNamesInScope fp=withGHCAST fp BwGHC.getGhcNamesInScope
