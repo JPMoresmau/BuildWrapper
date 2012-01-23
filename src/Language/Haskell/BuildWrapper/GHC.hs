@@ -64,14 +64,19 @@ withAST f fp base_dir mod options= do
 withASTNotes ::  (TypecheckedModule -> Ghc a) -> FilePath -> FilePath -> String -> [String] -> IO (OpResult (Maybe a))
 withASTNotes f fp base_dir mod options=do
     let lflags=map noLoc options
-    --putStrLn $ show options
+    -- putStrLn $ show options
     (_leftovers, _) <- parseStaticFlags lflags
     runGhc (Just libdir) $ do
         flg <- getSessionDynFlags
         (flg', _, _) <- parseDynamicFlags flg _leftovers
         GHC.defaultCleanupHandler flg' $ do
                 ref <- GMU.liftIO $ newIORef []
-                setSessionDynFlags flg'  { hscTarget = HscNothing, ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref }
+                -- our options here
+                -- if we use OneShot, we need the other modules to be built
+                -- so we can't use hscTarget = HscNothing
+                -- and it takes a while to actually generate the o and hi files for big modules
+                -- if we use CompManager, it's slower for modules with lots of dependencies but we can keep hscTarget= HscNothing which makes it better for bigger modules
+                setSessionDynFlags flg'  {hscTarget = HscNothing,  ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref }
                 -- $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
                 addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }
                 --c1<-GMU.liftIO getClockTime
@@ -179,6 +184,7 @@ getThingAtPoint line col qual typed fp base_dir mod options= do
         t<-withAST (\tcm->do
               let loc = srcLocSpan $ mkSrcLoc (fsLit fp) line (scionColToGhcCol col)
               uq<-unqualifiedForModule tcm
+              -- liftIO $ putStrLn $ showData TypeChecker 2 (typecheckedSource tcm)
               let f=(if typed then (doThingAtPointTyped $ typecheckedSource tcm) else (doThingAtPointUntyped $ renamedSource tcm))
               --tap<- doThingAtPoint loc qual typed tcm (if typed then (typecheckedSource tcm) else (renamedSource tcm))
               let tap=f loc qual tcm uq
