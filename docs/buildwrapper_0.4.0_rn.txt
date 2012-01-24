@@ -1,0 +1,5 @@
+Buildwrapper 0.4.0: release notes
+
+- accept that Main is not in root src folder
+
+- getBuildFlags method: get Cabal build flags to use with other methods (performance enhancement)

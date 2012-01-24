@@ -357,6 +357,13 @@ getBuiltPath line=let
                 _ -> Nothing
           
 type CabalBuildInfo=(BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[(ModuleName,FilePath)])             
+            
+canonicalizeBuildInfo :: CabalBuildInfo -> IO CabalBuildInfo
+canonicalizeBuildInfo (n1,n2,n3,n4,ls)=do
+        lsC<-mapM (\(m,path)->do
+                pathC<-canonicalizePath path
+                return (m,pathC)) ls
+        return (n1,n2,n3,n4,lsC)
              
 getBuildInfo ::  FilePath  -> BuildWrapper (OpResult (Maybe (LocalBuildInfo,CabalBuildInfo)))
 getBuildInfo fp=do
@@ -368,13 +375,17 @@ getBuildInfo fp=do
                         return $ case mmr2 of
                                 Just (Just a)-> (Just a,bwns2)
                                 _-> (Nothing,bwns)
-        where go f=withCabal Source (\lbi->do
+        where 
+             go f=withCabal Source (\lbi->do
                 fps<-f lbi
+                fpC<-liftIO $ canonicalizePath fp
+                fpsC<-liftIO $ mapM canonicalizeBuildInfo fps
                 --liftIO $ putStrLn $ (show $ length fps)
-                -- liftIO $ mapM_ (\(_,_,_,_,ls)->mapM_ (putStrLn . snd) ls) fps
+                --liftIO $ mapM_ (\(_,_,_,_,ls)->mapM_ (putStrLn . snd) ls) fps
                 let ok=filter (\(_,_,_,_,ls)->not $ null ls ) $
-                        map (\(n1,n2,n3,n4,ls)->(n1,n2,n3,n4,filter (\(_,b)->b==fp || b==("." </> fp)) ls) ) 
-                                fps
+                        --b==fpC || b==("." </> fpC)
+                        map (\(n1,n2,n3,n4,ls)->(n1,n2,n3,n4,filter (\(_,b)->equalFilePath fpC b) ls) ) 
+                                fpsC
                 --liftIO $ putStrLn $ (show $ length ok)      
                 --liftIO $ mapM_ (\(_,_,_,_,ls)->mapM_ (putStrLn . snd) ls) ok          
                 return  $ if null ok

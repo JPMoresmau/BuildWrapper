@@ -268,7 +268,7 @@ instance FromJSON OutlineResult where
 data BuildFlags = BuildFlags {
         bf_ast :: [String],
         bf_preproc :: [String],
-        bg_modName :: Maybe String
+        bf_modName :: Maybe String
         }  
         deriving (Show,Read,Eq,Data,Typeable)
         

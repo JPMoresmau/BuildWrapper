@@ -46,6 +46,7 @@ tests=  [
         testThingAtPoint,
         testThingAtPointNotInCabal,
         testThingAtPointMain,
+        testThingAtPointMainSubFolder ,
         testNamesInScope,
         testInPlaceReference,
         testCabalComponents,
@@ -707,10 +708,44 @@ testThingAtPointMain api= TestLabel "testThingAtPointMain" (TestCase ( do
         configure api root Target          
         (bf3,nsErrors3f)<-getBuildFlags api root rel
         assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
+        assertEqual ("not main module") (Just "Main") (bf_modName bf3)
         (tap1,nsErrors1)<-getThingAtPoint api root bf3 rel 3 16 True True
         assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors1) (null nsErrors1)
         assertEqual "not just typed qualified" (Just "GHC.List.head :: [GHC.Integer.Type.Integer]\n                 -> GHC.Integer.Type.Integer") tap1
-        ))  
+        )) 
+        
+testThingAtPointMainSubFolder :: (APIFacade a)=> a -> Test
+testThingAtPointMainSubFolder api= TestLabel "testThingAtPointMainSubFolder" (TestCase ( do
+        root<-createTestProject
+        let cf=testCabalFile root
+        let cfn=takeFileName cf
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "executable BWTest",
+                "  hs-source-dirs:  src",
+                "  main-is:        src2/A.hs",
+                "  other-modules:  B.D",
+                "  build-depends:  base"]
+        let sf=root </> "src" </> "src2"
+        createDirectory sf        
+        let rel="src" </> "src2" </> "A.hs"        
+        writeFile (root </> rel) $ unlines [  
+                  "module Main where",
+                  "import B.D",
+                  "main=return $ head [2,3,4]"
+                  ]
+        synchronize api root False
+        configure api root Target          
+        (bf3,nsErrors3f)<-getBuildFlags api root rel
+        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
+        assertEqual ("not main module") (Just "Main") (bf_modName bf3)
+        (tap1,nsErrors1)<-getThingAtPoint api root bf3 rel 3 16 True True
+        assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors1) (null nsErrors1)
+        assertEqual "not just typed qualified" (Just "GHC.List.head :: [GHC.Integer.Type.Integer]\n                 -> GHC.Integer.Type.Integer") tap1
+        ))           
 
 testNamesInScope :: (APIFacade a)=> a -> Test
 testNamesInScope api= TestLabel "testNamesInScope" (TestCase ( do
