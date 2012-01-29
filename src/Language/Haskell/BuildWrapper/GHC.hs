@@ -14,7 +14,7 @@
 module Language.Haskell.BuildWrapper.GHC where
 import Language.Haskell.BuildWrapper.Base hiding (Target)
 import Language.Haskell.BuildWrapper.Find
-
+import Language.Haskell.BuildWrapper.GHCStorage
 
 -- import Text.JSON
 -- import Data.DeriveTH
@@ -23,6 +23,7 @@ import Data.Char
 import Data.Generics hiding (Fixity, typeOf)
 import Data.Maybe
 import Data.Monoid
+import Data.Aeson
 
 import Data.IORef
 import qualified Data.List as List
@@ -34,7 +35,7 @@ import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,Warn
 import GHC
 import SrcLoc 
 import GHC.Paths ( libdir )
-import HscTypes ( srcErrorMessages, SourceError)
+import HscTypes ( srcErrorMessages, SourceError, liftIO)
 import Outputable
 import FastString (FastString,unpackFS,concatFS,fsLit,mkFastString)
 import Lexer
@@ -50,6 +51,9 @@ import System.FilePath
 
 import qualified MonadUtils as GMU
 
+
+import qualified Data.ByteString.Lazy as BS
+
 getAST :: FilePath -> FilePath -> String -> [String] -> IO (OpResult (Maybe TypecheckedSource))
 getAST =withASTNotes (\t -> do
         return $ tm_typechecked_source t
@@ -60,6 +64,16 @@ withAST f fp base_dir mod options= do
         (a,_)<-withASTNotes f fp base_dir mod options
         return a
 
+withJSONAST :: (Value -> IO a) -> FilePath -> FilePath ->  String -> [String] -> IO (Maybe a)
+withJSONAST f fp base_dir mod options=do
+        mv<-getGHCInfo fp
+        case mv of 
+                Just v-> f v >>= return . Just 
+                Nothing->do
+                        (mTc,ns)<-getAST fp base_dir mod options
+                        case mTc of
+                                Just tc->f (dataToJSON tc) >>= return . Just 
+                                Nothing -> return Nothing
 
 withASTNotes ::  (TypecheckedModule -> Ghc a) -> FilePath -> FilePath -> String -> [String] -> IO (OpResult (Maybe a))
 withASTNotes f fp base_dir mod options=do
@@ -99,6 +113,7 @@ withASTNotes f fp base_dir mod options=do
                                 l <- loadModule d
                                 --c3<-GMU.liftIO getClockTime
                                 setContext [ms_mod modSum] []
+                                GMU.liftIO $ storeGHCInfo fp (typecheckedSource $ dm_typechecked_module l)
                                 --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
                                 a<-f (dm_typechecked_module l)
 #if __GLASGOW_HASKELL__ < 702                           
@@ -178,13 +193,17 @@ getGhcNamesInScope f base_dir mod options=do
                 --GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
                 return $ map (showSDocDump . ppr ) names)  f base_dir mod options
         return $ fromMaybe[] names
+
+
+
    
 getThingAtPoint :: Int -> Int -> Bool -> Bool -> FilePath -> FilePath -> String -> [String] -> IO String
 getThingAtPoint line col qual typed fp base_dir mod options= do
         t<-withAST (\tcm->do
               let loc = srcLocSpan $ mkSrcLoc (fsLit fp) line (scionColToGhcCol col)
               uq<-unqualifiedForModule tcm
-              -- liftIO $ putStrLn $ showData TypeChecker 2 (typecheckedSource tcm)
+              --liftIO $ debugToJSON (typecheckedSource tcm)
+              --liftIO $ debugFindInJSON line col (typecheckedSource tcm)
               let f=(if typed then (doThingAtPointTyped $ typecheckedSource tcm) else (doThingAtPointUntyped $ renamedSource tcm))
               --tap<- doThingAtPoint loc qual typed tcm (if typed then (typecheckedSource tcm) else (renamedSource tcm))
               let tap=f loc qual tcm uq
@@ -224,6 +243,17 @@ getThingAtPoint line col qual typed fp base_dir mod options= do
                                 then showSDocForUser unqual ((qualifiedResult x) <+> (text $ haddockType x))
                                 else showSDocForUser unqual ((prettyResult x) <+> (text $ haddockType x))   
    
+getThingAtPointJSON :: Int -> Int -> Bool -> Bool -> FilePath -> FilePath -> String -> [String] -> IO String
+getThingAtPointJSON line col qual typed fp base_dir mod options= do
+        mr<-withJSONAST (\v->do
+                let f=overlap line (scionColToGhcCol col)
+                let mf=findInJSON f v
+                BS.putStrLn $ encode (fromJust mf)
+                return $ findInJSONFormatted typed mf
+            ) fp base_dir mod options
+        return $ fromMaybe "no info" mr  
+   
+   
 unqualifiedForModule :: TypecheckedMod m => m -> Ghc PrintUnqualified
 unqualifiedForModule tcm =fromMaybe alwaysQualify `fmap` mkPrintUnqualifiedForModule (moduleInfo tcm)   
    
@@ -247,7 +277,7 @@ unqualifiedForModule tcm =fromMaybe alwaysQualify `fmap` mkPrintUnqualifiedForMo
 --               p t@(TestLoc a b)= if a==line || b==col
 --                        then [show t]
 --                        else []
---               
+--              
    
 --getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
 --getThingAtPoint ts line col= maybeToList  $ something (mkQ Nothing toS) test1

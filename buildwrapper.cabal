@@ -37,7 +37,9 @@ library
                    old-time,
                    aeson >=0.4,
                    unordered-containers,
-                   utf8-string
+                   utf8-string,
+                   bytestring,
+                   attoparsec
   ghc-options:     -Wall -fno-warn-unused-do-bind
   exposed-modules: 
                    Language.Haskell.BuildWrapper.API,
@@ -48,7 +50,8 @@ library
   other-modules:   
                    Language.Haskell.BuildWrapper.Find,
                    Language.Haskell.BuildWrapper.Packages,
-                   Language.Haskell.BuildWrapper.Src
+                   Language.Haskell.BuildWrapper.Src,
+                   Language.Haskell.BuildWrapper.GHCStorage
 
 executable buildwrapper
   hs-source-dirs:  src-exe

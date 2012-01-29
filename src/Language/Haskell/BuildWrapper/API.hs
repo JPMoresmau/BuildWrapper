@@ -323,7 +323,7 @@ getThingAtPoint fp line col qual typed=withGHCAST fp $ BwGHC.getThingAtPoint lin
 
 
 getThingAtPointF :: BuildFlags -> FilePath -> Int -> Int -> Bool -> Bool -> BuildWrapper (OpResult (Maybe String))
-getThingAtPointF bf fp line col qual typed=withGHCASTF bf fp $ BwGHC.getThingAtPoint line col qual typed
+getThingAtPointF bf fp line col qual typed=withGHCASTF bf fp $ BwGHC.getThingAtPointJSON line col qual typed
                 
 getNamesInScope :: FilePath-> BuildWrapper (OpResult (Maybe [String]))
 getNamesInScope fp=withGHCAST fp BwGHC.getGhcNamesInScope
