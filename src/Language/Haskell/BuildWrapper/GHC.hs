@@ -249,7 +249,7 @@ getThingAtPointJSON line col qual typed fp base_dir mod options= do
                 let f=overlap line (scionColToGhcCol col)
                 let mf=findInJSON f v
                 BS.putStrLn $ encode (fromJust mf)
-                return $ findInJSONFormatted typed mf
+                return $ findInJSONFormatted qual typed mf
             ) fp base_dir mod options
         return $ fromMaybe "no info" mr  
    

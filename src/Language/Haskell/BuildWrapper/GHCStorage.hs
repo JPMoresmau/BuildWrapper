@@ -15,6 +15,7 @@ import Var(Var,varType,varName)
 import FastString(FastString)
 import NameSet(NameSet)
 import Name hiding (varName)
+import DataCon (dataConName)
 #if __GLASGOW_HASKELL__ < 700
 import GHC.SYB.Instances
 #endif 
@@ -81,11 +82,11 @@ dataToJSON  =
                      [x] -> x
                      _ -> toJSON sub          
         name :: Name -> Value
-        name  n     = object ["Name" .=  (string $ showSDoc $ ppr n),"HaddockType".= (string $ (if isValOcc (nameOccName n) then "v" else "t"))]
+        name  n     = object ((nameAndModule n) ++["GType" .=  (string $ "Name"),"HType".= (string $ (if isValOcc (nameOccName n) then "v" else "t"))])
         occName :: OccName -> Value
-        occName o   = object ["OccName" .=  (string $ OccName.occNameString o),"HaddockType".= (string $ (if isValOcc o then "v" else "t"))]
+        occName o   = object ["OccName" .=  (string $ OccName.occNameString o),"HType".= (string $ (if isValOcc o then "v" else "t"))]
         modName  :: ModuleName -> Value
-        modName m= object [ "ModuleName" .=  (string $ showSDoc $ ppr m),"HaddockType".= (string $ "m")]
+        modName m= object [ "Name" .=  (string $ showSDoc $ ppr m),"GType" .= (string "ModuleName"),"HType".= (string $ "m")]
         srcSpan :: SrcSpan -> Value
         srcSpan src 
                 | isGoodSrcSpan src   = object[ "SrcSpan" .= toJSON [srcLoc $ srcSpanStart src, srcLoc $ srcSpanEnd src]] 
@@ -96,9 +97,10 @@ dataToJSON  =
                 | otherwise = Null
         var :: Var -> Value
         var  v     = typedVar v (varType v)
-        dataCon    = simple "DataCon". showSDoc . ppr :: DataCon -> Value
-        simple:: T.Text -> String -> Value
-        simple nm v=object [nm .= T.pack v]
+        dataCon ::  DataCon -> Value
+        dataCon  d  = object ((nameAndModule $ dataConName d) ++["GType" .=  (string $ "DataCon")])
+--        simple:: T.Text -> String -> Value
+--        simple nm v=object [nm .= T.pack v]
         simpleV:: T.Text -> Value -> Value
         simpleV nm v=object [nm .= v]
         bagRdrName:: Bag (Located (HsBind RdrName)) -> Value
@@ -114,15 +116,23 @@ dataToJSON  =
                         Just (t,v)-> typedVar v t
                         Nothing->generic ev
         typedVar :: Var -> Type -> Value
-        typedVar v t=object ["Var" .= (string $ showSDoc $ ppr v)
-                                ,"Type" .= (string $ showSDoc $ pprTypeForUser True $ t)
-                                ,"HaddockType".= (string $ (if isValOcc (nameOccName (Var.varName v)) then "v" else "t"))]
+        typedVar v t=object ((nameAndModule $ varName v)++ [
+                                "GType" .= (string "Var")
+                                ,"Type" .= (string $ showSDocUnqual $ pprTypeForUser True $ t)
+                                ,"QType" .= (string $ showSDoc $ pprTypeForUser True $ t)
+                                ,"HType".= (string $ (if isValOcc (nameOccName (Var.varName v)) then "v" else "t"))])
 
         nameSet = const $ Data.Aeson.String "{!NameSet placeholder here!}" :: NameSet -> Value
                 
         postTcType  = const Null :: Type -> Value -- string . showSDoc . ppr 
 
         fixity  = const Null :: GHC.Fixity -> Value --simple "Fixity" . showSDoc . ppr 
+
+        -- nameAndModule :: Name -> [Pair]
+        nameAndModule n=let
+                mn=maybe "" (showSDoc . ppr . moduleName) $ nameModule_maybe n
+                na=showSDocUnqual $ ppr n
+                in ["Module" .= (string mn), "Name" .= (string na)]
 
 debugToJSON :: Data a =>a -> IO()
 debugToJSON = BS.putStrLn . encode . dataToJSON
@@ -140,21 +150,25 @@ debugFindInJSON l c a= do
 type FindFunc=(Value -> Bool)
 
 
-findInJSONFormatted :: Bool -> Maybe Value -> String
-findInJSONFormatted typed (Just (Object m)) | HM.size m >0=let
-        (String name)=head $ HM.elems $ HM.delete "Type" m
+findInJSONFormatted :: Bool -> Bool -> Maybe Value -> String
+findInJSONFormatted qual typed (Just (Object m)) | Just (String name)<-HM.lookup "Name" m=let
         tn=T.unpack name
+        qn=if qual
+                then 
+                     let mo=maybe "" (\(String s)->(T.unpack s)++".") $ HM.lookup "Module" m
+                     in mo ++ tn
+                else tn
         in if typed then
-                        let mt=HM.lookup "Type" m
+                        let mt=HM.lookup (if qual then "QType" else "Type") m
                         in case mt of
-                                Just (String t)->tn ++ " :: " ++ (T.unpack t)
+                                Just (String t)->qn ++ " :: " ++ (T.unpack t)
                                 _ -> tn
                 else
-                       let mt=HM.lookup "HaddockType" m
+                       let mt=HM.lookup "HType" m
                        in case mt of
-                                Just (String t)->tn ++ " " ++ (T.unpack t)
+                                Just (String t)->qn ++ " " ++ (T.unpack t)
                                 _ -> tn
-findInJSONFormatted _ _="no info"
+findInJSONFormatted _ _ _="no info"
 
 findInJSON :: FindFunc -> Value -> Maybe Value
 findInJSON f (Array arr) | not $ V.null arr=let
