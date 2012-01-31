@@ -273,18 +273,16 @@ data BuildFlags = BuildFlags {
         deriving (Show,Read,Eq,Data,Typeable)
         
 instance ToJSON BuildFlags where
-        toJSON=  String . T.pack . show 
-        --object ["a" .= map toJSON a,"p" .= map toJSON p,"m" .= toJSON m]              
-        
+        toJSON (BuildFlags ast preproc modName)=  object ["a" .= map toJSON ast, "p" .=  map toJSON preproc, "m" .= toJSON modName]
 
 instance FromJSON BuildFlags where
-   parseJSON (String s)=return $ (read . T.unpack) s
---   parseJSON (String s)=read $ T.unpack <$> s
---    parseJSON (Object v) =BuildFlags <$>
---                         v .: "a" <*>
---                         v .: "p" <*>
---                         v .: "m"
+   parseJSON (Object v)=BuildFlags <$>
+                         v .: "a" <*>
+                         v .: "p" <*>
+                         v .: "m"
    parseJSON _= mzero  
+   
+
            
 --withCabal :: (GenericPackageDescription -> BuildWrapper a) -> BuildWrapper (Either BWNote a)
 --withCabal f =do

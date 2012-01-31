@@ -1,6 +1,8 @@
 {-# LANGUAGE CPP,OverloadedStrings,PatternGuards #-}
 module Language.Haskell.BuildWrapper.GHCStorage where
 
+import Language.Haskell.BuildWrapper.Base
+
 import Data.Generics
 import System.Directory
 import System.FilePath
@@ -28,39 +30,69 @@ import TypeRep ( Type(..), Pred(..) )
 
 
 import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString as BSS
 import Data.Aeson
 import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.HashMap.Lazy as HM
 import qualified Data.Vector as V
 import Data.Attoparsec.Number (Number(I))
+import System.Time (ClockTime)
 
 
-getGHCInfoFile :: FilePath -> FilePath
-getGHCInfoFile fp= let 
+getInfoFile :: FilePath -> FilePath
+getInfoFile fp= let 
         (dir,file)=splitFileName fp
         in combine dir ("." ++ (addExtension file ".bwinfo"))
 
-clearGHCInfo :: FilePath -> IO()
-clearGHCInfo fp =do
-        let ghcInfoFile=getGHCInfoFile fp
+clearInfo :: FilePath -> IO()
+clearInfo fp =do
+        let ghcInfoFile=getInfoFile fp
         removeFile ghcInfoFile
 
-storeGHCInfo :: FilePath -> TypecheckedSource -> IO()
-storeGHCInfo fp tcs=do
-        let ghcInfoFile=getGHCInfoFile fp
-        let bs=encode $ dataToJSON tcs
-        BS.writeFile ghcInfoFile bs
+storeBuildFlagsInfo :: FilePath -> (BuildFlags,[BWNote]) -> IO()
+storeBuildFlagsInfo fp bf=setStoredInfo fp "BuildFlags"  (toJSON bf)
 
-getGHCInfo :: FilePath -> IO(Maybe Value)
-getGHCInfo fp=do
-       let ghcInfoFile=getGHCInfoFile fp
+storeGHCInfo :: FilePath -> TypecheckedSource -> IO()
+storeGHCInfo fp tcs=setStoredInfo fp "AST"  (dataToJSON tcs)
+
+readGHCInfo :: FilePath -> IO(Maybe Value)
+readGHCInfo fp=do
+       (Object hm)<-readStoredInfo fp
+       return $ HM.lookup "AST" hm
+
+readBuildFlagsInfo :: FilePath -> ClockTime -> IO (Maybe (BuildFlags,[BWNote]))
+readBuildFlagsInfo fp ct=do
+       let ghcInfoFile=getInfoFile fp
        ex<-doesFileExist ghcInfoFile
-       if ex
+       if ex then do
+               ctF<-getModificationTime ghcInfoFile
+               if ctF>ct 
+                   then do
+                       (Object hm)<-readStoredInfo fp
+                       return $ maybe Nothing (\x-> case fromJSON x of
+                                Success a->Just a
+                                Error _->Nothing) $ HM.lookup "BuildFlags" hm
+                   else return Nothing
+             else return Nothing
+
+setStoredInfo :: FilePath -> T.Text -> Value -> IO()
+setStoredInfo fp k v=do
+        let ghcInfoFile=getInfoFile fp
+        (Object hm)<-readStoredInfo fp
+        let hm2=HM.insert k v hm
+        BSS.writeFile ghcInfoFile $ BSS.concat $ BS.toChunks $ encode $ Object hm2
+
+readStoredInfo :: FilePath -> IO Value
+readStoredInfo fp=do
+       let ghcInfoFile=getInfoFile fp
+       ex<-doesFileExist ghcInfoFile
+       mv<-if ex
                 then do
-                       bs<-BS.readFile ghcInfoFile
-                       return $ decode bs
+                       bs<-BSS.readFile ghcInfoFile
+                       return $ decode' $ BS.fromChunks [bs]
                 else return Nothing
+       return $ fromMaybe (object []) mv
 
 dataToJSON :: Data a =>a -> Value
 dataToJSON  = 

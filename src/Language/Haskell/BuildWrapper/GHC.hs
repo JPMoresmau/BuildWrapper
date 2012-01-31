@@ -66,7 +66,7 @@ withAST f fp base_dir mod options= do
 
 withJSONAST :: (Value -> IO a) -> FilePath -> FilePath ->  String -> [String] -> IO (Maybe a)
 withJSONAST f fp base_dir mod options=do
-        mv<-getGHCInfo fp
+        mv<-readGHCInfo fp
         case mv of 
                 Just v-> f v >>= return . Just 
                 Nothing->do

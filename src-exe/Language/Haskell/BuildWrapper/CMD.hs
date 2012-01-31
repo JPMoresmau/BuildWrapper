@@ -33,11 +33,11 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | Write {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath, contents::String}  
         | Configure {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, verbosity::Verbosity,cabalTarget::WhichCabal}
         | Build {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, verbosity::Verbosity,output::Bool,cabalTarget::WhichCabal}
-        | Build1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, buildFlags::String, file:: FilePath}
-        | Outline {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, buildFlags::String, file:: FilePath} 
+        | Build1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath}
+        | Outline {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath} 
         | TokenTypes {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath} 
-        | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, buildFlags::String, file:: FilePath,token::String}
-        | ThingAtPoint {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, buildFlags::String, file:: FilePath, line::Int, column::Int, qualify::Bool, typed::Bool}
+        | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath,token::String}
+        | ThingAtPoint {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath, line::Int, column::Int, qualify::Bool, typed::Bool}
         | NamesInScope {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath} 
         | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String}
         | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String}
@@ -51,7 +51,6 @@ cf=def &= typFile &= help "cabal file"
 fp=def &= typFile &= help "relative path of file to process"
 ff=def &= help "overwrite newer file"
 uf=def &= help "user cabal flags"
-bf=(show $ BuildFlags [] [] Nothing)  &= help "build flags"
 
 v=Normal &= help "verbosity"
 wc=Target &= help "which cabal file to use: original or temporary"
@@ -61,12 +60,12 @@ msynchronize1 = Synchronize1 tf cp cf uf ff fp
 mconfigure = Configure tf cp cf uf v wc
 mwrite= Write tf cp cf uf fp (def &= help "file contents")
 mbuild = Build tf cp cf uf v (def &= help "output compilation and linking result") wc
-mbuild1 = Build1 tf cp cf uf bf fp
+mbuild1 = Build1 tf cp cf uf fp
 mgetbf = GetBuildFlags tf cp cf uf fp
-moutline = Outline tf cp cf uf bf fp
+moutline = Outline tf cp cf uf fp
 mtokenTypes= TokenTypes tf cp cf uf fp
-moccurrences=Occurrences tf cp cf uf bf fp (def &= help "text to search occurrences of" &= name "token")
-mthingAtPoint=ThingAtPoint tf cp cf uf bf fp 
+moccurrences=Occurrences tf cp cf uf fp (def &= help "text to search occurrences of" &= name "token")
+mthingAtPoint=ThingAtPoint tf cp cf uf fp 
         (def &= help "line" &= name "line")
         (def &= help "column" &= name "column")
         (def &= help "qualify results")
@@ -90,12 +89,12 @@ cmdMain = (cmdArgs $
                 handle (Write tf cp cf uf fp s)=run tf cp cf uf (write fp s)
                 handle (Configure tf cp cf uf v wc)=runV v tf cp cf uf (configure wc)
                 handle (Build tf cp cf uf v output wc)=runV v tf cp cf uf (build output wc)
-                handle (Build1 tf cp cf uf bf fp)=runV v tf cp cf uf (build1F (read bf) fp)
+                handle (Build1 tf cp cf uf fp)=runV v tf cp cf uf (build1 fp)
                 handle (GetBuildFlags tf cp cf uf fp)=runV v tf cp cf uf (getBuildFlags fp)
-                handle (Outline tf cp cf uf bf fp)=run tf cp cf uf (getOutlineF (read bf) fp)
+                handle (Outline tf cp cf uf fp)=run tf cp cf uf (getOutline fp)
                 handle (TokenTypes tf cp cf uf fp)=run tf cp cf uf (getTokenTypes fp)
-                handle (Occurrences tf cp cf uf bf fp token)=run tf cp cf uf (getOccurrencesF (read bf) fp token)
-                handle (ThingAtPoint tf cp cf uf bf fp line column qual typed)=run tf cp cf uf (getThingAtPointF (read bf) fp line column qual typed)
+                handle (Occurrences tf cp cf uf fp token)=run tf cp cf uf (getOccurrences fp token)
+                handle (ThingAtPoint tf cp cf uf fp line column qual typed)=run tf cp cf uf (getThingAtPoint fp line column qual typed)
                 handle (NamesInScope tf cp cf uf fp)=run tf cp cf uf (getNamesInScope fp)
                 handle (Dependencies tf cp cf uf)=run tf cp cf uf getCabalDependencies
                 handle (Components tf cp cf uf)=run tf cp cf uf getCabalComponents
