@@ -46,7 +46,7 @@ synchronize force =do
                 "Setup.hs":
                 "Setup.lhs":
                 fileList)
-        return $ (catMaybes (m:m1),ns)
+        return (catMaybes (m : m1), ns)
 
 
 synchronize1 ::  Bool -> FilePath -> BuildWrapper(Maybe FilePath)
