@@ -123,10 +123,16 @@ dataToJSON  =
         srcSpan src 
                 | isGoodSrcSpan src   = object[ "SrcSpan" .= toJSON [srcLoc $ srcSpanStart src, srcLoc $ srcSpanEnd src]] 
                 | otherwise = Null
+#if __GLASGOW_HASKELL__ < 702   
         srcLoc :: SrcLoc -> Value
         srcLoc sl 
                 | isGoodSrcLoc  sl=object ["line" .= toJSON (srcLocLine sl),"column" .= toJSON (srcLocCol sl)]
                 | otherwise = Null
+#else
+        srcLoc :: SrcLoc -> Value
+        srcLoc (RealSrcLoc sl)=object ["line" .= toJSON (srcLocLine sl),"column" .= toJSON (srcLocCol sl)]
+        srcLoc _ = Null        
+#endif
         var :: Var -> Value
         var  v     = typedVar v (varType v)
         dataCon ::  DataCon -> Value

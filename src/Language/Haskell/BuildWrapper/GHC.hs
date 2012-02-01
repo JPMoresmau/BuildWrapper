@@ -35,7 +35,7 @@ import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,Warn
 import GHC
 import SrcLoc 
 import GHC.Paths ( libdir )
-import HscTypes ( srcErrorMessages, SourceError, liftIO)
+import HscTypes ( srcErrorMessages, SourceError)
 import Outputable
 import FastString (FastString,unpackFS,concatFS,fsLit,mkFastString)
 import Lexer
