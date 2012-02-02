@@ -1,5 +1,5 @@
 name:           buildwrapper
-version:        0.4.1
+version:        0.4.2
 cabal-version:  >= 1.8
 build-type:     Simple
 license:        BSD3
@@ -31,7 +31,7 @@ library
                    ghc-syb-utils,
                    text,
                    containers,
-                   vector,
+                   vector >= 0.8,
                    haskell-src-exts,
                    cpphs,
                    old-time,
@@ -57,7 +57,7 @@ executable buildwrapper
   hs-source-dirs:  src-exe
   main-is:         Main.hs
   build-depends:   base < 5, buildwrapper, cmdargs, filepath, Cabal, directory, mtl, ghc, cpphs,haskell-src-exts, old-time, ghc-syb-utils, ghc-paths
-                   ,vector, containers, syb, process, regex-tdfa, text, aeson >=0.4, bytestring
+                   ,vector >= 0.8, containers, syb, process, regex-tdfa, text, aeson >=0.4, bytestring
   ghc-options:     -Wall -fno-warn-unused-do-bind
   other-modules:   Language.Haskell.BuildWrapper.CMD
   
