@@ -84,28 +84,27 @@ getPkgInfos =
       r <- lookForPackageDBIn getLibDir
       case r of
         Nothing   -> ioError $ userError ("Can't find package database in " ++ getLibDir)
-        Just pkgs -> return $ pkgs
+        Just pkgs -> return pkgs
 
     -- Get the user package configuration database
     e_appdir <- try $ getAppUserDataDirectory "ghc"
-    user_conf <- do
-         case e_appdir of
-           Left _       -> return []
-           Right appdir -> do
-             let subdir = currentArch ++ '-':currentOS ++ '-':ghcVersion
-                 dir = appdir </> subdir
-             r <- lookForPackageDBIn dir
-             case r of
-               Nothing   -> return []
-               Just pkgs -> return pkgs
+    user_conf <- case e_appdir of
+                    Left _ -> return []
+                    Right appdir -> do 
+                       let subdir
+                             = currentArch ++ '-' : currentOS ++ '-' : ghcVersion
+                           dir = appdir </> subdir
+                       r <- lookForPackageDBIn dir
+                       case r of
+                           Nothing -> return []
+                           Just pkgs -> return pkgs
 
     -- Process GHC_PACKAGE_PATH, if present:
     e_pkg_path <- try (getEnv "GHC_PACKAGE_PATH")
-    env_stack <- do 
-      case e_pkg_path of
+    env_stack <- case e_pkg_path of
         Left _     -> return []
         Right path -> do
-          pkgs <- mapM readContents [(PkgDirectory pkg) | pkg <- splitSearchPath path]
+          pkgs <- mapM readContents [PkgDirectory pkg | pkg <- splitSearchPath path]
           return $ concat pkgs
 
     -- Send back the combined installed packages list:
@@ -126,7 +125,7 @@ readContents pkgdb =
       if conf_dir_exists
         then do
           files <- getDirectoryContents dbdir
-          return  [ dbdir </> file | file <- files, isSuffixOf ".conf" file]
+          return  [ dbdir </> file | file <- files, ".conf" `isSuffixOf` file]
         else return []
 
     -- | Read a file, ensuring that UTF8 coding is used for GCH >= 6.12
@@ -177,7 +176,7 @@ readContents pkgdb =
               case pkgInfo of
                 ParseOk _ info -> return [info]
                 ParseFailed err  -> do
-                        putStrLn (show err)
+                        (print err)
                         return [emptyInstalledPackageInfo]
         ) (\_->return [emptyInstalledPackageInfo])
         
@@ -193,7 +192,7 @@ readContents pkgdb =
         pkgInfoList <-
           Exception.evaluate pkgs
             `catchError`
-            (\e-> ioError $ userError $ "parsing " ++ dbFile ++ ": " ++ (show e))
+            (\e-> ioError $ userError $ "parsing " ++ dbFile ++ ": " ++ show e)
         return [(takeDirectory dbFile, pkgInfoList)]
 
 -- GHC.Path sets libdir for us...
