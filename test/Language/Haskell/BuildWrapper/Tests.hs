@@ -318,7 +318,7 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         assertBool ("returned false on bool4") bool4
         assertBool ("no errors or warnings on nsErrors4") (not $ null nsErrors4)
         let (nsError5:[])=nsErrors4
-        assertEqualNotesWithoutSpaces "not proper error 5" (BWNote BWWarning "This binding for `pats' shadows the existing binding\n           defined at src\\A.hs:3:1" (BWLocation rel 4 5)) nsError5
+        assertEqualNotesWithoutSpaces "not proper error 5" (BWNote BWWarning ("This binding for `pats' shadows the existing binding\n           defined at "++rel++":3:1") (BWLocation rel 4 5)) nsError5
         )) 
         
 testBuildOutput :: (APIFacade a)=> a -> Test
