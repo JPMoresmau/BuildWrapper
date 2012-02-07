@@ -36,12 +36,15 @@ import FastString (FastString,unpackFS,concatFS,fsLit,mkFastString)
 import Lexer hiding (loc)
 import Bag
 
+#if __GLASGOW_HASKELL__ >= 702
+import SrcLoc
+#endif
+
 #if __GLASGOW_HASKELL__ >= 610
 import StringBuffer
 #endif
 
 import System.FilePath
---import System.Time
 
 import qualified MonadUtils as GMU
 
