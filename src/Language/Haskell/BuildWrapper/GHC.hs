@@ -10,15 +10,11 @@
 -- Stability   : beta
 -- Portability : portable
 -- 
--- Load relevant module in the GHC AST and get GHC messages and thing at point info.
+-- Load relevant module in the GHC AST and get GHC messages and thing at point info. Also use the GHC lexer for syntax highlighting.
 module Language.Haskell.BuildWrapper.GHC where
 import Language.Haskell.BuildWrapper.Base hiding (Target)
-import Language.Haskell.BuildWrapper.Find
 import Language.Haskell.BuildWrapper.GHCStorage
 
--- import Text.JSON
--- import Data.DeriveTH
--- import Data.Derive.JSON
 import Data.Char
 import Data.Generics hiding (Fixity, typeOf)
 import Data.Maybe
@@ -33,13 +29,11 @@ import qualified Data.Text as T
 import DynFlags
 import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,WarningMessages, Message )
 import GHC
-import SrcLoc 
 import GHC.Paths ( libdir )
 import HscTypes ( srcErrorMessages, SourceError)
 import Outputable
 import FastString (FastString,unpackFS,concatFS,fsLit,mkFastString)
-import Lexer
-import PprTyThing ( pprTypeForUser )
+import Lexer hiding (loc)
 import Bag
 
 #if __GLASGOW_HASKELL__ >= 610
@@ -52,31 +46,28 @@ import System.FilePath
 import qualified MonadUtils as GMU
 
 
-import qualified Data.ByteString.Lazy as BS
-
 getAST :: FilePath -> FilePath -> String -> [String] -> IO (OpResult (Maybe TypecheckedSource))
-getAST =withASTNotes (\t -> do
-        return $ tm_typechecked_source t
+getAST =withASTNotes (return . tm_typechecked_source
         )
 
 withAST ::  (TypecheckedModule -> Ghc a) -> FilePath -> FilePath ->  String -> [String] -> IO (Maybe a)
-withAST f fp base_dir mod options= do
-        (a,_)<-withASTNotes f fp base_dir mod options
+withAST f fp base_dir modul options= do
+        (a,_)<-withASTNotes f fp base_dir modul options
         return a
 
 withJSONAST :: (Value -> IO a) -> FilePath -> FilePath ->  String -> [String] -> IO (Maybe a)
-withJSONAST f fp base_dir mod options=do
+withJSONAST f fp base_dir modul options=do
         mv<-readGHCInfo fp
         case mv of 
-                Just v-> f v >>= return . Just 
+                Just v-> fmap Just (f v) 
                 Nothing->do
-                        (mTc,ns)<-getAST fp base_dir mod options
+                        (mTc,_)<-getAST fp base_dir modul options
                         case mTc of
-                                Just tc->f (dataToJSON tc) >>= return . Just 
+                                Just tc->fmap Just (f (dataToJSON tc)) 
                                 Nothing -> return Nothing
 
 withASTNotes ::  (TypecheckedModule -> Ghc a) -> FilePath -> FilePath -> String -> [String] -> IO (OpResult (Maybe a))
-withASTNotes f fp base_dir mod options=do
+withASTNotes f fp base_dir modul options=do
     let lflags=map noLoc options
     -- putStrLn $ show options
     (_leftovers, _) <- parseStaticFlags lflags
@@ -94,7 +85,7 @@ withASTNotes f fp base_dir mod options=do
                 -- $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
                 addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }
                 --c1<-GMU.liftIO getClockTime
-                let modName=mkModuleName mod
+                let modName=mkModuleName modul
                 -- loadWithLogger (logWarnErr ref)
                 res<- load (LoadUpTo modName) -- LoadAllTargets
                            `gcatch` (\(e :: SourceError) -> handle_error ref e)
@@ -105,7 +96,7 @@ withASTNotes f fp base_dir mod options=do
                 --GMU.liftIO $ putStrLn ("load all targets: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
                 case res of 
                         Succeeded -> do
-                                modSum <- getModSummary $ modName
+                                modSum <- getModSummary modName
                                 p <- parseModule modSum
                                 --return $ showSDocDump $ ppr $ pm_mod_summary p
                                 t <- typecheckModule p
@@ -118,12 +109,12 @@ withASTNotes f fp base_dir mod options=do
                                 a<-f (dm_typechecked_module l)
 #if __GLASGOW_HASKELL__ < 702                           
                                 warns <- getWarnings
-                                return $ (Just a,List.nub $ notes++ (reverse $ ghcMessagesToNotes base_dir (warns, emptyBag)))
+                                return (Just a,List.nub $ notes ++ reverse (ghcMessagesToNotes base_dir (warns, emptyBag)))
 #else
                                 notes2 <- GMU.liftIO $ readIORef ref
                                 return $ (Just a,notes2)
 #endif
-                        Failed -> return $ (Nothing,notes)
+                        Failed -> return (Nothing, notes)
         where
 --            logWarnErr :: GhcMonad m => IORef [BWNote] -> Maybe SourceError -> m ()
 --            logWarnErr ref err = do
@@ -138,7 +129,7 @@ withASTNotes f fp base_dir mod options=do
             add_warn_err ref warns errs = do
               let notes = ghcMessagesToNotes base_dir (warns, errs)
               GMU.liftIO $ modifyIORef ref $
-                         \ns -> ( ns ++ notes)
+                         \ ns -> ns ++ notes
         
             handle_error :: GhcMonad m => IORef [BWNote] -> SourceError -> m SuccessFlag
             handle_error ref e = do
@@ -150,15 +141,14 @@ withASTNotes f fp base_dir mod options=do
                return Failed
                
             logAction :: IORef [BWNote] -> Severity -> SrcSpan -> PprStyle -> Message -> IO ()
-            logAction ref s loc ppr msg
+            logAction ref s loc style msg
                 | (Just status)<-bwSeverity s=do
                         let n=BWNote { bwn_location = ghcSpanToBWLocation base_dir loc
                                  , bwn_status = status
-                                 , bwn_title = removeBaseDir base_dir $ removeStatus status $ showSDocForUser (qualName ppr,qualModule ppr) msg
+                                 , bwn_title = removeBaseDir base_dir $ removeStatus status $ showSDocForUser (qualName style,qualModule style) msg
                                  }
-                        modifyIORef ref $  \ns -> ( ns ++ [n])
-                | otherwise=do
-                        return ()
+                        modifyIORef ref $  \ ns -> ns ++ [n]
+                | otherwise=return ()
             
             bwSeverity :: Severity -> Maybe BWNoteStatus
             bwSeverity SevWarning = Just BWWarning       
@@ -166,208 +156,71 @@ withASTNotes f fp base_dir mod options=do
             bwSeverity SevFatal   = Just BWError
             bwSeverity _          = Nothing
             
-        --f $ tm_typechecked_source t
-        --return $ showSDocDump $ ppr $ pm_parsed_source p
-        --return $ showSDocDump $ ppr $ tm_typechecked_source t
-    --return  $ makeObj  [("parse" , (showJSON $ tm_typechecked_source t))]
-    --return r
    
 -- | Convert 'GHC.Messages' to '[BWNote]'.
 --
 -- This will mix warnings and errors, but you can split them back up
 -- by filtering the '[BWNote]' based on the 'bw_status'.
-ghcMessagesToNotes :: FilePath ->  Messages -> [BWNote]
-ghcMessagesToNotes base_dir (warns, errs) =
-             (map_bag2ms (ghcWarnMsgToNote base_dir) warns) ++
-             (map_bag2ms (ghcErrMsgToNote base_dir) errs)
+ghcMessagesToNotes :: FilePath -- ^ base directory
+        ->  Messages -- ^ GHC messages
+        -> [BWNote]
+ghcMessagesToNotes base_dir (warns, errs) = map_bag2ms (ghcWarnMsgToNote base_dir) warns ++
+        map_bag2ms (ghcErrMsgToNote base_dir) errs
   where
     map_bag2ms f =  map f . Bag.bagToList   
    
    
-getGhcNamesInScope  :: FilePath -> FilePath -> String -> [String] -> IO [String]
-getGhcNamesInScope f base_dir mod options=do
+-- | get all names in scope
+getGhcNamesInScope  :: FilePath -- ^ source path
+        -> FilePath -- ^ base directory
+        -> String -- ^ module name
+        -> [String] -- ^ build options
+        -> IO [String]
+getGhcNamesInScope f base_dir modul options=do
         names<-withAST (\_->do
                 --c1<-GMU.liftIO getClockTime
                 names<-getNamesInScope
                 --c2<-GMU.liftIO getClockTime
                 --GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
-                return $ map (showSDocDump . ppr ) names)  f base_dir mod options
+                return $ map (showSDocDump . ppr ) names)  f base_dir modul options
         return $ fromMaybe[] names
 
-
-
-   
-getThingAtPoint :: Int -> Int -> Bool -> Bool -> FilePath -> FilePath -> String -> [String] -> IO String
-getThingAtPoint line col qual typed fp base_dir mod options= do
-        t<-withAST (\tcm->do
-              let loc = srcLocSpan $ mkSrcLoc (fsLit fp) line (scionColToGhcCol col)
-              uq<-unqualifiedForModule tcm
-              --liftIO $ debugToJSON (typecheckedSource tcm)
-              --liftIO $ debugFindInJSON line col (typecheckedSource tcm)
-              let f=(if typed then (doThingAtPointTyped $ typecheckedSource tcm) else (doThingAtPointUntyped $ renamedSource tcm))
-              --tap<- doThingAtPoint loc qual typed tcm (if typed then (typecheckedSource tcm) else (renamedSource tcm))
-              let tap=f loc qual tcm uq
-              --(if typed then (doThingAtPointTyped $ typecheckedSource tcm)
-              -- else doThingAtPointTyped (renamedSource tcm) loc qual tcm
-              return tap) fp base_dir mod options
-        return $ fromMaybe "no info" t
-      where
-            doThingAtPointTyped :: TypecheckedSource -> SrcSpan -> Bool -> TypecheckedModule -> PrintUnqualified -> String
-            doThingAtPointTyped src loc qual tcm uq=let
-                    in_range = overlaps loc
-                    r = searchBindBag in_range noSrcSpan src
-                    unqual = if qual
-                        then alwaysQualify
-                        else uq
-                    --liftIO $ putStrLn $ showData TypeChecker 2 src
-                    in case pathToDeepest r of
-                      Nothing -> "no info"
-                      Just (x,xs) ->
-                        case typeOf (x,xs) of
-                          Just t ->
-                              showSDocForUser unqual
-                                (prettyResult x <+> dcolon <+>
-                                  pprTypeForUser True t)
-                          _ -> showSDocForUser unqual (prettyResult x) --(Just (showSDocDebug (ppr x $$ ppr xs )))
-            doThingAtPointUntyped :: (Search id a, OutputableBndr id) => a -> SrcSpan -> Bool -> TypecheckedModule  -> PrintUnqualified -> String
-            doThingAtPointUntyped src loc qual tcm uq=let
-                    in_range = overlaps loc
-                    r = findHsThing in_range src
-                    unqual = if qual
-                        then neverQualify
-                        else uq
-                    in case pathToDeepest r of
-                      Nothing -> "no info"
-                      Just (x,_) ->
-                        if qual
-                                then showSDocForUser unqual ((qualifiedResult x) <+> (text $ haddockType x))
-                                else showSDocForUser unqual ((prettyResult x) <+> (text $ haddockType x))   
-   
-getThingAtPointJSON :: Int -> Int -> Bool -> Bool -> FilePath -> FilePath -> String -> [String] -> IO String
-getThingAtPointJSON line col qual typed fp base_dir mod options= do
+-- | get the "thing" at a particular point (line/column) in the source
+-- this is using the saved JSON info if available
+getThingAtPointJSON :: Int -- ^ line
+        -> Int -- ^ column
+        -> Bool -- ^ do we want the result qualified by the module
+        -> Bool -- ^ do we want the full type or just the haddock type
+        -> FilePath -- ^ source file path
+        -> FilePath -- ^ base directory
+        -> String  -- ^ module name
+        -> [String] -- ^  build flags
+        -> IO String
+getThingAtPointJSON line col qual typed fp base_dir modul options= do
         mr<-withJSONAST (\v->do
                 let f=overlap line (scionColToGhcCol col)
                 let mf=findInJSON f v
                 return $ findInJSONFormatted qual typed mf
-            ) fp base_dir mod options
+            ) fp base_dir modul options
         return $ fromMaybe "no info" mr  
    
-   
-unqualifiedForModule :: TypecheckedMod m => m -> Ghc PrintUnqualified
-unqualifiedForModule tcm =fromMaybe alwaysQualify `fmap` mkPrintUnqualifiedForModule (moduleInfo tcm)   
-   
---data S a=S String    
---    
---instance Show (S a) where
---        show (S s)=s    
---   
---data TestLoc=TestLoc Int Int
---        deriving (Show,Data,Typeable)
---data Test=Test [TestLoc]
---        deriving (Show,Data,Typeable)
---   
---test1=Test [TestLoc 3 4,TestLoc 2 14,TestLoc 3 16]
---
---getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
---getThingAtPoint ts line col= everything (++) ([] `mkQ` (\x -> p x )) test1
---        -- synthesize [] toS (mkQ Nothing toS) test1
---        where 
---               p :: TestLoc -> [String]
---               p t@(TestLoc a b)= if a==line || b==col
---                        then [show t]
---                        else []
---              
-   
---getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
---getThingAtPoint ts line col= maybeToList  $ something (mkQ Nothing toS) test1
---        where 
---               toS :: TestLoc -> Maybe String
---               toS t@(TestLoc a b)=if a==line || b==col
---                        then Just $ show t
---                        else Nothing
-
-
---getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
---getThingAtPoint ts line col=map show ((listify (mkQ False (isJust . toS)) test1)::[TestLoc])
---        -- maybeToList  $ something (mkQ Nothing toS) test1
---        where 
---               toS :: TestLoc -> Maybe String
---               toS t@(TestLoc a b)=if a==line || b==col
---                        then Just $ show t
---                        else Nothing
-
---newtype C a = C a deriving (Data,Typeable)
---
-----getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
---
---coerce :: a -> C a
---coerce = unsafeCoerce
---uncoerce :: C a -> a
---uncoerce = unsafeCoerce
---
---fmapData :: forall t a b. (Typeable a, Data (t (C a)), Data (t a)) =>
---    (a -> b) -> t a -> t b
---fmapData f input = uc . everything (++) ([] `mkQ` (\(x::C a) -> [coerce (f (uncoerce x))]))
---                    $ (coerce input)
---    where uc = unsafeCoerce
---
---getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
---getThingAtPoint ts line col= --map unLoc $ filter (\(L _ o)->not $ null o) $ fmapData overlap (bagToList ts)
---        map unLoc $ filter (\(L _ o)->not $ null o) $  everything (++) ([] `mkQ` overlap) (bagToList ts)
---   where 
---        --overlap :: forall b1 . (Outputable b1, Typeable b1) =>Located b1  -> Located String
---        overlap :: Located (HsBindLR Id Id)  -> [Located String]
---        overlap (L loc o)= let
---                st=srcSpanStart loc
---                en=srcSpanEnd loc
---                in if (isGoodSrcLoc st) && (isGoodSrcLoc en) && ((srcLocLine st) <= line) && ((srcLocCol st) <=col) && ((srcLocLine en) >= line) && ((srcLocCol en) >=col)
---                        then [L loc $ showSDocDump $ ppr o]
---                        else []
---   
--- [showData TypeChecker 4 ts]
-
-
---getThingAtPoint :: TypecheckedSource -> Int -> Int -> [String]
---getThingAtPoint ts line col= map pr lf
---        --maybeToList  $ something (mkQ Nothing toS) ts -- listify (mkQ False overlap) ts
---   where 
---        lf :: forall b1 . (Outputable b1, Typeable b1) => [Located b1]
---        lf=listify (mkQ False overlap) ts
---        --find :: (Outputable a,Typeable a) => TypecheckedSource -> [Located a]
---        --find = listify $ overlap
---        toS :: forall b1 . (Outputable b1, Typeable b1) =>Located b1  -> Maybe String
---        toS l= if overlap l
---                then Just $ pr l
---                else Nothing
---        pr :: forall b1 . (Outputable b1) => Located b1 -> String
---        pr=showSDocDump . ppr . unLoc
---        --showData TypeChecker 4
---        overlap :: forall b1 . (Outputable b1, Typeable b1) =>Located b1  -> Bool
---        overlap (a::Located b1)= let
---                (L loc _)=a
---                st=srcSpanStart loc
---                en=srcSpanEnd loc
---                in (isGoodSrcLoc st) && (isGoodSrcLoc en) && ((srcLocLine st) <= line) && ((srcLocCol st) <=col) && ((srcLocLine en) >= line) && ((srcLocCol en) >=col)
---                --        overlap _ =False
---   
---   
-
-ghcSpanToLocation :: FilePath -- ^ Base directory
-                  -> GHC.SrcSpan
+  
+-- | convert a GHC SrcSpan to a Span,  ignoring the actual file info
+ghcSpanToLocation ::GHC.SrcSpan
                   -> InFileSpan
-ghcSpanToLocation baseDir sp
+ghcSpanToLocation sp
   | GHC.isGoodSrcSpan sp =let
       (stl,stc)=start sp
       (enl,enc)=end sp
       in mkFileSpan 
                  stl
                  (ghcColToScionCol stc)
-                 (enl)
+                 enl
                  (ghcColToScionCol enc)
   | otherwise = mkFileSpan 0 0 0 0
 
    
-   
+-- | convert a GHC SrcSpan to a BWLocation   
 ghcSpanToBWLocation :: FilePath -- ^ Base directory
                   -> GHC.SrcSpan
                   -> BWLocation
@@ -384,11 +237,12 @@ ghcSpanToBWLocation baseDir sp
                         | otherwise=c:x:xs
                 f c s=c:s
 #if __GLASGOW_HASKELL__ < 702   
-                sfile ss= GHC.srcSpanFile ss
+                sfile = GHC.srcSpanFile
 #else 
                 sfile (RealSrcSpan ss)= GHC.srcSpanFile ss
 #endif 
-                        
+  
+-- | convert a column info from GHC to our system (1 based)                      
 ghcColToScionCol :: Int -> Int
 #if __GLASGOW_HASKELL__ < 700
 ghcColToScionCol c=c+1 -- GHC 6.x starts at 0 for columns
@@ -396,6 +250,7 @@ ghcColToScionCol c=c+1 -- GHC 6.x starts at 0 for columns
 ghcColToScionCol c=c -- GHC 7 starts at 1 for columns
 #endif
 
+-- | convert a column info from our system (1 based) to GHC      
 scionColToGhcCol :: Int -> Int
 #if __GLASGOW_HASKELL__ < 700
 scionColToGhcCol c=c-1 -- GHC 6.x starts at 0 for columns
@@ -427,7 +282,7 @@ ghctokensArbitrary base_dir contents options= do
 #endif
                 let prTS = lexTokenStream sb lexLoc dflags1
                 case prTS of
-                        POk _ toks      -> return $ Right $ (filter ofInterest toks)
+                        POk _ toks      -> return $ Right $ filter ofInterest toks
                         PFailed loc msg -> return $ Left $ ghcErrMsgToNote base_dir $ mkPlainErrMsg loc msg
 
 #if __GLASGOW_HASKELL__ < 702
@@ -479,25 +334,21 @@ lexerFlags =
 -- | Filter tokens whose span appears legitimate (start line is less than end line, start column is
 -- less than end column.)
 ofInterest :: Located Token -> Bool
-ofInterest (L span _) =
-  let  (sl,sc) = start span
-       (el,ec) = end span
+ofInterest (L loc _) =
+  let  (sl,sc) = start loc
+       (el,ec) = end loc
   in (sl < el) || (sc < ec)
 
---toInteractive ::  Location -> Location
---toInteractive l =
---  let (_, sl1, sc1, el1, ec1) = viewLoc l
---  in  mkLocation interactive sl1 sc1 el1 ec1        
        
 -- | Convert a GHC token to an interactive token (abbreviated token type)
-tokenToType :: FilePath -> Located Token -> TokenDef
-tokenToType base_dir (L sp t) = TokenDef (tokenType t) (ghcSpanToLocation base_dir sp)       
+tokenToType :: Located Token -> TokenDef
+tokenToType (L sp t) = TokenDef (tokenType t) (ghcSpanToLocation sp)       
         
 -- | Generate the interactive token list used by EclipseFP for syntax highlighting
 tokenTypesArbitrary :: FilePath -> String -> Bool -> [String] -> IO (Either BWNote [TokenDef])
 tokenTypesArbitrary projectRoot contents literate options = generateTokens projectRoot contents literate options convertTokens id
   where
-    convertTokens = map (tokenToType projectRoot)        
+    convertTokens = map tokenToType        
         
 -- | Extract occurrences based on lexing  
 occurrences :: FilePath     -- ^ Project root or base directory for absolute path conversion
@@ -514,8 +365,8 @@ occurrences projectRoot contents query literate options =
       tokensMatching = filter matchingVal
       matchingVal :: TokenDef -> Bool
       matchingVal (TokenDef v _)=query==v
-      mkTokenDef (L sp t)=TokenDef (tokenValue qualif t) (ghcSpanToLocation projectRoot sp)
-  in generateTokens projectRoot contents literate options (map mkTokenDef) tokensMatching        
+      mkToken (L sp t)=TokenDef (tokenValue qualif t) (ghcSpanToLocation sp)
+  in generateTokens projectRoot contents literate options (map mkToken) tokensMatching        
         
 -- | Parse the current document, generating a TokenDef list, filtered by a function
 generateTokens :: FilePath                        -- ^ The project's root directory
@@ -531,41 +382,16 @@ generateTokens projectRoot contents literate options  xform filterFunc =
        >>= (\result ->
              case result of 
                Right toks ->
-                 let filterResult = filterFunc $ List.sortBy (comparing td_loc) (ppTs ++ (xform toks))
+                 let filterResult = filterFunc $ List.sortBy (comparing td_loc) (ppTs ++ xform toks)
                  --liftIO $ putStrLn $ show tokenList
                  in return $ Right filterResult
                Left n -> return $ Left n
                )
      
 -- | Preprocess some source, returning the literate and Haskell source as tuple.
---preprocessSource ::  String -> Bool -> ([TokenDef],String)
---preprocessSource contents literate=
---        let 
---                (ts1,s2)=if literate then ppSF contents ppSLit else ([],contents) 
---                (ts2,s3)=ppSF s2 ppSCpp
---        in (ts1++ts2,s3)
---        where 
---                ppSF contents2 p= let
---                        linesWithCount=zip (lines contents2) [1..]
---                        (ts,nc,_)= List.foldl' p (Seq.empty,Seq.empty,False) linesWithCount
---                        in (F.toList ts, F.concatMap (++ "\n") nc)
---                ppSCpp :: (Seq.Seq TokenDef,Seq.Seq String,Bool) -> (String,Int) -> (Seq.Seq TokenDef,Seq.Seq String,Bool)
---                ppSCpp (ts2,l2,f) (l,c) 
---                        | f = addPPToken "PP" (l,c) (ts2,l2,'\\' == (last l))
---                        | ('#':_)<-l =addPPToken "PP" (l,c) (ts2,l2,'\\' == (last l)) 
---                        | ("{-# " `List.isPrefixOf` l)=addPPToken "D" (l,c) (ts2,l2,False) 
---                        | otherwise =(ts2,l2 Seq.|> l,False)
---                ppSLit :: (Seq.Seq TokenDef,Seq.Seq String,Bool) -> (String,Int) -> (Seq.Seq TokenDef,Seq.Seq String,Bool)
---                ppSLit (ts2,l2,f) (l,c) 
---                        | "\\begin{code}" `List.isPrefixOf` l=addPPToken "DL" ("\\begin{code}",c) (ts2,l2,True)
---                        | "\\end{code}" `List.isPrefixOf` l=addPPToken "DL" ("\\end{code}",c) (ts2,l2,False)
---                        | f = (ts2,l2 Seq.|> l,True)
---                        | ('>':lCode)<-l=(ts2,l2 Seq.|> (' ':lCode ),f)
---                        | otherwise =addPPToken "DL" (l,c) (ts2,l2,f)  
---                addPPToken :: T.Text -> (String,Int) -> (Seq.Seq TokenDef,Seq.Seq String,Bool) -> (Seq.Seq TokenDef,Seq.Seq String,Bool)
---                addPPToken name (l,c) (ts2,l2,f) =(ts2 Seq.|> (TokenDef name (mkFileSpan c 1 c ((length l)+1))),l2 Seq.|> "",f)
-
-preprocessSource ::  String -> Bool -> ([TokenDef],String)
+preprocessSource ::  String -- ^ the source contents
+        -> Bool -- ^ is the source literate Haskell
+        -> ([TokenDef],String) -- ^ the preprocessor tokens and the final valid Haskell source
 preprocessSource contents literate=
         let 
                 (ts1,s2)=if literate then ppSF contents ppSLit else ([],contents) 
@@ -580,8 +406,8 @@ preprocessSource contents literate=
                 ppSCpp (ts2,l2,f) (l,c) 
                         | (Continue _)<-f = addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f)
                         | ('#':_)<-l =addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f) 
-                        | ("{-# " `List.isPrefixOf` l)=addPPToken "D" (l,c) (ts2,"":l2,f) 
-                        | (Indent n)<-f=(ts2,l:((replicate n (takeWhile (==' ') l))++l2),Start)
+                        | "{-# " `List.isPrefixOf` l=addPPToken "D" (l,c) (ts2,"":l2,f) 
+                        | (Indent n)<-f=(ts2,l:(replicate n (takeWhile (== ' ') l) ++ l2),Start)
                         | otherwise =(ts2,l:l2,Start)
                 ppSLit :: ([TokenDef],[String],PPBehavior) -> (String,Int) -> ([TokenDef],[String],PPBehavior)
                 ppSLit (ts2,l2,f) (l,c) 
@@ -591,9 +417,9 @@ preprocessSource contents literate=
                         | ('>':lCode)<-l=(ts2, (' ':lCode ):l2,f)
                         | otherwise =addPPToken "DL" (l,c) (ts2,"":l2,f)  
                 addPPToken :: T.Text -> (String,Int) -> ([TokenDef],[String],PPBehavior) -> ([TokenDef],[String],PPBehavior)
-                addPPToken name (l,c) (ts2,l2,f) =((TokenDef name (mkFileSpan c 1 c ((length l)+1))):ts2 ,l2,f)
+                addPPToken name (l,c) (ts2,l2,f) =(TokenDef name (mkFileSpan c 1 c (length l + 1)) : ts2 ,l2,f)
                 lineBehavior l f 
-                        | '\\' == (last l) = case f of
+                        | '\\' == last l = case f of
                                 Continue n->Continue (n+1)
                                 _ -> Continue 1
                         | otherwise = case f of
@@ -604,14 +430,16 @@ preprocessSource contents literate=
 data PPBehavior=Continue Int | Indent Int | Start
         deriving Eq
 
+-- | convert a GHC error message to our note type
 ghcErrMsgToNote :: FilePath -> ErrMsg -> BWNote
 ghcErrMsgToNote = ghcMsgToNote BWError
 
+-- | convert a GHC warning message to our note type
 ghcWarnMsgToNote :: FilePath -> WarnMsg -> BWNote
 ghcWarnMsgToNote = ghcMsgToNote BWWarning
 
--- Note that we don *not* include the extra info, since that information is
--- only useful in the case where we don not show the error location directly
+-- Note that we do *not* include the extra info, since that information is
+-- only useful in the case where we do not show the error location directly
 -- in the source.
 ghcMsgToNote :: BWNoteStatus -> FilePath -> ErrMsg -> BWNote
 ghcMsgToNote note_kind base_dir msg =
@@ -625,12 +453,13 @@ ghcMsgToNote note_kind base_dir msg =
     unqual = errMsgContext msg
     show_msg = showSDocForUser unqual
 
+-- | remove the initial status text from a message
 removeStatus :: BWNoteStatus -> String -> String
 removeStatus BWWarning s 
-        | List.isPrefixOf "Warning:" s = List.dropWhile isSpace $ drop 8 s
+        | "Warning:" `List.isPrefixOf` s = List.dropWhile isSpace $ drop 8 s
         | otherwise = s
 removeStatus BWError s 
-        | List.isPrefixOf "Error:" s = List.dropWhile isSpace $ drop 6 s
+        | "Error:" `List.isPrefixOf` s = List.dropWhile isSpace $ drop 6 s
         | otherwise = s        
 
 #if CABAL_VERSION == 106
@@ -638,19 +467,20 @@ deriving instance Typeable StringBuffer
 deriving instance Data StringBuffer
 #endif
 
-mkUnqualTokenValue :: FastString
+-- | make unqualified token
+mkUnqualTokenValue :: FastString -- ^ the name
                    -> T.Text
 mkUnqualTokenValue = T.pack . unpackFS
 
-
-mkQualifiedTokenValue :: FastString
-                      -> FastString
+-- | make qualified token: join the qualifier and the name by a dot
+mkQualifiedTokenValue :: FastString -- ^ the qualifier
+                      -> FastString -- ^ the name
                       -> T.Text
 mkQualifiedTokenValue q a = (T.pack . unpackFS . concatFS) [q, dotFS, a]
 
 -- | Make a token definition from its source location and Lexer.hs token type.
-mkTokenDef :: FilePath -> Located Token -> TokenDef
-mkTokenDef base_dir (L sp t) = TokenDef (mkTokenName t) (ghcSpanToLocation base_dir sp)
+--mkTokenDef :: Located Token -> TokenDef
+--mkTokenDef (L sp t) = TokenDef (mkTokenName t) (ghcSpanToLocation sp)
 
 mkTokenName :: Token -> T.Text
 mkTokenName = T.pack . showConstr . toConstr
@@ -850,7 +680,7 @@ dotFS :: FastString
 dotFS = fsLit "."
 
 tokenValue :: Bool -> Token -> T.Text
-tokenValue _ t | elem (tokenType t) ["K","EK"] = T.drop 2 $ mkTokenName t
+tokenValue _ t | tokenType t `elem` ["K", "EK"] = T.drop 2 $ mkTokenName t
 tokenValue _ (ITvarid a) = mkUnqualTokenValue a
 tokenValue _ (ITconid a) = mkUnqualTokenValue a
 tokenValue _ (ITvarsym a) = mkUnqualTokenValue a
@@ -874,231 +704,15 @@ instance Monoid (Bag a) where
   mappend = unionBags
   mconcat = unionManyBags        
         
---instance JSON SrcLoc
---        where showJSON src 
---                | isGoodSrcLoc src =makeObj [((unpackFS $ srcLocFile src) , (JSArray  [showJSON $ srcLocLine src,showJSON $ srcLocCol src])) ]
---                | otherwise = JSNull
---        
---instance JSON SrcSpan
---        where showJSON src 
---                | isGoodSrcSpan src=makeObj [((unpackFS $ srcSpanFile src) , (JSArray  [showJSON $ srcSpanStartLine src,showJSON $ srcSpanStartCol src,showJSON $ srcSpanEndLine src,showJSON $ srcSpanEndCol src])) ]
---                | otherwise = JSNull     
---  
---instance JSON FastString
---        where showJSON=JSString . toJSString . unpackFS
---  
---instance JSON ModuleName
---        where showJSON=JSString . toJSString . moduleNameString
---        
---instance JSON OccName
---        where showJSON=JSString . toJSString . showSDocDump . ppr  
---
---instance JSON Type
---        where showJSON =JSString . toJSString . showSDocDump . ppr
---  
---instance JSON DataCon
---        where showJSON=JSString . toJSString . showSDocDump . ppr  
---
---instance JSON Unique
---        where showJSON=JSString . toJSString . showSDocDump . ppr  
---
---instance JSON Name
---        where showJSON=JSString . toJSString . showSDocDump . ppr  
---
---instance JSON EvBindsVar
---        where showJSON=JSString . toJSString . showSDocDump . ppr  
---
---instance JSON PackageId
---        where showJSON=JSString . toJSString . showSDocDump . ppr  
---        
---instance (JSON a)=> JSON (Bag a)
---        where showJSON=JSArray . map showJSON . bagToList
---
---instance (JSON a)=> JSON (UniqSet  a)
---        where showJSON=JSArray . map showJSON . uniqSetToList 
---
---instance JSON Rational
---        where showJSON=JSRational False 
---
---instance JSON Var
---        where showJSON v=makeObj [("Name",showJSON $ Var.varName v),("Unique",showJSON $ varUnique v),("Type",showJSON $ varType v)] 
---
---instance JSON RdrName
---        where 
---                showJSON (Unqual on) = JSArray [showJSON on]
---                showJSON (Qual mn on)  = JSArray [showJSON mn,showJSON on]  
---  
---instance(JSON a)=> JSON (Located a)
---        where showJSON (L s o)=case showJSON o of
---                JSObject o->let
---                        ass=fromJSObject o
---                        in JSObject $ toJSObject (("Loc",(showJSON s)):ass)
---                JSNull -> JSNull
---                v->makeObj [("Loc",(showJSON s)),("Object" ,v)]  
---  
--- $( derive makeJSON ''HsModule )
--- $( derive makeJSON ''ImportDecl )      
--- $( derive makeJSON ''HsDocString )   
--- $( derive makeJSON ''HsDecl)   
--- $( derive makeJSON ''WarningTxt)   
---      
---
--- $( derive makeJSON ''InstDecl )
----- $( derive makeJSON ''HsBind )
--- $( derive makeJSON ''HsBindLR )
--- $( derive makeJSON ''DefaultDecl )
--- $( derive makeJSON ''WarnDecl )
--- $( derive makeJSON ''RuleDecl )
--- $( derive makeJSON ''DocDecl )
--- $( derive makeJSON ''HsQuasiQuote )
--- $( derive makeJSON ''SpliceDecl )
--- $( derive makeJSON ''AnnDecl )
--- $( derive makeJSON ''ForeignDecl )
--- $( derive makeJSON ''Sig )
--- $( derive makeJSON ''DerivDecl )
--- $( derive makeJSON ''TyClDecl )
---      
--- $( derive makeJSON ''NewOrData )
--- $( derive makeJSON ''HsTyVarBndr )
--- $( derive makeJSON ''HsPred )
--- $( derive makeJSON ''HsType )
--- $( derive makeJSON ''ConDecl )
--- $( derive makeJSON ''FamilyFlavour )
--- $( derive makeJSON ''ResType )
--- $( derive makeJSON ''HsConDetails )
--- $( derive makeJSON ''HsExplicitFlag )
--- $( derive makeJSON ''ConDeclField )
--- $( derive makeJSON ''Boxity )
--- $( derive makeJSON ''HsSplice )
--- $( derive makeJSON ''HsBang )
--- $( derive makeJSON ''IPName )
--- $( derive makeJSON ''HsExpr )
---  
--- $( derive makeJSON ''HsLit)
--- $( derive makeJSON ''MatchGroup)
--- $( derive makeJSON ''HsStmtContext)
--- $( derive makeJSON ''HsBracket)
--- $( derive makeJSON ''Pat)
--- $( derive makeJSON ''HsWrapper)
--- $( derive makeJSON ''HsCmdTop)
--- $( derive makeJSON ''Fixity)
--- $( derive makeJSON ''HsArrAppType)
--- $( derive makeJSON ''ArithSeqInfo)
--- $( derive makeJSON ''HsRecFields )
--- $( derive makeJSON ''HsRecField )
--- $( derive makeJSON ''StmtLR )
--- $( derive makeJSON ''HsLocalBindsLR )
--- $( derive makeJSON ''HsTupArg )
--- $( derive makeJSON ''HsOverLit )
--- $( derive makeJSON ''OverLitVal )  
--- $( derive makeJSON ''HsValBindsLR )
--- $( derive makeJSON ''HsIPBinds )
--- $( derive makeJSON ''IPBind ) 
--- $( derive makeJSON ''FixitySig ) 
--- $( derive makeJSON ''InlinePragma ) 
--- $( derive makeJSON ''Match ) 
--- $( derive makeJSON ''Activation )
--- $( derive makeJSON ''RuleMatchInfo )
--- $( derive makeJSON ''InlineSpec )
--- $( derive makeJSON ''RecFlag )
--- $( derive makeJSON ''GRHSs )
--- $( derive makeJSON ''GRHS )
--- $( derive makeJSON ''FixityDirection )
--- $( derive makeJSON ''EvTerm )
--- $( derive makeJSON ''TcEvBinds )
--- $( derive makeJSON ''ForeignExport )
--- $( derive makeJSON ''ForeignImport )
--- $( derive makeJSON ''HsMatchContext )
--- $( derive makeJSON ''HsGroup )
--- $( derive makeJSON ''CExportSpec )
--- $( derive makeJSON ''CImportSpec )
--- $( derive makeJSON ''CCallConv )
--- $( derive makeJSON ''CCallTarget )
--- $( derive makeJSON ''EvBind )
--- $( derive makeJSON ''Safety )
--- $( derive makeJSON ''AnnProvenance )
--- $( derive makeJSON ''RuleBndr )
--- $( derive makeJSON ''TcSpecPrags )
--- $( derive makeJSON ''TcSpecPrag )
---
---instance (JSON a)=> JSON (IE a)
---        where
---            showJSON= showJSON . ieName 
---      
--- {--
---         p <- parseModule modSum
---        t <- typecheckModule p
---        d <- desugarModule t
---        l <- loadModule d
---        n <- getNamesInScope
---        c <- return $ coreModule d
--- 
---        g <- getModuleGraph
---        mapM showModule g     
---        return $ (parsedSource d,"/n-----/n",  typecheckedSource d)
---        --} 
---        
---{--
---instance ToJSON SrcLoc
---        where toJSON src 
---                | isGoodSrcLoc src =object [(pack $ unpackFS $ srcLocFile src) .= (Array $ fromList [toJSON $ srcLocLine src,toJSON $ srcLocCol src]) ]
---                | otherwise = Null
---        
---instance ToJSON SrcSpan
---        where toJSON src 
---                | isGoodSrcSpan src=object [(pack $ unpackFS $ srcSpanFile src) .= (Array $ fromList [toJSON $ srcSpanStartLine src,toJSON $ srcSpanStartCol src,toJSON $ srcSpanEndLine src,toJSON $ srcSpanEndCol src]) ]
---                | otherwise = Null
---                        
---instance(ToJSON a)=> ToJSON (Located a)
---        where toJSON (L s o)=case toJSON o of
---                Object o->Object (M.insert "Loc" (toJSON s) o)
---                Null -> Null
---                v->object ["Loc" .= (toJSON s),"Object" .= v]
---
---instance (ToJSON a, OutputableBndr a)=> ToJSON (HsModule a)
---        where toJSON hsm=object ["ModName" .= (toJSON $ hsmodName hsm),
---                "Exports" .= (toJSON $ hsmodExports hsm),
---                "Imports" .= (toJSON $ hsmodImports hsm),
---                "Decls" .= (toJSON $  hsmodDecls hsm)
---                ]
---
---instance ToJSON FastString
---        where toJSON=toJSON . pack . unpackFS
---       
---instance ToJSON ModuleName
---        where toJSON=toJSON . moduleNameString
---        
---instance ToJSON OccName
---        where toJSON=toJSON . showSDocDump . ppr
---        
---instance ToJSON RdrName
---        where 
---                toJSON (Unqual on) = Array $ fromList [toJSON on]
---                toJSON (Qual mn on)  = Array $ fromList [toJSON mn,toJSON on]
---
---instance (ToJSON a)=> ToJSON (IE a)
---        where
---            toJSON= toJSON . ieName --}
---            {--toJSON (IEVar name)= object ["IEVar" .= toJSON name]      
---            toJSON (IEThingAbs name)=object ["IEThingAbs" .= toJSON name]      
---            toJSON (IEThingAll name)= object ["IEThingAll" .= toJSON name]      
---            toJSON (IEThingWith name ns)= object ["IEVar" .= toJSON name]      
---            toJSON (IEModuleContents mn)= object ["IEModuleContents" .= toJSON name]      
---            toJSON (IEGroup i hds)= object ["IEVar" .= toJSON hds]      
---            toJSON (IEDoc hds)=  object ["IEDoc" .= toJSON hds]      
---            toJSON (IEDocNamed s)= object ["IEDocNamed" .= toJSON s]      --}
---{-- 
---instance (ToJSON a)=> ToJSON (ImportDecl a)
---        where
---            toJSON imd=object ["ModName" .= toJSON (ideclName imd),
---                "PackageQualified" .= toJSON (ideclPkgQual imd),
---                "Source" .= toJSON (ideclSource imd),
---                "Qualified" .= toJSON (ideclQualified imd),
---                "As" .= toJSON (ideclAs imd),
---                "Hiding" .= toJSON (ideclHiding imd)
---                ]
---
---instance (ToJSON a, OutputableBndr a)=> ToJSON (HsDecl a)
---        where toJSON =toJSON . showSDocDump . ppr
---        
---        --}
+start, end :: SrcSpan -> (Int,Int)   
+#if __GLASGOW_HASKELL__ < 702   
+start ss= (srcSpanStartLine ss, srcSpanStartCol ss)
+end ss= (srcSpanEndLine ss, srcSpanEndCol ss)
+#else 
+start (RealSrcSpan ss)= (srcSpanStartLine ss, srcSpanStartCol ss)
+start (UnhelpfulSpan _)=error "UnhelpfulSpan in cmpOverlap start"
+end (RealSrcSpan ss)= (srcSpanEndLine ss, srcSpanEndCol ss)   
+end (UnhelpfulSpan _)=error "UnhelpfulSpan in cmpOverlap start"   
+#endif
+        
+        
