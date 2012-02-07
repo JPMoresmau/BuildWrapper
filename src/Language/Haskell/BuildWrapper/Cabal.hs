@@ -358,10 +358,10 @@ getBuiltPath line=let
           
 type CabalBuildInfo=(BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[(ModuleName,FilePath)])             
             
-canonicalizeBuildInfo :: CabalBuildInfo -> IO CabalBuildInfo
+canonicalizeBuildInfo :: CabalBuildInfo -> BuildWrapper CabalBuildInfo
 canonicalizeBuildInfo (n1,n2,n3,n4,ls)=do
         lsC<-mapM (\(m,path)->do
-                pathC<-canonicalizePath path
+                pathC<-canonicalizeFullPath path
                 return (m,pathC)) ls
         return (n1,n2,n3,n4,lsC)
              
@@ -378,8 +378,8 @@ getBuildInfo fp=do
         where 
              go f=withCabal Source (\lbi->do
                 fps<-f lbi
-                fpC<-liftIO $ canonicalizePath fp
-                fpsC<-liftIO $ mapM canonicalizeBuildInfo fps
+                fpC<-canonicalizeFullPath fp
+                fpsC<-mapM canonicalizeBuildInfo fps
                 --liftIO $ putStrLn $ (show $ length fps)
                 --liftIO $ mapM_ (\(_,_,_,_,ls)->mapM_ (putStrLn . snd) ls) fps
                 let ok=filter (\(_,_,_,_,ls)->not $ null ls ) $

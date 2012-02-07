@@ -30,7 +30,7 @@ import System.Info
 import Control.Monad
 
 --import System.Time
-tests :: (APIFacade a)=> [(a -> Test)]
+tests :: (APIFacade a)=> [a -> Test]
 tests=  [
         testSynchronizeAll,
         testConfigureWarnings , testConfigureErrors ,

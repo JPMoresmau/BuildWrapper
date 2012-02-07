@@ -333,6 +333,16 @@ getTargetPath src=do
         liftIO $ createDirectoryIfMissing True (takeDirectory path)
         return path
 
+-- | get the full, canonicalized path of a source
+canonicalizeFullPath :: FilePath -- ^ relative path of source file
+        -> BuildWrapper FilePath
+canonicalizeFullPath fp =do
+        full<-getFullSrc fp 
+        ex<-liftIO $ doesFileExist full -- on OSX with GHC 7.0, canonicalizePath fails on non existing paths, so let's be defensive
+        if ex 
+                then liftIO $ canonicalizePath full
+                else return full
+                
 -- | get the full path of a source
 getFullSrc :: FilePath -- ^ relative path of source file
         -> BuildWrapper FilePath
