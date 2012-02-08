@@ -19,7 +19,7 @@ import Control.Monad.State
 
 
 import Data.Char
-import Data.Function (on)
+import Data.Ord (comparing)
 import Data.List
 import Data.Maybe
 import qualified Data.Map as DM
@@ -46,9 +46,6 @@ import System.Directory
 import System.Exit
 import System.FilePath
 import System.Process
---import System.Time
-
-
 
 getFilesToCopy :: BuildWrapper(OpResult [FilePath])
 getFilesToCopy =do
@@ -58,41 +55,7 @@ getFilesToCopy =do
                 Nothing ->([],bwns); 
 
 
---maybe (return []) (\f->concat $ (map (\(_,_,ls)->ls)) f) getAllFiles
-
-{--withCabal True (\gpd->do
-                let pd=localPkgDescr  gpd
-                let libs=maybe [] extractFromLib $ library pd
-                let exes=concatMap extractFromExe $ executables pd
-                let tests=concatMap extractFromTest $ testSuites pd
-                return (libs ++ exes ++ tests)
-        )
-        where 
-        extractFromLib :: Library -> [FilePath]
-        extractFromLib l=let
-                modules=(exposedModules l) ++ (otherModules $ libBuildInfo l)
-                in copyModules modules (hsSourceDirs  $ libBuildInfo l)
-        extractFromExe :: Executable -> [FilePath]
-        extractFromExe e=let
-                modules= (otherModules $ buildInfo e)
-                hsd=hsSourceDirs  $ buildInfo e
-                in (copyFiles [modulePath e] hsd)++ (copyModules modules hsd)     
-        extractFromTest :: TestSuite -> [FilePath]
-        extractFromTest e =let
-                modules= (otherModules $ testBuildInfo e)
-                hsd=hsSourceDirs  $ testBuildInfo e
-                extras=case testInterface e of
-                       (TestSuiteExeV10 _ mp)->(copyFiles [mp] hsd)
-                       (TestSuiteLibV09 _ mn)->copyModules [mn] hsd
-                       _->[]
-                        in extras++ (copyModules modules hsd)
-        copyModules :: [ModuleName] -> [FilePath] -> [FilePath]
-        copyModules mods=copyFiles (concatMap (\m->[(toFilePath m) <.> "hs",(toFilePath m) <.> "lhs"]) mods)
-        copyFiles :: [FilePath] -> [FilePath] -> [FilePath]
-        copyFiles mods dirs=[d </> m  | m<-mods, d<-dirs]
-        --}
-    
-cabalV :: BuildWrapper (V.Verbosity)
+cabalV :: BuildWrapper V.Verbosity
 cabalV =do
         v<-gets verbosity
         return $ toCabalV v
@@ -112,7 +75,7 @@ cabalBuild output srcOrTgt= do
                 
                 let args=[
                         "build",
-                        "--verbose="++(show $ fromEnum v),
+                        "--verbose=" ++ show (fromEnum v),
                         "--builddir="++dist_dir
                         
                         ] ++ (if output 
@@ -122,31 +85,25 @@ cabalBuild output srcOrTgt= do
                 liftIO $ do
                         cd<-getCurrentDirectory
                         setCurrentDirectory (takeDirectory cf)
-                        -- c1<-getClockTime
-                        -- f<-readFile ((takeDirectory cf) </> "src" </> "A.hs")
-                        -- putStrLn "cabal build start"
                         (ex,out,err)<-readProcessWithExitCode cp args ""
                         putStrLn err
-                        if (isInfixOf  "cannot satisfy -package-id" err) || (isInfixOf  "re-run the 'configure'" err)
+                        if isInfixOf "cannot satisfy -package-id" err ||  isInfixOf "re-run the 'configure'" err
                                 then 
                                         return Nothing
                                 else
                                         do
-                                        --putStrLn ("build out:" ++ out)
-                                        let fps=catMaybes $ map getBuiltPath $ lines out
-                                        -- c2<-getClockTime
-                                        -- putStrLn ("cabal build end" ++ (timeDiffToString  $ diffClockTimes c2 c1))
+                                        let fps=(mapMaybe getBuiltPath (lines out))
                                         let ret=parseBuildMessages err
                                         setCurrentDirectory cd
                                         return $ Just (ex==ExitSuccess,ret,fps)
             )
         case mr of
-                Nothing -> return ((BuildResult False []),n)
+                Nothing -> return (BuildResult False [],n)
                 Just Nothing->do
                                 let setup_config = DSC.localBuildInfoFile dist_dir
                                 liftIO $ removeFile setup_config
                                 cabalBuild output srcOrTgt
-                Just (Just (r,n2,fps)) -> return ((BuildResult r fps),n++n2)
+                Just (Just (r,n2,fps)) -> return (BuildResult r fps, n ++ n2)
 
 cabalConfigure :: WhichCabal-> BuildWrapper (OpResult (Maybe LocalBuildInfo))
 cabalConfigure srcOrTgt= do
@@ -161,70 +118,32 @@ cabalConfigure srcOrTgt= do
                 uf<-gets cabalFlags
                 let args=[
                         "configure",
-                        "--verbose="++(show $ fromEnum v),
+                        "--verbose=" ++ show (fromEnum v),
                         "--user",
                         "--enable-tests",
                         "--builddir="++dist_dir,
                         "--flags="++uf
                         ]
-                {--(_,Just hOut,Just hErr)<-liftIO $ createProcess 
-                        ((proc cp args){
-                                cwd = Just $takeDirectory cf,
-                                std_out = CreatePipe,
-                                std_err = CreatePipe
-                                })--}
                 liftIO $ do
                         cd<-getCurrentDirectory
                         setCurrentDirectory (takeDirectory cf)
-                        --c1<-getClockTime
-                        --c<-readFile cf
-                        --putStrLn dist_dir
-                        --putStrLn (takeDirectory cf)
-                        --putStrLn (show $ fromEnum v)
-                        --putStrLn "cabal configure start"
                         (ex,_,err)<-readProcessWithExitCode cp args ""
-                        --c2<-getClockTime
-                        --putStrLn ("cabal configure end: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
                         putStrLn err
                         let msgs=(parseCabalMessages (takeFileName cf) (takeFileName cp) err) -- ++ (parseCabalMessages (takeFileName cf) out)
-                        --putStrLn ("msgs:"++(show $ length msgs))
                         ret<-case ex of
                                 ExitSuccess  -> do
                                         lbi<-DSC.getPersistBuildConfig dist_dir
                                         return (Just lbi,msgs)
-                                ExitFailure _ -> return $ (Nothing,msgs)
+                                ExitFailure _ -> return (Nothing, msgs)
                         setCurrentDirectory cd
                         return ret
-            else return (Nothing,[])       
-        {-- 
-        v<-gets cabalVerbosity
-        gen_pkg_descr <- liftIO $ readPackageDescription v cf
-        dist_dir<-getDistDir
-        let prog_conf =defaultProgramConfiguration
-        let user_flags = [] --getSessionSelector userFlags     
-        let config_flags = 
-                 (defaultConfigFlags prog_conf)
-                   { configDistPref = Flag dist_dir
-                   , configVerbosity = Flag v
-                   , configUserInstall = Flag True
-                , configTests = Flag True
-              --  , configConfigurationsFlags = map (\(n,v)->(FlagName n,v)) user_flags
-           }
-        lbi<-liftIO $ handle (\(e :: IOError) ->  return $ Left $ BWNote BWError "Cannot configure:" (show e) (BWLocation cf 1 1)) $ do   
-                lbi <- liftIO $ DSC.configure (gen_pkg_descr, (Nothing, []))
-                           config_flags
-                liftIO $ DSC.writePersistBuildConfig dist_dir lbi
-                liftIO $ initialBuildSteps dist_dir (localPkgDescr lbi) lbi v
-                            knownSuffixHandlers
-                return $ Right lbi
-        liftIO $ setCurrentDirectory cd
-        return lbi --}
-        -- cabal configure --buildir dist_dir -v=verbosity --user --enable-tests
+            else do
+                liftIO $ putStrLn ("cabal file"++ cf ++" does not exist")
+                return (Nothing,[])       
 
 getCabalFile :: WhichCabal -> BuildWrapper FilePath
 getCabalFile Source= gets cabalFile
-getCabalFile Target= gets cabalFile
-                         >>=return . takeFileName
+getCabalFile Target= fmap takeFileName (gets cabalFile)
                          >>=getTargetPath
 
 cabalInit :: WhichCabal -> BuildWrapper (OpResult (Maybe LocalBuildInfo))
@@ -250,17 +169,14 @@ cabalInit srcOrTgt= do
                           Nothing -> do
                             liftIO $ putStrLn "configuring because persist build config not present"
                             cabalConfigure srcOrTgt
-                          Just _lbi -> do
-                            return $ (Just _lbi,[])
+                          Just _lbi -> return (Just _lbi, [])
 
 
-withCabal :: WhichCabal -> (LocalBuildInfo -> BuildWrapper (a))-> BuildWrapper (OpResult (Maybe a))  
+withCabal :: WhichCabal -> (LocalBuildInfo -> BuildWrapper a)-> BuildWrapper (OpResult (Maybe a))  
 withCabal srcOrTgt f=do
         (mlbi,notes)<-cabalInit srcOrTgt
         case mlbi of
-                Nothing-> do
-                        --liftIO $ putStrLn (show err)
-                        return $ (Nothing,notes)
+                Nothing-> return (Nothing, notes)
                 Just lbi ->do
                         r<-(f lbi)
                         return (Just r, notes)
@@ -276,24 +192,24 @@ parseCabalMessages cf cabalExe s=let
                 setupExe :: String
                 setupExe=addExtension "setup" $ takeExtension cabalExe
                 dropPrefixes :: [String] -> String -> Maybe String
-                dropPrefixes prfxs s=foldr (stripPrefixIfNeeded s) Nothing prfxs
+                dropPrefixes prfxs s2=foldr (stripPrefixIfNeeded s2) Nothing prfxs
                 stripPrefixIfNeeded :: String -> String -> Maybe String -> Maybe String
-                stripPrefixIfNeeded _ _ j@(Just r)=j
-                stripPrefixIfNeeded s prfx  _=stripPrefix prfx s
+                stripPrefixIfNeeded _ _ j@(Just _)=j
+                stripPrefixIfNeeded s3 prfx  _=stripPrefix prfx s3
                 parseCabalLine :: (Maybe (BWNote,[String]),[BWNote]) -> String ->(Maybe (BWNote,[String]),[BWNote])
                 parseCabalLine (currentNote,ls) l 
-                        | isPrefixOf "Error:" l=(Just (BWNote BWError "" (BWLocation cf 1 1),[dropWhile isSpace $ drop 6 l]),addCurrent currentNote ls)
-                        | isPrefixOf "Warning:" l=let
+                        | "Error:" `isPrefixOf` l=(Just (BWNote BWError "" (BWLocation cf 1 1),[dropWhile isSpace $ drop 6 l]),addCurrent currentNote ls)
+                        | "Warning:" `isPrefixOf` l=let
                                 msg=(dropWhile isSpace $ drop 8 l)
-                                msg2=if isPrefixOf cf msg
-                                        then dropWhile isSpace $ drop ((length cf) + 1) msg
+                                msg2=if cf `isPrefixOf` msg
+                                        then dropWhile isSpace $ drop (length cf + 1) msg
                                         else msg
                                 in (Just (BWNote BWWarning "" (BWLocation cf (extractLine msg2) 1),[msg2]),addCurrent currentNote ls)
-                        | Just s <- dropPrefixes [cabalExe,setupExe] l=
+                        | Just s4 <- dropPrefixes [cabalExe,setupExe] l=
                                 let 
-                                        s2=dropWhile isSpace $ drop 1 s -- drop 1 for ":" that follows file name
-                                in if isPrefixOf "At least the following" s2
-                                                then (Just $ (BWNote BWError "" (BWLocation cf 1 1),[s2]),addCurrent currentNote ls)
+                                        s2=dropWhile isSpace $ drop 1 s4 -- drop 1 for ":" that follows file name
+                                in if "At least the following" `isPrefixOf` s2
+                                                then (Just (BWNote BWError "" (BWLocation cf 1 1), [s2]),addCurrent currentNote ls)
                                                 else 
                                                         let
                                                                 (loc,rest)=span (/= ':') s2
@@ -307,7 +223,7 @@ parseCabalMessages cf cabalExe s=let
                                                                                         else (loc,line',tail msg')
                                                         in (Just (BWNote BWError "" (BWLocation realloc (read line) 1),[msg]),addCurrent currentNote ls)
                         | Just (jcn,msgs)<-currentNote=
-                                if (not $ null l)
+                                if not $ null l
                                         then (Just (jcn,l:msgs),ls)
                                         else (Nothing,ls++[makeNote jcn msgs])
                         | otherwise =(Nothing,ls)
@@ -317,20 +233,21 @@ parseCabalMessages cf cabalExe s=let
                         (_,_,_,ls)=el =~ "\\(line ([0-9]*)\\)" :: (String,String,String,[String])
                         in if null ls
                                 then 1
-                                else (read $ head ls)
+                                else read $ head ls
  
 
 parseBuildMessages :: String -> [BWNote]
 parseBuildMessages s=let
         (m,ls)=foldl parseBuildLine (Nothing,[]) $ lines s
-        in ((nub $ case m of
-                Nothing -> ls
-                Just (bwn,msgs)->ls++[makeNote bwn msgs]))
+        in (nub $
+           case m of
+               Nothing -> ls
+               Just (bwn, msgs) -> ls ++ [makeNote bwn msgs])
         where 
                 parseBuildLine :: (Maybe (BWNote,[String]),[BWNote]) -> String ->(Maybe (BWNote,[String]),[BWNote])
                 parseBuildLine (currentNote,ls) l  
                         | Just (jcn,msgs)<-currentNote=
-                                if (not $ null l) && (' ' ==(head l))
+                                if not (null l) && (' ' == head l)
                                        then (Just (jcn,l:msgs),ls)
                                        else (Nothing,ls++[makeNote jcn msgs])
                         -- | Just fp<-getBuiltPath l=(currentNote,ls,fp:fps)             
@@ -345,7 +262,7 @@ parseBuildMessages s=let
 makeNote :: BWNote  -> [String] ->BWNote
 makeNote bwn msgs=let
         title=dropWhile isSpace $ unlines $ reverse msgs
-        in if isPrefixOf "Warning:" title
+        in if "Warning:" `isPrefixOf` title
                 then bwn{bwn_title=dropWhile isSpace $ drop 8 title,bwn_status=BWWarning}    
                 else bwn{bwn_title=title}      
 
@@ -369,7 +286,7 @@ getBuildInfo ::  FilePath  -> BuildWrapper (OpResult (Maybe (LocalBuildInfo,Caba
 getBuildInfo fp=do
         (mmr,bwns)<-go getReferencedFiles
         case mmr of
-                Just (Just a)->return $ ((Just a),bwns)
+                Just (Just a)->return (Just a, bwns)
                 _ -> do
                         (mmr2,bwns2)<-go getAllFiles
                         return $ case mmr2 of
@@ -390,37 +307,26 @@ getBuildInfo fp=do
                 --liftIO $ mapM_ (\(_,_,_,_,ls)->mapM_ (putStrLn . snd) ls) ok          
                 return  $ if null ok
                         then Nothing
-                        else Just $ (lbi,head ok))
+                        else Just (lbi, head ok))
              
 fileGhcOptions :: (LocalBuildInfo,CabalBuildInfo) -> BuildWrapper(ModuleName,[String])
 fileGhcOptions (lbi,(bi,clbi,fp,isLib,ls))=do
         dist_dir<-getDistDir
         let inplace=dist_dir </> "package.conf.inplace"
         inplaceExist<-liftIO $ doesFileExist inplace
-        let pkg=if isLib
-                then ["-package-name", display $ packageId $ localPkgDescr lbi ]
-                else if inplaceExist
-                        then ["-package-conf",inplace]
-                        else []
-        return (fst $ head ls,pkg++(ghcOptions lbi bi clbi fp))
+        let pkg
+                  | isLib =
+                    ["-package-name", display $ packageId $ localPkgDescr lbi]
+                  | inplaceExist = ["-package-conf", inplace]
+                  | otherwise = []
+        return (fst $ head ls,pkg ++ ghcOptions lbi bi clbi fp)
 
-
-
-            -- libraries, executables, test suite: BuildInfo + all relevant modules
-            -- find if modules included correspond to a component            
-                        -- what about generated modules?
-              
-                -- libraryConfig :: Maybe ComponentLocalBuildInfo executableConfigs :: [(String, ComponentLocalBuildInfo)] testSuiteConfigs :: [(String, ComponentLocalBuildInfo)]
-    
-                        -- ghcOptions :: LocalBuildInfo -> BuildInfo -> ComponentLocalBuildInfo
-           -- -> FilePath -> [String]
-           -- ghcOptions lbi bi clbi odir
 
 fileCppOptions :: CabalBuildInfo -> [String]
 fileCppOptions (bi,_,_,_,_)=cppOptions bi      
 
 cabalExtensions :: CabalBuildInfo -> (ModuleName,[String])
-cabalExtensions (bi,_,_,_,ls)=(fst $ head ls,map show $ ((otherExtensions bi) ++ (defaultExtensions bi) ++ (oldExtensions bi)))      
+cabalExtensions (bi,_,_,_,ls)=(fst $ head ls,map show (otherExtensions bi ++ defaultExtensions bi ++ oldExtensions bi))      
        
 getSourceDirs :: BuildInfo -> [FilePath]       
 getSourceDirs bi=let
@@ -442,7 +348,7 @@ getAllFiles lbi= do
         extractFromLib :: Library -> [(BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath])]
         extractFromLib l=let
                 lib=libBuildInfo l
-                in [(lib,fromJustDebug "extractFromLibAll" $ libraryConfig lbi,buildDir lbi,True,(getSourceDirs lib))]
+                in [(lib, fromJustDebug "extractFromLibAll" $ libraryConfig lbi,buildDir lbi, True, getSourceDirs lib)]
         extractFromExe :: Executable -> (BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath])
         extractFromExe e@Executable{exeName=exeName'}=let
                 ebi=buildInfo e
@@ -476,7 +382,7 @@ getAllFiles lbi= do
                 tf<-gets tempFolder
                 -- exclude every file containing the temp folder name (".buildwrapper" by default)
                 -- which may happen if . is a source path
-                let notMyself=filter (\f->(not $ isInfixOf tf f)) allF
+                let notMyself=filter (not . isInfixOf tf) allF
                 return $ map (\f->(fromString $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) notMyself
      
 getReferencedFiles :: LocalBuildInfo -> BuildWrapper [CabalBuildInfo]
@@ -490,8 +396,9 @@ getReferencedFiles lbi= do
         extractFromLib :: Library -> [CabalBuildInfo]
         extractFromLib l=let
                 lib=libBuildInfo l
-                modules=(PD.exposedModules l) ++ (otherModules lib)
-                in [(lib,fromJustDebug "extractFromLibRef" $ libraryConfig lbi,buildDir lbi,True,(copyModules modules (getSourceDirs lib)))]
+                modules=PD.exposedModules l ++ otherModules lib
+                in [(lib, fromJustDebug "extractFromLibRef" $ libraryConfig lbi,
+                        buildDir lbi, True, copyModules modules (getSourceDirs lib))]
         extractFromExe :: Executable ->CabalBuildInfo
         extractFromExe e@Executable{exeName=exeName'}=let
                 ebi=buildInfo e
@@ -499,7 +406,7 @@ getReferencedFiles lbi= do
                 exeDir    = targetDir </> (exeName' ++ "-tmp")
                 modules= (otherModules ebi)
                 hsd=getSourceDirs ebi
-                in (ebi,fromJustDebug "extractFromExeRef" $ lookup exeName' $ executableConfigs lbi,exeDir,False, copyMain (modulePath e) hsd++ (copyModules modules hsd) ) 
+                in (ebi,fromJustDebug "extractFromExeRef" $ lookup exeName' $ executableConfigs lbi,exeDir,False, copyMain (modulePath e) hsd ++ copyModules modules hsd ) 
         extractFromTest :: TestSuite -> CabalBuildInfo
         extractFromTest t@TestSuite {testName=testName'} =let
                 tbi=testBuildInfo t
@@ -508,19 +415,19 @@ getReferencedFiles lbi= do
                 modules= (otherModules tbi )
                 hsd=getSourceDirs tbi
                 extras=case testInterface t of
-                       (TestSuiteExeV10 _ mp)->(copyMain mp hsd)
-                       (TestSuiteLibV09 _ mn)->copyModules [mn] hsd
-                       _->[]
-                in (tbi,fromJustDebug ("extractFromTestRef:"++testName'++(show $ testSuiteConfigs lbi)) $ lookup testName' $ testSuiteConfigs lbi,testDir,False,extras++ (copyModules modules hsd)       )
+                    (TestSuiteExeV10 _ mp) -> copyMain mp hsd
+                    (TestSuiteLibV09 _ mn) -> copyModules [mn] hsd
+                    _ -> []
+                in (tbi,fromJustDebug ("extractFromTestRef:"++testName' ++ show (testSuiteConfigs lbi)) $ lookup testName' $ testSuiteConfigs lbi,testDir,False,extras ++ copyModules modules hsd       )
         copyModules :: [ModuleName] -> [FilePath] -> [(ModuleName,FilePath)]
-        copyModules mods=copyFiles (concatMap (\m->[(toFilePath m) <.> "hs",((toFilePath m) <.> "lhs")]) mods)
+        copyModules mods=copyFiles (concatMap (\m->[toFilePath m <.> "hs", toFilePath m <.> "lhs"]) mods)
         copyFiles :: [FilePath] -> [FilePath] -> [(ModuleName,FilePath)]
         copyFiles mods dirs=[(fromString $ fileToModule m,d </> m)  | m<-mods, d<-dirs]    
         copyMain :: FilePath  ->[FilePath] ->  [(ModuleName,FilePath)]
-        copyMain fs dirs=map (\d->(fromString "Main",d </> fs)) dirs 
+        copyMain fs = map (\ d -> (fromString "Main", d </> fs)) 
         
 moduleToString :: ModuleName -> String
-moduleToString = concat . intersperse ['.'] . components
+moduleToString = intercalate "." . components
 
 cabalComponents :: BuildWrapper (OpResult [CabalComponent])
 cabalComponents = do
@@ -529,12 +436,14 @@ cabalComponents = do
 
 cabalDependencies :: BuildWrapper (OpResult [(FilePath,[CabalPackage])])
 cabalDependencies = do
-     (rs,ns)<-withCabal Source (\lbi-> do
-        liftIO $ ghandle (\(e :: IOError) -> do
-               putStrLn $ show e
-               return []) $ do
-            pkgs<-liftIO $ getPkgInfos
-            return $ dependencies (localPkgDescr lbi) pkgs
+     (rs,ns)<-withCabal Source (\lbi-> liftIO $
+          ghandle
+            (\ (e :: IOError) ->
+               do (print e)
+                  return [])
+            $
+            do pkgs <- liftIO getPkgInfos
+               return $ dependencies (localPkgDescr lbi) pkgs
             )
      return (fromMaybe [] rs,ns)
 
@@ -545,7 +454,9 @@ dependencies pd pkgs=let
         allC= cabalComponentsFromDescription pd
         gdeps=PD.buildDepends pd
         cpkgs=concat $ DM.elems $ DM.map (\ipis->getDep allC ipis gdeps []) pkgsMap
-        in DM.assocs $ DM.fromListWith (++) $ ((map (\(a,b)->(a,[b])) cpkgs) ++ (map (\(a,_)->(a,[])) pkgs))
+        in DM.assocs $ DM.fromListWith (++)
+                (map (\ (a, b) -> (a, [b])) cpkgs ++
+                map (\ (a, _) -> (a, [])) pkgs)
         where 
                 buildPkgMap :: (FilePath,[InstalledPackageInfo]) -> DM.Map String [(FilePath,InstalledPackageInfo)] -> DM.Map String  [(FilePath,InstalledPackageInfo)]
                 buildPkgMap (fp,ipis) m=foldr (\i dm->let
@@ -553,13 +464,13 @@ dependencies pd pkgs=let
                         vals=DM.lookup key dm
                         newvals=case vals of
                                 Nothing->[(fp,i)]
-                                Just l->sortBy (flip (compare `on` (pkgVersion . sourcePackageId . snd))) ((fp,i):l)
+                                Just l->sortBy (flip (comparing (pkgVersion . sourcePackageId . snd))) ((fp,i):l)
                         in DM.insert key newvals dm
                         ) m ipis
                 getDep :: [CabalComponent] -> [(FilePath,InstalledPackageInfo)] -> [Dependency]-> [(FilePath,CabalPackage)] -> [(FilePath,CabalPackage)]
                 getDep _ [] _ acc= acc
                 getDep allC ((fp,InstalledPackageInfo{sourcePackageId=i,exposed=e,IPI.exposedModules=ems}):xs) deps acc= let
-                        (ds,deps2)=partition (\(Dependency n v)->((pkgName i)==n) && withinRange (pkgVersion i) v) deps -- find if version is referenced, remove the referencing component so that it doesn't match an older version
+                        (ds,deps2)=partition (\(Dependency n v)->(pkgName i == n) && withinRange (pkgVersion i) v) deps -- find if version is referenced, remove the referencing component so that it doesn't match an older version
                         cps=if null ds then [] else allC
                         mns=map display ems
                         in getDep allC xs deps2 ((fp,CabalPackage (display $ pkgName i) (display $ pkgVersion i) e cps mns): acc) -- build CabalPackage structure
@@ -567,20 +478,12 @@ dependencies pd pkgs=let
                 --DM.map (sortBy (flip (compare `on` (pkgVersion . sourcePackageId . snd)))) $ DM.fromListWith (++) (map (\i->((display $ pkgName $ sourcePackageId i),[i]) ) ipis) --concatenates all version and sort them, most recent first
         
 cabalComponentsFromDescription :: PD.PackageDescription -> [CabalComponent]
-cabalComponentsFromDescription pd= 
-      (if isJust (PD.library pd) then [CCLibrary (PD.buildable $ PD.libBuildInfo $ fromJust (PD.library pd))] else []) ++
-      [ CCExecutable (PD.exeName e) (PD.buildable $ PD.buildInfo e)
-      | e <- PD.executables pd ]
-       ++ [ CCTestSuite (PD.testName e) (PD.buildable $ PD.testBuildInfo e)
-        | e <- PD.testSuites pd ]
+cabalComponentsFromDescription pd= [CCLibrary
+           (PD.buildable $ PD.libBuildInfo $ fromJust (PD.library pd))
+         | isJust (PD.library pd)] ++
+              [ CCExecutable (PD.exeName e) (PD.buildable $ PD.buildInfo e)
+              | e <- PD.executables pd ]
+               ++ [ CCTestSuite (PD.testName e) (PD.buildable $ PD.testBuildInfo e)
+                | e <- PD.testSuites pd ]
 
-
---class ToBWNote a where
---        toBWNote :: a -> BWNote
-
---peErrorToBWNote :: FilePath -> PError -> BWNote
---peErrorToBWNote cf (AmbigousParse t ln)= BWNote BWError "AmbigousParse" t (BWLocation cf ln 1)
---peErrorToBWNote cf (NoParse t ln)      = BWNote BWError "NoParse" t (BWLocation cf ln 1)
---peErrorToBWNote cf (TabsError ln)      = BWNote BWError "TabsError" "" (BWLocation cf ln 1)    
---peErrorToBWNote cf (FromString t mln)  = BWNote BWError "FromString" t (BWLocation cf (fromMaybe 1 mln) 1)    
 
