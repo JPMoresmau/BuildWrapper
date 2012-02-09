@@ -13,5 +13,6 @@ module Main where
 
 import Language.Haskell.BuildWrapper.CMD
 
+-- | main entry point
 main::IO()
 main = cmdMain

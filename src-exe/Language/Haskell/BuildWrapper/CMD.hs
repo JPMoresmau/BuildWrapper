@@ -13,9 +13,9 @@
 module Language.Haskell.BuildWrapper.CMD where
 
 import Language.Haskell.BuildWrapper.API
-import Language.Haskell.BuildWrapper.Base
+import Language.Haskell.BuildWrapper.Base hiding (tempFolder,cabalPath, cabalFile, cabalFlags,verbosity)
 import Control.Monad.State
-import System.Console.CmdArgs hiding (Verbosity(..))
+import System.Console.CmdArgs hiding (Verbosity(..),verbosity)
 
 import Paths_buildwrapper
 
@@ -28,6 +28,7 @@ type CabalFile = FilePath
 type CabalPath = FilePath
 type TempFolder = FilePath
 
+-- | all the different actions and their parameters
 data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, force::Bool}
         | Synchronize1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, force::Bool, file:: FilePath}
         | Write {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath, contents::String}  
@@ -44,63 +45,91 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | GetBuildFlags {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath}
     deriving (Show,Read,Data,Typeable)    
   
- 
+
+tf :: TempFolder
 tf=".dist-buildwrapper" &= typDir &= help "temporary folder, relative to cabal file folder"
+cp :: CabalPath
 cp="cabal" &= typFile &= help "location of cabal executable" 
+cf :: CabalFile
 cf=def &= typFile &= help "cabal file" 
+fp :: FilePath
 fp=def &= typFile &= help "relative path of file to process"
+ff :: Bool
 ff=def &= help "overwrite newer file"
+uf :: String
 uf=def &= help "user cabal flags"
 
+v :: Verbosity
 v=Normal &= help "verbosity"
+wc :: WhichCabal
 wc=Target &= help "which cabal file to use: original or temporary"
 
+msynchronize :: BWCmd
 msynchronize = Synchronize tf cp cf uf ff
+msynchronize1 :: BWCmd
 msynchronize1 = Synchronize1 tf cp cf uf ff fp
+mconfigure :: BWCmd
 mconfigure = Configure tf cp cf uf v wc
+mwrite :: BWCmd
 mwrite= Write tf cp cf uf fp (def &= help "file contents")
+mbuild :: BWCmd
 mbuild = Build tf cp cf uf v (def &= help "output compilation and linking result") wc
+mbuild1 :: BWCmd
 mbuild1 = Build1 tf cp cf uf fp
+mgetbf :: BWCmd
 mgetbf = GetBuildFlags tf cp cf uf fp
+moutline :: BWCmd
 moutline = Outline tf cp cf uf fp
+mtokenTypes :: BWCmd
 mtokenTypes= TokenTypes tf cp cf uf fp
+moccurrences :: BWCmd
 moccurrences=Occurrences tf cp cf uf fp (def &= help "text to search occurrences of" &= name "token")
+mthingAtPoint :: BWCmd
 mthingAtPoint=ThingAtPoint tf cp cf uf fp 
         (def &= help "line" &= name "line")
         (def &= help "column" &= name "column")
         (def &= help "qualify results")
         (def &= help "type results")
+mnamesInScope :: BWCmd
 mnamesInScope=NamesInScope tf cp cf uf fp 
+mdependencies :: BWCmd
 mdependencies=Dependencies tf cp cf uf
+mcomponents :: BWCmd
 mcomponents=Components tf cp cf uf
 
-cmdMain = (cmdArgs $ 
-                modes [msynchronize, msynchronize1, mconfigure,mwrite,mbuild,mbuild1,mgetbf, moutline, mtokenTypes,moccurrences,mthingAtPoint,mnamesInScope,mdependencies,mcomponents]
-                &= helpArg [explicit, name "help", name "h"]
-                &= help "buildwrapper executable"
-                &= program "buildwrapper"
-                &= summary ("buildwrapper executable, version " ++ (showVersion version))
-                )
-        >>= handle
+-- | main method for command handling
+cmdMain :: IO ()
+cmdMain = cmdArgs
+  (modes
+     [msynchronize, msynchronize1, mconfigure, mwrite, mbuild, mbuild1,
+      mgetbf, moutline, mtokenTypes, moccurrences, mthingAtPoint,
+      mnamesInScope, mdependencies, mcomponents]
+     &= helpArg [explicit, name "help", name "h"]
+     &= help "buildwrapper executable"
+     &= program "buildwrapper"
+     &=
+     summary
+       ("buildwrapper executable, version " ++ showVersion version))
+  >>= handle
         where 
                 handle ::BWCmd -> IO ()
-                handle (Synchronize tf cp cf uf ff )=run tf cp cf uf (synchronize ff)
-                handle (Synchronize1 tf cp cf uf ff fp)=run tf cp cf uf (synchronize1 ff fp)
-                handle (Write tf cp cf uf fp s)=run tf cp cf uf (write fp s)
-                handle (Configure tf cp cf uf v wc)=runV v tf cp cf uf (configure wc)
-                handle (Build tf cp cf uf v output wc)=runV v tf cp cf uf (build output wc)
-                handle (Build1 tf cp cf uf fp)=runV v tf cp cf uf (build1 fp)
-                handle (GetBuildFlags tf cp cf uf fp)=runV v tf cp cf uf (getBuildFlags fp)
-                handle (Outline tf cp cf uf fp)=run tf cp cf uf (getOutline fp)
-                handle (TokenTypes tf cp cf uf fp)=run tf cp cf uf (getTokenTypes fp)
-                handle (Occurrences tf cp cf uf fp token)=run tf cp cf uf (getOccurrences fp token)
-                handle (ThingAtPoint tf cp cf uf fp line column qual typed)=run tf cp cf uf (getThingAtPoint fp line column qual typed)
-                handle (NamesInScope tf cp cf uf fp)=run tf cp cf uf (getNamesInScope fp)
-                handle (Dependencies tf cp cf uf)=run tf cp cf uf getCabalDependencies
-                handle (Components tf cp cf uf)=run tf cp cf uf getCabalComponents
-                run:: (ToJSON a) => FilePath -> FilePath -> FilePath -> String -> StateT BuildWrapperState IO a -> IO ()
-                run = runV Normal
-                runV:: (ToJSON a) => Verbosity -> FilePath -> FilePath -> FilePath -> String -> StateT BuildWrapperState IO a -> IO ()
-                runV v tf cp cf uf f=(evalStateT f (BuildWrapperState tf cp cf v uf))
+                handle c@Synchronize{force=f}=runCmd c (synchronize f)
+                handle c@Synchronize1{force=f,file=fi}=runCmd c (synchronize1 f fi)
+                handle c@Write{file=fi,contents=s}=runCmd c (write fi s)
+                handle c@Configure{cabalTarget=w}=runCmd c (configure w)
+                handle c@Build{verbosity=ve,output=o,cabalTarget=w}=runCmdV ve c (build o w)
+                handle c@Build1{file=fi}=runCmd c (build1 fi)
+                handle c@GetBuildFlags{file=fi}=runCmd c (getBuildFlags fi)
+                handle c@Outline{file=fi}=runCmd c (getOutline fi)
+                handle c@TokenTypes{file=fi}=runCmd c (getTokenTypes fi)
+                handle c@Occurrences{file=fi,token=t}=runCmd c (getOccurrences fi t)
+                handle c@ThingAtPoint{file=fi,line=l,column=co,qualify=q, typed=t}=runCmd c (getThingAtPoint fi l co q t )
+                handle c@NamesInScope{file=fi}=runCmd c (getNamesInScope fi)
+                handle c@Dependencies{}=runCmd c getCabalDependencies
+                handle c@Components{}=runCmd c getCabalComponents
+                runCmd :: (ToJSON a) => BWCmd -> StateT BuildWrapperState IO a -> IO ()
+                runCmd=runCmdV Normal
+                runCmdV:: (ToJSON a) => Verbosity -> BWCmd -> StateT BuildWrapperState IO a -> IO ()
+                runCmdV vb cmd f=evalStateT f (BuildWrapperState (tempFolder cmd) (cabalPath cmd) (cabalFile cmd) vb (cabalFlags cmd))
                                 >>= BS.putStrLn . BS.append "build-wrapper-json:" . encode
                         
