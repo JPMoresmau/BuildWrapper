@@ -49,16 +49,33 @@ import System.FilePath
 import qualified MonadUtils as GMU
 
 
-getAST :: FilePath -> FilePath -> String -> [String] -> IO (OpResult (Maybe TypecheckedSource))
+-- | get the GHC typechecked AST
+getAST :: FilePath -- ^ the source file
+        -> FilePath -- ^ the base directory
+        ->  String -- ^ the module name 
+        -> [String] -- ^ the GHC options 
+        -> IO (OpResult (Maybe TypecheckedSource))
 getAST =withASTNotes (return . tm_typechecked_source
         )
 
-withAST ::  (TypecheckedModule -> Ghc a) -> FilePath -> FilePath ->  String -> [String] -> IO (Maybe a)
+-- | perform an action on the GHC Typechecked module
+withAST ::  (TypecheckedModule -> Ghc a) -- ^ the action
+        -> FilePath -- ^ the source file
+        -> FilePath -- ^ the base directory
+        ->  String -- ^ the module name 
+        -> [String] -- ^ the GHC options
+        -> IO (Maybe a)
 withAST f fp base_dir modul options= do
         (a,_)<-withASTNotes f fp base_dir modul options
         return a
 
-withJSONAST :: (Value -> IO a) -> FilePath -> FilePath ->  String -> [String] -> IO (Maybe a)
+-- | perform an action on the GHC JSON AST
+withJSONAST :: (Value -> IO a) -- ^ the action
+        -> FilePath -- ^ the source file
+        -> FilePath -- ^ the base directory
+        ->  String -- ^ the module name 
+        -> [String] -- ^ the GHC options
+        -> IO (Maybe a)
 withJSONAST f fp base_dir modul options=do
         mv<-readGHCInfo fp
         case mv of 
@@ -69,7 +86,13 @@ withJSONAST f fp base_dir modul options=do
                                 Just tc->fmap Just (f (dataToJSON tc)) 
                                 Nothing -> return Nothing
 
-withASTNotes ::  (TypecheckedModule -> Ghc a) -> FilePath -> FilePath -> String -> [String] -> IO (OpResult (Maybe a))
+-- | the main method loading the source contents into GHC
+withASTNotes ::  (TypecheckedModule -> Ghc a) -- ^ the final action to perform on the result
+         -> FilePath -- ^ the source file
+        -> FilePath -- ^ the base directory
+        ->  String -- ^ the module name 
+        -> [String] -- ^ the GHC options 
+        -> IO (OpResult (Maybe a))
 withASTNotes f fp base_dir modul options=do
     let lflags=map noLoc options
     -- putStrLn $ show options

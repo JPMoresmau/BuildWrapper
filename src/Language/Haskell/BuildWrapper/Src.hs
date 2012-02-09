@@ -1,5 +1,4 @@
 {-# LANGUAGE TypeSynonymInstances,OverloadedStrings #-}
-{-# OPTIONS_GHC -fno-warn-orphans #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.Src
 -- Author      : JP Moresmau
@@ -19,26 +18,24 @@ import Language.Haskell.Exts.Annotated
 
 
 import qualified Data.Text as T
---import Text.JSON
---import Data.DeriveTH
---import Data.Derive.JSON
 
-getHSEAST :: String -> [String] -> IO (ParseResult (Module SrcSpanInfo, [Comment]))
+-- | get the AST
+getHSEAST :: String -- ^ input text
+        -> [String] -- ^ options
+        -> IO (ParseResult (Module SrcSpanInfo, [Comment]))
 getHSEAST input options=do
-        --putStrLn $ show options
         let exts=map classifyExtension options
-        let extsFull=if elem "-fglasgow-exts" options
+        let extsFull=if "-fglasgow-exts" `elem` options
                 then exts ++ glasgowExts
                 else exts
-        --putStrLn input
-        --putStrLn $ show exts
         -- fixities necessary (see http://trac.haskell.org/haskell-src-exts/ticket/189 and https://sourceforge.net/projects/eclipsefp/forums/forum/371922/topic/4808590)
-        let mode=defaultParseMode {extensions=extsFull,ignoreLinePragmas=False,ignoreLanguagePragmas=False,fixities = Just baseFixities} 
-        return $ parseFileContentsWithComments mode input
-        --return $ makeObj  [("parse" , (showJSON $ pr))]
-        
-getHSEOutline :: (Module SrcSpanInfo, [Comment]) -> [OutlineDef]
-getHSEOutline (Module _ _ _ _ decls,comments)=concat $ map declOutline decls
+        let parseMode=defaultParseMode {extensions=extsFull,ignoreLinePragmas=False,ignoreLanguagePragmas=False,fixities = Just baseFixities} 
+        return $ parseFileContentsWithComments parseMode input
+
+-- | get the ouline from the AST        
+getHSEOutline :: (Module SrcSpanInfo, [Comment]) -- ^ the commented AST (even though we ignore comments now)
+        -> [OutlineDef]
+getHSEOutline (Module _ _ _ _ decls,_)=concatMap declOutline decls
         where 
                 declOutline :: Decl SrcSpanInfo -> [OutlineDef]
                 declOutline (DataFamDecl l _ h _) = [OutlineDef (headDecl h) [Data,Family] (makeSpan l) []]
@@ -47,7 +44,7 @@ getHSEOutline (Module _ _ _ _ decls,comments)=concat $ map declOutline decls
                 declOutline (DataDecl l _ _ h cons _) = [OutlineDef (headDecl h) [Data] (makeSpan l) (map qualConDeclOutline cons)]
                 --declOutline (GDataDecl l _ _ h cons _) = [OutlineDef (headDecl h) [Data] (makeSpan l) (map qualConDeclOutline cons)]
                 declOutline (TypeFamDecl l h _) = [OutlineDef (headDecl h) [Type,Family] (makeSpan l) []]
-                declOutline (TypeInsDecl l t1 _) = [OutlineDef ((typeDecl t1) ) [Type,Instance] (makeSpan l) []] -- ++ " "++(typeDecl t2)
+                declOutline (TypeInsDecl l t1 _) = [OutlineDef (typeDecl t1) [Type,Instance] (makeSpan l) []] -- ++ " "++(typeDecl t2)
                 declOutline (TypeDecl l h _) = [OutlineDef (headDecl h) [Type] (makeSpan l) []]
                 declOutline (ClassDecl l _ h _ cdecls) = [OutlineDef (headDecl h) [Class] (makeSpan l) (maybe [] (concatMap classDecl) cdecls)]
                 declOutline (FunBind l matches) = [OutlineDef (matchDecl $ head matches) [Function] (makeSpan l) []]
@@ -70,16 +67,16 @@ getHSEOutline (Module _ _ _ _ decls,comments)=concat $ map declOutline decls
                 typeDecl (TyForall _ _ _ t)=typeDecl t
                 typeDecl (TyVar _ n )=nameDecl n
                 typeDecl (TyCon _ qn )=qnameDecl qn
-                typeDecl (TyList _ t )=T.concat  ["[",(typeDecl t),"]"]
+                typeDecl (TyList _ t )=T.concat  ["[", typeDecl t, "]"]
                 typeDecl (TyParen _ t )=typeDecl t
-                typeDecl (TyApp _ t1 t2)=T.concat  [(typeDecl t1) , " ",(typeDecl t2)]
+                typeDecl (TyApp _ t1 t2)=T.concat  [typeDecl t1, " ", typeDecl t2]
                 typeDecl _ = ""
                 matchDecl :: Match a -> T.Text
                 matchDecl (Match _ n _ _ _)=nameDecl n     
                 matchDecl (InfixMatch _ _ n _ _ _)=nameDecl n    
                 iheadDecl :: InstHead a -> T.Text
-                iheadDecl (IHead _ qn ts)= T.concat  [(qnameDecl qn) , " " , (T.intercalate " " (map typeDecl ts))]
-                iheadDecl (IHInfix _ t1 qn t2)= T.concat  [(typeDecl t1), " ", (qnameDecl qn) , " " , (typeDecl t2)]
+                iheadDecl (IHead _ qn ts)= T.concat  [qnameDecl qn, " ", T.intercalate " " (map typeDecl ts)]
+                iheadDecl (IHInfix _ t1 qn t2)= T.concat  [typeDecl t1, " ", qnameDecl qn, " ", typeDecl t2]
                 iheadDecl (IHParen _ i)=iheadDecl i
                 conDecl :: ConDecl SrcSpanInfo -> (T.Text,[OutlineDef])
                 conDecl (ConDecl _ n _)=(nameDecl n,[])
@@ -101,10 +98,11 @@ getHSEOutline (Module _ _ _ _ decls,comments)=concat $ map declOutline decls
                 spliceName :: Splice SrcSpanInfo -> T.Text
                 spliceName (IdSplice _ n)=T.pack n
                 spliceName (ParenSplice  _ e)=spliceDecl e
-
 getHSEOutline _ = []
 
-getHSEImportExport :: (Module SrcSpanInfo, [Comment]) -> ([ExportDef],[ImportDef])
+-- | get the import/export declarations
+getHSEImportExport :: (Module SrcSpanInfo, [Comment]) -- ^ the AST 
+        -> ([ExportDef],[ImportDef])
 getHSEImportExport (Module _ mhead _ imps _,_)=(headExp mhead,impDefs imps)
         where
                 headExp :: Maybe (ModuleHead SrcSpanInfo) ->[ExportDef] 
@@ -134,7 +132,7 @@ getHSEImportExport (Module _ mhead _ imps _,_)=(headExp mhead,impDefs imps)
                 child (IAbs l n)=ImportSpecDef (nameDecl n) IEAbs (makeSpan l) []
                 child (IThingAll l n) = ImportSpecDef (nameDecl n) IEThingAll (makeSpan l) []
                 child (IThingWith l n cns) = ImportSpecDef (nameDecl n) IEThingWith (makeSpan l) (map cnameDecl cns)
-                
+getHSEImportExport _=([],[])                
 
 nameDecl :: Name a -> T.Text
 nameDecl (Ident _ s)=T.pack s
@@ -149,6 +147,7 @@ qnameDecl _ =""
 mnnameDecl :: ModuleName a -> T.Text
 mnnameDecl (ModuleName _ s)=T.pack s
  
+-- | convert a HSE span into a buildwrapper span 
 makeSpan :: SrcSpanInfo -> InFileSpan
 makeSpan si=let
         sis=srcInfoSpan si
@@ -156,89 +155,9 @@ makeSpan si=let
         (el,ec)=srcSpanEnd sis      
         in   InFileSpan (InFileLoc sl sc) (InFileLoc el ec)
    
+-- | all known extensions, as string   
 knownExtensionNames :: [String]
 knownExtensionNames = map show knownExtensions
-   
-        
--- $( derive makeJSON ''ParseResult )
--- $( derive makeJSON ''Module )
--- $( derive makeJSON ''ModuleHead )
--- $( derive makeJSON ''ExportSpecList )
----- $( derive makeJSON ''SrcLoc )
---
---instance JSON SrcLoc
---        where showJSON src = JSArray  [showJSON $ srcLine src,showJSON $ srcColumn src]
---
--- $( derive makeJSON ''ModulePragma )
--- $( derive makeJSON ''WarningText )
--- $( derive makeJSON ''ExportSpec )
--- $( derive makeJSON ''ImportDecl )
--- $( derive makeJSON ''ImportSpecList )
--- $( derive makeJSON ''ImportSpec )
--- $( derive makeJSON ''Decl )
--- $( derive makeJSON ''DeclHead )
--- $( derive makeJSON ''Deriving )
--- $( derive makeJSON ''Context )
--- $( derive makeJSON ''InstHead )
--- $( derive makeJSON ''ModuleName )
--- $( derive makeJSON ''Tool )
--- $( derive makeJSON ''CName )
--- $( derive makeJSON ''Name )
--- $( derive makeJSON ''DataOrNew )
--- $( derive makeJSON ''QualConDecl )
--- $( derive makeJSON ''Kind )
--- $( derive makeJSON ''TyVarBind )
--- $( derive makeJSON ''Asst )
--- $( derive makeJSON ''ConDecl )
--- $( derive makeJSON ''FieldDecl )
--- $( derive makeJSON ''QName )
--- $( derive makeJSON ''Type )
--- $( derive makeJSON ''IPName )
--- $( derive makeJSON ''BangType )
--- $( derive makeJSON ''SpecialCon )
--- $( derive makeJSON ''Boxed )
--- $( derive makeJSON ''FunDep )
--- $( derive makeJSON ''ClassDecl )
--- $( derive makeJSON ''GadtDecl )
--- $( derive makeJSON ''InstDecl )
--- $( derive makeJSON ''Match )
--- $( derive makeJSON ''Rhs )
--- $( derive makeJSON ''Binds )
--- $( derive makeJSON ''Exp )
--- $( derive makeJSON ''GuardedRhs )
--- $( derive makeJSON ''IPBind )
--- $( derive makeJSON ''Splice )
--- $( derive makeJSON ''Literal )
--- $( derive makeJSON ''Pat )
--- $( derive makeJSON ''XName )
--- $( derive makeJSON ''Alt )
--- $( derive makeJSON ''QOp )
--- $( derive makeJSON ''XAttr )
--- $( derive makeJSON ''Bracket )
--- $( derive makeJSON ''QualStmt )
--- $( derive makeJSON ''Stmt )
--- $( derive makeJSON ''FieldUpdate )
--- $( derive makeJSON ''RPat )
--- $( derive makeJSON ''RPatOp )
--- $( derive makeJSON ''GuardedAlts )
--- $( derive makeJSON ''PXAttr )
--- $( derive makeJSON ''PatField )
--- $( derive makeJSON ''GuardedAlt )
--- $( derive makeJSON ''Activation )
--- $( derive makeJSON ''Annotation )
--- $( derive makeJSON ''Rule )
--- $( derive makeJSON ''CallConv )
--- $( derive makeJSON ''RuleVar )
--- $( derive makeJSON ''Safety )
--- $( derive makeJSON ''Op )
--- $( derive makeJSON ''Assoc )
--- $( derive makeJSON ''Comment )
--- $( derive makeJSON ''SrcSpan )
--- $( derive makeJSON ''SrcSpanInfo )
---
---instance JSON Rational
---        where showJSON=JSRational False 
-
 
 
 
