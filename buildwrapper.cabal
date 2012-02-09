@@ -49,10 +49,9 @@ library
                    Language.Haskell.BuildWrapper.GHC
   extensions:      CPP
   other-modules:   
-                   Language.Haskell.BuildWrapper.Find,
+                   Language.Haskell.BuildWrapper.GHCStorage,
                    Language.Haskell.BuildWrapper.Packages,
-                   Language.Haskell.BuildWrapper.Src,
-                   Language.Haskell.BuildWrapper.GHCStorage
+                   Language.Haskell.BuildWrapper.Src
 
 executable buildwrapper
   hs-source-dirs:  src-exe
