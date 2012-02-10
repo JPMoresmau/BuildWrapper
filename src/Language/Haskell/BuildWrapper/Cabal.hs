@@ -115,8 +115,8 @@ cabalConfigure :: WhichCabal -- ^ use original cabal or temp cabal file
 cabalConfigure srcOrTgt= do
         cf<-getCabalFile srcOrTgt
         cp<-gets cabalPath
-        ok<-liftIO $ doesFileExist cf
-        if ok 
+        okCF<-liftIO $ doesFileExist cf
+        if okCF 
             then 
                 do
                 v<-cabalV
@@ -140,12 +140,15 @@ cabalConfigure srcOrTgt= do
                                 ExitSuccess  -> do
                                         lbi<-DSC.getPersistBuildConfig dist_dir
                                         return (Just lbi,msgs)
-                                ExitFailure _ -> return (Nothing, msgs)
+                                ExitFailure ec -> if null msgs
+                                                then return (Nothing,[BWNote BWError ("Cabal configure returned error code " ++ show ec) (BWLocation cf 0 1)])   
+                                                else return (Nothing, msgs)
                         setCurrentDirectory cd
                         return ret
             else do
-                liftIO $ putStrLn ("cabal file"++ cf ++" does not exist")
-                return (Nothing,[])       
+                let err="Cabal file"++ cf ++" does not exist"
+                liftIO $ putStrLn err
+                return (Nothing,[BWNote BWError err (BWLocation cf 0 1)])       
 
 -- | get the full path to the cabal file
 getCabalFile :: WhichCabal  -- ^ use original cabal or temp cabal file

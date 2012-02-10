@@ -33,7 +33,8 @@ import Control.Monad
 tests :: (APIFacade a)=> [a -> Test]
 tests=  [
         testSynchronizeAll,
-        testConfigureWarnings , testConfigureErrors ,
+        testConfigureWarnings , 
+        testConfigureErrors ,
         testBuildErrors,
         testBuildWarnings,
         testBuildOutput,
@@ -89,12 +90,13 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         root<-createTestProject
         (boolNoCabal,nsNoCabal)<- configure api root Target
         assertBool "configure returned true on no cabal" (not boolNoCabal)
-        assertEqual "errors or warnings on no cabal (should be ignored)" 0 (length nsNoCabal)        
-        -- assertEqual ("wrong error on no cabal") (BWNote BWError "No cabal file found.\nPlease create a package description file <pkgname>.cabal\n" (BWLocation "" 0 1)) (head nsNoCabal)   
+        --assertEqual "errors or warnings on no cabal (should be ignored)" 0 (length nsNoCabal)        
+        let bw=head nsNoCabal
+        assertEqual ("wrong error on no cabal") BWError (bwn_status bw)   
         
         synchronize api root False
         (boolOK,nsOK)<-configure api root Target
-        assertBool ("configure returned false") boolOK
+        assertBool "configure returned false" boolOK
         assertBool ("errors or warnings:"++show nsOK) (null nsOK)
         let cf=testCabalFile root
         let cfn=takeFileName cf
