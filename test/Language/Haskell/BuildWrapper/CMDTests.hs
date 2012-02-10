@@ -33,17 +33,17 @@ cmdTests= map (\f->f CMDAPI) tests
 data CMDAPI=CMDAPI
 
 instance APIFacade CMDAPI where
-        synchronize _ r ff= runAPI r "synchronize" ["--force="++(show ff)]
-        synchronize1 _ r ff fp= runAPI r "synchronize1" ["--force="++(show ff),"--file="++fp]
+        synchronize _ r ff= runAPI r "synchronize" ["--force="++ show ff ]
+        synchronize1 _ r ff fp= runAPI r "synchronize1" ["--force="++show ff,"--file="++fp]
         write _ r fp s= runAPI r "write" ["--file="++fp,"--contents="++s]
-        configure _ r t= runAPI r "configure" ["--cabaltarget="++(show t)]
-        build _ r b wc= runAPI r "build" ["--output="++(show b),"--cabaltarget="++(show wc)]
+        configure _ r t= runAPI r "configure" ["--cabaltarget="++ show t]
+        build _ r b wc= runAPI r "build" ["--output="++ show b,"--cabaltarget="++ show wc]
         build1 _ r fp= runAPI r "build1" ["--file="++fp]
         getBuildFlags _ r fp= runAPI r "getbuildflags" ["--file="++fp]
         getOutline _ r fp= runAPI r "outline" ["--file="++fp]
         getTokenTypes _ r fp= runAPI r "tokentypes" ["--file="++fp]
         getOccurrences _ r fp s= runAPI r "occurrences" ["--file="++fp,"--token="++s]
-        getThingAtPoint _ r fp l c q t= runAPI r "thingatpoint" ["--file="++fp,"--line="++(show l),"--column="++(show c),"--qualify="++(show q),"--typed="++(show t)]
+        getThingAtPoint _ r fp l c q t= runAPI r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show c,"--qualify="++ show q,"--typed="++ show t]
         getNamesInScope _ r fp= runAPI r "namesinscope" ["--file="++fp]
         getCabalDependencies _ r= runAPI r "dependencies" []
         getCabalComponents _ r= runAPI r "components" []
@@ -57,7 +57,7 @@ exeExtension = ""
         
 runAPI:: (FromJSON a,Show a) => FilePath -> String -> [String] -> IO a
 runAPI root command args= do
-        let fullargs=[command,"--tempfolder=.dist-buildwrapper","--cabalpath=cabal","--cabalfile="++(testCabalFile root)] ++ args
+        let fullargs=[command,"--tempfolder=.dist-buildwrapper","--cabalpath=cabal","--cabalfile="++ testCabalFile root] ++ args
         exePath<-filterM doesFileExist [".dist-buildwrapper/dist/build/buildwrapper/buildwrapper" <.> exeExtension,"dist/build/buildwrapper/buildwrapper" <.> exeExtension]
         (ex,out,err)<-readProcessWithExitCode (head exePath) fullargs ""
         putStrLn ("out:"++out)

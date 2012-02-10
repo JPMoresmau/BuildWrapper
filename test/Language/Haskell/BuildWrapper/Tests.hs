@@ -77,12 +77,12 @@ testSynchronizeAll api= TestLabel "testSynchronizeAll" (TestCase ( do
         (fps,_)<-synchronize api root False
         assertBool "no file path on creation" (not $ null fps) 
         assertEqual "no cabal file" (testProjectName <.> ".cabal") (head fps)
-        assertBool "no A" (elem ("src" </> "A.hs") fps)
-        assertBool "no C" (elem ("src" </> "B" </> "C.hs") fps)
-        assertBool "no Main" (elem ("src"  </> "Main.hs") fps)
-        assertBool "no D" (elem ("src" </> "B" </> "D.hs") fps)
-        assertBool "no Main test" (elem ("test" </> "Main.hs") fps)
-        assertBool "no TestA" (elem ("test" </> "TestA.hs") fps)
+        assertBool "no A" (("src" </> "A.hs") `elem` fps)
+        assertBool "no C" (("src" </> "B" </> "C.hs") `elem` fps)
+        assertBool "no Main" (("src" </> "Main.hs") `elem` fps)
+        assertBool "no D" (("src" </> "B" </> "D.hs") `elem` fps)
+        assertBool "no Main test" (("test" </> "Main.hs") `elem` fps)
+        assertBool "no TestA" (("test" </> "TestA.hs") `elem` fps)
         ))
 
 testConfigureErrors :: (APIFacade a)=> a -> Test
@@ -92,7 +92,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         assertBool "configure returned true on no cabal" (not boolNoCabal)
         --assertEqual "errors or warnings on no cabal (should be ignored)" 0 (length nsNoCabal)        
         let bw=head nsNoCabal
-        assertEqual ("wrong error on no cabal") BWError (bwn_status bw)   
+        assertEqual "wrong error on no cabal" BWError (bwn_status bw)   
         
         synchronize api root False
         (boolOK,nsOK)<-configure api root Target
@@ -104,7 +104,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
                 "build-type:     Simple"]
         synchronize api root False
         (bool1,nsErrors1)<-configure api root Target
-        assertBool ("bool1 returned true") (not bool1)
+        assertBool "bool1 returned true" (not bool1)
         assertEqual "no errors on no name" 2 (length nsErrors1)
         let (nsError1:nsError2:[])=nsErrors1
         assertEqual "not proper error 1" (BWNote BWError "No 'name' field.\n" (BWLocation cfn 1 1)) nsError1
@@ -114,7 +114,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
                 "build-type:     Simple"]
         synchronize api root False
         (bool2,nsErrors2)<-configure api root Target
-        assertBool ("bool2 returned true") (not bool2)
+        assertBool "bool2 returned true" (not bool2)
         assertEqual "no errors on invalid name" 1 (length nsErrors2)
         let (nsError3:[])=nsErrors2
         assertEqual "not proper error 3" (BWNote BWError "Parse of field 'name' failed.\n" (BWLocation cfn 1 1)) nsError3
@@ -130,7 +130,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
                 "  build-depends:   base, toto"]
         synchronize api root False
         (bool3,nsErrors3)<-configure api root Target
-        assertBool ("bool3 returned true") (not bool3)
+        assertBool "bool3 returned true" (not bool3)
         assertEqual "no errors on unknown dependency" 1 (length nsErrors3)
         let (nsError4:[])=nsErrors3
         assertEqual "not proper error 4" (BWNote BWError "At least the following dependencies are missing:\ntoto -any\n" (BWLocation cfn 1 1)) nsError4
@@ -147,12 +147,12 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
                 "  build-depends:   base, toto, titi"]
         synchronize api root False
         (bool4,nsErrors4)<-configure api root Target
-        assertBool ("bool4 returned true") (not bool4)
+        assertBool "bool4 returned true" (not bool4)
         assertEqual "no errors on unknown dependencies" 1 (length nsErrors4)
         let (nsError5:[])=nsErrors4
         assertEqual "not proper error 5" (BWNote BWError "At least the following dependencies are missing:\ntiti -any, toto -any\n" (BWLocation cfn 1 1)) nsError5
         (BuildResult bool4b _,nsErrors4b)<-build api root False Source
-        assertBool ("bool4b returned true") (not bool4b)
+        assertBool "bool4b returned true" (not bool4b)
         assertEqual "no errors on unknown dependencies" 1 (length nsErrors4b)
         let (nsError5b:[])=nsErrors4b
         assertEqual "not proper error 5b" (BWNote BWError "At least the following dependencies are missing:\ntiti -any, toto -any\n" (BWLocation cfn 1 1)) nsError5b
@@ -167,7 +167,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
                 "  build-depends:  base"]
         synchronize api root False
         (bool5,nsErrors5)<-configure api root Target
-        assertBool ("bool5 returned true") (not bool5)
+        assertBool "bool5 returned true" (not bool5)
         assertEqual "no errors on no main" 1 (length nsErrors5)
         let (nsError6:[])=nsErrors5
         assertEqual "not proper error 6" (BWNote BWError "No 'Main-Is' field found for executable BWTest\n" (BWLocation cfn 1 1)) nsError6
@@ -193,8 +193,8 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
                 "  build-depends:   base"]
         synchronize api root False
         (bool1,ns1)<- configure api root Target
-        assertBool ("returned false 1 "++ (show ns1)) bool1
-        assertEqual ("didn't return 1 warning: "++(show ns1)) 1 (length ns1)
+        assertBool ("returned false 1 " ++ show ns1) bool1
+        assertEqual ("didn't return 1 warning: " ++ show ns1) 1 (length ns1)
         let (nsWarning1:[])=ns1
         assertEqual "not proper warning 1" (BWNote BWWarning "Unknown fields: field1 (line 5)\nFields allowed in this section:\nname, version, cabal-version, build-type, license, license-file,\ncopyright, maintainer, build-depends, stability, homepage,\npackage-url, bug-reports, synopsis, description, category, author,\ntested-with, data-files, data-dir, extra-source-files,\nextra-tmp-files\n" (BWLocation cfn 5 1)) nsWarning1
         writeFile cf $ unlines ["name: "++testProjectName,
@@ -208,8 +208,8 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
                 "  build-depends:   base"]
         synchronize api root False
         (bool2,ns2)<- configure api root Target
-        assertBool ("returned false 2 "++ (show ns2)) bool2
-        assertEqual ("didn't return 1 warning: "++(show ns1)) 1 (length ns2)
+        assertBool ("returned false 2 " ++ show ns2) bool2
+        assertEqual ("didn't return 1 warning: " ++ show ns1) 1 (length ns2)
         let (nsWarning2:[])=ns2
         assertEqual "not proper warning 2" (BWNote BWWarning "A package using section syntax must specify at least\n'cabal-version: >= 1.2'.\n" (BWLocation cfn 1 1)) nsWarning2
         writeFile cf $ unlines ["name: "++testProjectName,
@@ -221,12 +221,12 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
                 "  exposed-modules: A",
                 "  other-modules:  B.C",
                 "  build-depends:   base"]
-        writeFile ((takeDirectory cf) </> "Setup.hs") $ unlines ["import Distribution.Simple",
+        writeFile (takeDirectory cf </> "Setup.hs") $ unlines ["import Distribution.Simple",
                         "main = defaultMain"]
         synchronize api root False
         (bool3,ns3)<- configure api root Target
-        assertBool ("returned false 3 "++ (show ns3)) bool3
-        assertEqual ("didn't return 1 warning: "++(show ns1)) 1 (length ns3)
+        assertBool ("returned false 3 " ++ show ns3) bool3
+        assertEqual ("didn't return 1 warning: " ++ show ns1) 1 (length ns3)
         let (nsWarning3:[])=ns3
         assertEqual "not proper warning 3" (BWNote BWWarning "No 'build-type' specified. If you do not need a custom Setup.hs or\n./configure script then use 'build-type: Simple'.\n" (BWLocation cfn 1 1)) nsWarning3
 
@@ -237,39 +237,33 @@ testBuildErrors api = TestLabel "testBuildErrors" (TestCase ( do
         root<-createTestProject
         synchronize api root False
         (boolOKc,nsOKc)<-configure api root Target
-        assertBool ("returned false on configure") boolOKc
+        assertBool "returned false on configure" boolOKc
         assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
         (BuildResult boolOK _,nsOK)<-build api root False Source
-        assertBool ("returned false on build") boolOK
+        assertBool "returned false on build" boolOK
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
-        --let srcF=root </> "src"
         let rel="src"</>"A.hs"
         -- write source file
         writeFile (root </> rel) $ unlines ["module A where","import toto","fA=undefined"]
-        --mf1<-runAPI root $ synchronize1 rel False
-        --assertBool ("mf1 not just") (isJust mf1)
         (BuildResult bool1 _,nsErrors1)<-build api root False Source
-        assertBool ("returned true on bool1") (not bool1)
-        assertBool ("no errors or warnings on nsErrors") (not $ null nsErrors1)
-        -- assertBool ("no rel in fps1: "++(show fps1)) (elem rel fps1)
+        assertBool "returned true on bool1" (not bool1)
+        assertBool "no errors or warnings on nsErrors" (not $ null nsErrors1)
         let (nsError1:[])=nsErrors1
         assertEqualNotesWithoutSpaces "not proper error 1" (BWNote BWError "parse error on input `toto'\n" (BWLocation rel 2 8)) nsError1
         -- write file and synchronize
         writeFile (root </> "src"</>"A.hs")$ unlines ["module A where","import Toto","fA=undefined"]
         mf2<-synchronize1 api root True rel
-        assertBool ("mf2 not just") (isJust mf2)
+        assertBool "mf2 not just" (isJust mf2)
         (BuildResult bool2 _,nsErrors2)<-build api root False Source
-        assertBool ("returned true on bool2") (not bool2)
-        assertBool ("no errors or warnings on nsErrors2") (not $ null nsErrors2)
-        -- assertBool ("no rel in fps2: "++(show fps2)) (elem rel fps1)
+        assertBool "returned true on bool2" (not bool2)
+        assertBool "no errors or warnings on nsErrors2" (not $ null nsErrors2)
         let (nsError2:[])=nsErrors2
         assertEqualNotesWithoutSpaces "not proper error 2" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" (BWLocation rel 2 8)) nsError2
-        (bf3,nsErrors3f)<- getBuildFlags api root ("src"</>"A.hs")
-        assertBool ("errors or warnings on nsErrors3f:"++ (show nsErrors3f)) (null nsErrors3f)
+        (_,nsErrors3f)<- getBuildFlags api root ("src"</>"A.hs")
+        assertBool ("errors or warnings on nsErrors3f:" ++ show nsErrors3f) (null nsErrors3f)
         (bool3,nsErrors3)<-build1 api root ("src"</>"A.hs")
-        assertBool ("returned true on bool3") (not bool3)
-        assertBool ("no errors or warnings on nsErrors3") (not $ null nsErrors3)
-        -- assertBool ("no rel in fps2: "++(show fps2)) (elem rel fps1)
+        assertBool "returned true on bool3" (not bool3)
+        assertBool "no errors or warnings on nsErrors3" (not $ null nsErrors3)
         let (nsError3:[])=nsErrors3
         assertEqualNotesWithoutSpaces "not proper error 3" (BWNote BWError "Could not find module `Toto':\n  Use -v to see a list of the files searched for." (BWLocation rel 2 8)) nsError3
         
@@ -292,33 +286,33 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
                 "  ghc-options:     -Wall"]
         --let srcF=root </> "src"
         (boolOK,nsOK)<-configure api root Source
-        assertBool ("returned false") boolOK
+        assertBool "returned false" boolOK
         assertBool ("errors or warnings:"++show nsOK) (null nsOK)
         let rel="src"</>"A.hs"
         writeFile (root </> rel) $ unlines ["module A where","import Data.List","fA=undefined"] 
         mf2<-synchronize1 api root True rel
-        assertBool ("mf2 not just") (isJust mf2)
+        assertBool "mf2 not just" (isJust mf2)
         (BuildResult bool1 fps1,nsErrors1)<-build api root False Source
-        assertBool ("returned false on bool1") bool1
-        assertBool ("no errors or warnings on nsErrors1") (not $ null nsErrors1)
-        assertBool ("no rel in fps1: "++(show fps1)) (elem rel fps1)
+        assertBool "returned false on bool1" bool1
+        assertBool "no errors or warnings on nsErrors1" (not $ null nsErrors1)
+        assertBool ("no rel in fps1: " ++ show fps1) (rel `elem` fps1)
         let (nsError1:nsError2:[])=nsErrors1
         assertEqualNotesWithoutSpaces "not proper error 1" (BWNote BWWarning "The import of `Data.List' is redundant\n               except perhaps to import instances from `Data.List'\n             To import instances alone, use: import Data.List()\n" (BWLocation rel 2 1)) nsError1
         assertEqualNotesWithoutSpaces "not proper error 2" (BWNote BWWarning "Top-level binding with no type signature:\n               fA :: forall a. a\n" (BWLocation rel 3 1)) nsError2
-        (bf3,nsErrors3f)<-getBuildFlags api root rel
-        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
+        (_,nsErrors3f)<-getBuildFlags api root rel
+        assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
         (bool3,nsErrors3)<-build1 api root rel
-        assertBool ("returned false on bool3") bool3
-        assertBool ("no errors or warnings on nsErrors3") (not $ null nsErrors3)
+        assertBool "returned false on bool3" bool3
+        assertBool "no errors or warnings on nsErrors3" (not $ null nsErrors3)
         let (nsError3:nsError4:[])=nsErrors3
         assertEqualNotesWithoutSpaces "not proper error 3" (BWNote BWWarning "The import of `Data.List' is redundant\n           except perhaps to import instances from `Data.List'\n         To import instances alone, use: import Data.List()" (BWLocation rel 2 1)) nsError3
         assertEqualNotesWithoutSpaces "not proper error 4" (BWNote BWWarning "Top-level binding with no type signature:\n           fA :: forall a. a" (BWLocation rel 3 1)) nsError4
         writeFile (root </> rel) $ unlines ["module A where","pats:: String -> String","pats a=reverse a","fB:: String -> Char","fB pats=head pats"] 
         mf3<-synchronize1 api root True rel
-        assertBool ("mf3 not just") (isJust mf2)
+        assertBool "mf3 not just" (isJust mf3)
         (bool4,nsErrors4)<-build1 api root rel
-        assertBool ("returned false on bool4") bool4
-        assertBool ("no errors or warnings on nsErrors4") (not $ null nsErrors4)
+        assertBool "returned false on bool4" bool4
+        assertBool "no errors or warnings on nsErrors4" (not $ null nsErrors4)
         let (nsError5:[])=nsErrors4
         assertEqualNotesWithoutSpaces "not proper error 5" (BWNote BWWarning ("This binding for `pats' shadows the existing binding\n           defined at "++rel++":3:1") (BWLocation rel 4 5)) nsError5
         )) 
@@ -329,8 +323,8 @@ testBuildOutput api = TestLabel "testBuildOutput" (TestCase ( do
         synchronize api root False
         build api root True Source
         let exeN=case os of
-                "mingw32"->(addExtension testProjectName "exe")
-                _->testProjectName
+                        "mingw32" -> addExtension testProjectName "exe"
+                        _   -> testProjectName
         let exeF=root </> ".dist-buildwrapper" </> "dist" </> "build" </> testProjectName </> exeN
         exeE1<-doesFileExist exeF
         assertBool ("exe does not exist on build output: "++exeF) exeE1
@@ -350,38 +344,19 @@ testModuleNotInCabal api = TestLabel "testModuleNotInCabal" (TestCase ( do
         writeFile (root </> rel) $ unlines ["module A where","import Auto","fA=undefined"] 
         let rel2="src"</>"Auto.hs"
         writeFile (root </> rel2) $ unlines ["module Auto where","fAuto=undefined"] 
-        (fps,ns)<-synchronize api root False
+        synchronize api root False
         (BuildResult bool1 _,nsErrors1)<-build api root True Source
-        assertBool ("returned false on bool1") bool1
-        assertBool ("errors or warnings on nsErrors1") (null nsErrors1)
-        (bf2,nsErrors2f)<-getBuildFlags api root rel
-        assertBool ("no errors or warnings on nsErrors2f") (null nsErrors2f)
+        assertBool "returned false on bool1" bool1
+        assertBool "errors or warnings on nsErrors1" (null nsErrors1)
+        (_,nsErrors2f)<-getBuildFlags api root rel
+        assertBool "no errors or warnings on nsErrors2f" (null nsErrors2f)
         (bool2, nsErrors2)<-build1 api root rel
-        assertBool ("returned false on bool2: "++(show nsErrors2)) bool2
-        assertBool ("errors or warnings on nsErrors2: "++(show nsErrors2)) (null nsErrors2)
+        assertBool ("returned false on bool2: " ++ show nsErrors2) bool2
+        assertBool ("errors or warnings on nsErrors2: " ++ show nsErrors2) (null nsErrors2)
         
         ))      
         
---testAST :: Test
---testAST = TestLabel "testAST" (TestCase ( do
---        root<-createTestProject
---        runAPI root synchronize False
---        (boolOKc,nsOKc)<-runAPI root $ configure Target
---        assertBool ("returned false on configure") boolOKc
---        assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
---        
---        (boolOK,nsOK)<-runAPI root $ build False
---        assertBool ("returned false on build") boolOK
---        assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
---        (mast,nsOK2)<-runAPI root $ getAST ("src" </> "A.hs")
---        assertBool ("errors or warnings on getAST:"++show nsOK2) (null nsOK2)
---        case mast of
---                Just ast->do
---                        let json=makeObj  [("parse" , (showJSON $ ast))]
---                        putStrLn $ show $ encode json
---                Nothing -> assertFailure "no ast"
---        ))
-        
+      
 testOutline :: (APIFacade a)=> a -> Test
 testOutline api= TestLabel "testOutline" (TestCase ( do
         root<-createTestProject
@@ -430,8 +405,8 @@ testOutline api= TestLabel "testOutline" (TestCase ( do
                 "        mkt2_s :: String,",
                 "        mkt2_i :: Int",
                 "        }" ]
-        (bf3,nsErrors3f)<-getBuildFlags api root rel
-        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)        
+        (_,nsErrors3f)<-getBuildFlags api root rel
+        assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)        
         (OutlineResult defs es is,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
         let expected=[
@@ -463,7 +438,7 @@ testOutline api= TestLabel "testOutline" (TestCase ( do
                         ]
                 ]
         assertEqual "length" (length expected) (length defs)
-        mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected defs)
+        mapM_ (uncurry (assertEqual "outline")) (zip expected defs)
         assertEqual "exports" [] es
         assertEqual "imports" [ImportDef "Data.Char" (InFileSpan (InFileLoc 5 1)(InFileLoc 5 17)) False False "" Nothing] is
       ))   
@@ -497,15 +472,15 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
                 "#endif",
                 ""
                  ]
-        (bf3,nsErrors3f)<-getBuildFlags api root rel
-        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)         
+        (_,nsErrors3f)<-getBuildFlags api root rel
+        assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)         
         (OutlineResult defs1 _ _,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on getOutlinePreproc 1:"++show nsErrors1) (null nsErrors1)
         let expected1=[
                 OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25))  []
                 ]
         assertEqual "length of expected1" (length expected1) (length defs1)
-        mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected1 defs1)
+        mapM_ (uncurry (assertEqual "outline")) (zip expected1 defs1)
         write api root rel $ unlines [
                 "{-# LANGUAGE CPP #-}",
                 "",
@@ -530,7 +505,7 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
                   ]
                 ] 
         assertEqual "length of expected2" (length expected2) (length defs2)
-        mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected2 defs2)
+        mapM_ (uncurry (assertEqual "outline")) (zip expected2 defs2)
         write api root rel $ unlines [
                 "{-# LANGUAGE CPP #-}",
                 "",
@@ -549,7 +524,7 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
                 OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25))  []
                 ]
         assertEqual "length of expected3" (length expected3) (length defs3)
-        mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected3 defs3)
+        mapM_ (uncurry (assertEqual "outline")) (zip expected3 defs3)
       ))      
                        
        
@@ -569,15 +544,15 @@ testOutlineLiterate api= TestLabel "testOutlineLiterate" (TestCase ( do
                 "",
                 ""
                  ]
-        (bf3,nsErrors3f)<-getBuildFlags api root rel
-        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
+        (_,nsErrors3f)<-getBuildFlags api root rel
+        assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
         (OutlineResult defs1 _ _,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on testOutlineLiterate 1:"++show nsErrors1) (null nsErrors1)
         let expected1=[
                 OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 3)(InFileLoc 6 27))  []
                 ]
         assertEqual "length of expected1" (length expected1) (length defs1)
-        mapM_ (\(e,c)->assertEqual "outline" e c) (zip expected1 defs1)
+        mapM_ (uncurry (assertEqual "outline")) (zip expected1 defs1)
         ))       
        
 testOutlineImportExport :: (APIFacade a)=> a -> Test
@@ -594,8 +569,8 @@ testOutlineImportExport api= TestLabel "testOutlineImportExport" (TestCase ( do
                 "import Data.List hiding (orderBy,groupBy)",
                 "import qualified Data.Maybe (Maybe(Just))"
                 ]
-        (bf3,nsErrors3f)<-getBuildFlags api root rel
-        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
+        (_,nsErrors3f)<-getBuildFlags api root rel
+        assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
         (OutlineResult _ es is,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
         let exps=[
@@ -603,14 +578,14 @@ testOutlineImportExport api= TestLabel "testOutlineImportExport" (TestCase ( do
                 ExportDef "Data.Char" IEModule (InFileSpan (InFileLoc 1 23)(InFileLoc 1 39)) [],
                 ExportDef "MkTest" IEThingAll (InFileSpan (InFileLoc 1 40)(InFileLoc 1 50)) []
                 ]
-        mapM_ (\(e,c)->assertEqual "exports" e c) (zip exps es)
+        mapM_ (uncurry (assertEqual "exports")) (zip exps es)
         let imps=[
                 ImportDef "Data.Char" (InFileSpan (InFileLoc 3 1)(InFileLoc 3 17)) False False "" Nothing,
                 ImportDef "Data.Map" (InFileSpan (InFileLoc 4 1)(InFileLoc 4 30)) False False "DM" (Just [ImportSpecDef "empty" IEVar (InFileSpan (InFileLoc 4 24)(InFileLoc 4 29)) []]),
                 ImportDef "Data.List" (InFileSpan (InFileLoc 5 1)(InFileLoc 5 42)) False True "" (Just [ImportSpecDef "orderBy" IEVar (InFileSpan (InFileLoc 5 26)(InFileLoc 5 33)) [],ImportSpecDef "groupBy" IEVar (InFileSpan (InFileLoc 5 34)(InFileLoc 5 41)) []]),
                 ImportDef "Data.Maybe" (InFileSpan (InFileLoc 6 1)(InFileLoc 6 42)) True False "" (Just [ImportSpecDef "Maybe" IEThingWith (InFileSpan (InFileLoc 6 30)(InFileLoc 6 41)) ["Just"]])
                 ] 
-        mapM_ (\(e,c)->assertEqual "imports" e c) (zip imps is)
+        mapM_ (uncurry (assertEqual "imports")) (zip imps is)
         
         ))
                 
@@ -651,8 +626,8 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
                   "module Main where",
                   "main=return $ map id \"toto\""
                   ] 
-        (bf3,nsErrors3f)<-getBuildFlags api root rel
-        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)          
+        (_,nsErrors3f)<-getBuildFlags api root rel
+        assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)          
         (tap1,nsErrors1)<-getThingAtPoint api root rel 2 16 True True
         assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors1) (null nsErrors1)
         assertEqual "not just typed qualified" (Just "GHC.Base.map :: forall a b. (a -> b) -> [a] -> [b] GHC.Types.Char GHC.Types.Char") tap1
@@ -680,9 +655,9 @@ testThingAtPointNotInCabal api= TestLabel "testThingAtPointNotInCabal" (TestCase
         configure api root Target        
         let rel2="src"</>"Auto.hs"
         writeFile (root </> rel2) $ unlines ["module Auto where","fAuto=head [2,3,4]"] 
-        (fps,ns)<-synchronize api root False
-        (bf3,nsErrors3f)<-getBuildFlags api root rel2
-        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
+        synchronize api root False
+        (_,nsErrors3f)<-getBuildFlags api root rel2
+        assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
         (tap1,nsErrors1)<-getThingAtPoint api root rel2 2 8 True True
         assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors1) (null nsErrors1)
         assertEqual "not just typed qualified" (Just "GHC.List.head :: [GHC.Integer.Type.Integer] -> GHC.Integer.Type.Integer") tap1
@@ -693,7 +668,6 @@ testThingAtPointMain :: (APIFacade a)=> a -> Test
 testThingAtPointMain api= TestLabel "testThingAtPointMain" (TestCase ( do
         root<-createTestProject
         let cf=testCabalFile root
-        let cfn=takeFileName cf
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.8",
@@ -713,8 +687,8 @@ testThingAtPointMain api= TestLabel "testThingAtPointMain" (TestCase ( do
         synchronize api root False
         configure api root Target          
         (bf3,nsErrors3f)<-getBuildFlags api root rel
-        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
-        assertEqual ("not main module") (Just "Main") (bf_modName bf3)
+        assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
+        assertEqual "not main module" (Just "Main") (bf_modName bf3)
         (tap1,nsErrors1)<-getThingAtPoint api root rel 3 16 True True
         assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors1) (null nsErrors1)
         assertEqual "not just typed qualified" (Just "GHC.List.head :: [GHC.Integer.Type.Integer] -> GHC.Integer.Type.Integer") tap1
@@ -724,7 +698,6 @@ testThingAtPointMainSubFolder :: (APIFacade a)=> a -> Test
 testThingAtPointMainSubFolder api= TestLabel "testThingAtPointMainSubFolder" (TestCase ( do
         root<-createTestProject
         let cf=testCabalFile root
-        let cfn=takeFileName cf
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.8",
@@ -746,8 +719,8 @@ testThingAtPointMainSubFolder api= TestLabel "testThingAtPointMainSubFolder" (Te
         synchronize api root False
         configure api root Target          
         (bf3,nsErrors3f)<-getBuildFlags api root rel
-        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
-        assertEqual ("not main module") (Just "Main") (bf_modName bf3)
+        assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
+        assertEqual "not main module" (Just "Main") (bf_modName bf3)
         (tap1,nsErrors1)<-getThingAtPoint api root rel 3 16 True True
         assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors1) (null nsErrors1)
         assertEqual "not just typed qualified" (Just "GHC.List.head :: [GHC.Integer.Type.Integer] -> GHC.Integer.Type.Integer") tap1
@@ -773,9 +746,9 @@ testNamesInScope api= TestLabel "testNamesInScope" (TestCase ( do
         assertBool ("errors or warnings on getNamesInScope:"++show nsErrors1) (null nsErrors1)
         assertBool "getNamesInScope not just" (isJust mtts)
         let tts=fromJust mtts
-        assertBool "does not contain Main.main" (elem "Main.main" tts)
-        assertBool "does not contain B.D.fD" (elem "B.D.fD" tts)
-        assertBool "does not contain GHC.Types.Char" (elem "GHC.Types.Char" tts)
+        assertBool "does not contain Main.main" ("Main.main" `elem` tts)
+        assertBool "does not contain B.D.fD" ("B.D.fD" `elem` tts)
+        assertBool "does not contain GHC.Types.Char" ("GHC.Types.Char" `elem` tts)
         )) 
         
 testInPlaceReference  :: (APIFacade a)=> a -> Test
@@ -820,17 +793,17 @@ testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
         assertBool ("returned false on configure:"++show nsOKc) boolOKc
         assertBool ("errors or warnings on configure:"++show nsOKc) (null nsOKc)
         (BuildResult boolOK _,nsOK)<-build api root True Source
-        assertBool ("returned false on build") boolOK
+        assertBool "returned false on build" boolOK
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
         synchronize api root True
         (mtts,nsErrors1)<-getNamesInScope api root rel
         assertBool ("errors or warnings on getNamesInScope in place:"++show nsErrors1) (null nsErrors1)
         assertBool "getNamesInScope in place not just" (isJust mtts)
         let tts=fromJust mtts
-        assertBool "getNamesInScope in place 1 does not contain Main.main" (elem "Main.main" tts)
-        assertBool "getNamesInScope in place 1 does not contain B.C.fC" (elem "B.C.fC" tts)
-        (bf3,nsErrors3f)<-getBuildFlags api root rel
-        assertBool ("errors or warnings on nsErrors3f") (null nsErrors3f)
+        assertBool "getNamesInScope in place 1 does not contain Main.main" ("Main.main" `elem` tts)
+        assertBool "getNamesInScope in place 1 does not contain B.C.fC" ("B.C.fC" `elem` tts)
+        (_,nsErrors3f)<-getBuildFlags api root rel
+        assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
         (tap1,nsErrorsTap1)<-getThingAtPoint api root rel 3 16 True True
         assertBool ("errors or warnings on getThingAtPoint1 in place:"++show nsErrorsTap1) (null nsErrorsTap1)
         assertEqual "not just typed qualified" (Just "GHC.Base.map :: forall a b. (a -> b) -> [a] -> [b] GHC.Types.Char GHC.Types.Char") tap1
@@ -838,14 +811,14 @@ testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
         assertBool ("errors or warnings on getNamesInScope in place 2:"++show nsErrors2) (null nsErrors2)
         assertBool "getNamesInScope in place 2 not just" (isJust mtts2)
         let tts2=fromJust mtts2
-        assertBool "getNamesInScope in place 2 does not contain A.fA" (elem "A.fA" tts2)     
-        assertBool "getNamesInScope in place 2 does not contain B.C.fC" (elem "B.C.fC" tts2) 
+        assertBool "getNamesInScope in place 2 does not contain A.fA" ("A.fA" `elem` tts2)     
+        assertBool "getNamesInScope in place 2 does not contain B.C.fC" ("B.C.fC" `elem` tts2) 
         
         (mtts3,nsErrors3)<-getNamesInScope api root rel3
         assertBool ("errors or warnings on getNamesInScope in place 3:"++show nsErrors3) (null nsErrors3)
         assertBool "getNamesInScope in place 3 not just" (isJust mtts3)
         let tts3=fromJust mtts3
-        assertBool "getNamesInScope in place 3 does not contain A.fA" (elem "A.fA" tts3)       
+        assertBool "getNamesInScope in place 3 does not contain A.fA" ("A.fA" `elem` tts3)       
         ))
 
 testCabalComponents  :: (APIFacade a)=> a -> Test
@@ -906,7 +879,7 @@ testCabalDependencies api= TestLabel "testCabalDependencies" (TestCase ( do
         assertBool ("errors or warnings on getCabalDependencies:"++show nsOK) (null nsOK)
         assertEqual "not two databases" 2 (length cps)
         let (_:(_,pkgs):[])=cps
-        let base=filter (\pkg->(cp_name pkg)=="base") pkgs
+        let base=filter (\pkg->cp_name pkg == "base") pkgs
         assertEqual "not 1 base" 1 (length base)
         let (l:ex:ts:[])=cp_dependent $ head base
         assertEqual "not library true" (CCLibrary True) l
@@ -960,7 +933,7 @@ testMainTestContents=unlines ["module Main where","main=undefined"]
 testTestAContents :: String
 testTestAContents=unlines ["module TestA where","fTA=undefined"]           
         
-createTestProject :: IO(FilePath)
+createTestProject :: IO FilePath
 createTestProject = do
         temp<-getTemporaryDirectory
         let root=temp </> testProjectName
@@ -983,7 +956,7 @@ createTestProject = do
         return root
         
 removeSpaces :: String -> String
-removeSpaces = (filter (/=':')) . (filter (not . isSpace))
+removeSpaces = filter (/= ':') . filter (not . isSpace)
 
 assertEqualNotesWithoutSpaces :: String -> BWNote -> BWNote -> IO()
 assertEqualNotesWithoutSpaces msg n1 n2=do
