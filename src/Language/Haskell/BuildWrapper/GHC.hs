@@ -129,7 +129,11 @@ withASTNotes f fp base_dir modul options=do
                                 d <- desugarModule t -- to get warnings
                                 l <- loadModule d
                                 --c3<-GMU.liftIO getClockTime
+#if __GLASGOW_HASKELL__ < 704
                                 setContext [ms_mod modSum] []
+#else
+                                setContext [IIModule $ ms_mod modSum]
+#endif                                
                                 GMU.liftIO $ storeGHCInfo fp (typecheckedSource $ dm_typechecked_module l)
                                 --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
                                 a<-f (dm_typechecked_module l)
@@ -662,7 +666,9 @@ tokenType  ITopenTypQuote="TH"              --  [t|
 tokenType  ITcloseQuote="TH"                --tokenType ]
 tokenType  (ITidEscape {})="TH"    --  $x
 tokenType  ITparenEscape="TH"               --  $( 
+#if __GLASGOW_HASKELL__ < 704
 tokenType  ITvarQuote="TH"                  --  '
+#endif
 tokenType  ITtyQuote="TH"                   --  ''
 tokenType  (ITquasiQuote {})="TH" --  [:...|...|]
 
@@ -700,6 +706,14 @@ tokenType  (ITinterruptible {})="EK"
 tokenType  (ITvect_prag {})="P"
 tokenType  (ITvect_scalar_prag {})="P"
 tokenType  (ITnovect_prag {})="P"
+#endif
+
+  -- 7.4 new token types 
+#if __GLASGOW_HASKELL__ >= 704
+tokenType ITcapiconv= "EK"
+tokenType ITnounpack_prag= "P"
+tokenType ITtildehsh= "S"
+tokenType ITsimpleQuote="SS"
 #endif
 
 dotFS :: FastString

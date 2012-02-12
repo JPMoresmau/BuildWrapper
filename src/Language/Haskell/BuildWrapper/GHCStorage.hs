@@ -35,12 +35,18 @@ import GHC.SYB.Instances
 
 #if __GLASGOW_HASKELL__ < 702
 import TypeRep ( Type(..), PredType(..) )
-#else 
+#elif __GLASGOW_HASKELL__ < 704
 import TypeRep ( Type(..), Pred(..) )
+#else
+import TypeRep ( Type(..) )
 #endif
 
+#if __GLASGOW_HASKELL__ >= 704
+import TcEvidence
+#endif
 
 import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString.Lazy.Char8 as BSC (putStrLn)
 import qualified Data.ByteString as BSS
 import Data.Aeson
 import Data.Maybe
@@ -207,7 +213,7 @@ dataToJSON  =
 
 -- | debug function: shows on standard output the JSON representation of the given data
 debugToJSON :: Data a =>a -> IO()
-debugToJSON = BS.putStrLn . encode . dataToJSON
+debugToJSON = BSC.putStrLn . encode . dataToJSON
 
 -- | debug searching thing at point in given data
 debugFindInJSON :: Data a => Int -> Int -> a -> IO()
@@ -217,7 +223,7 @@ debugFindInJSON l c a= do
         case mv of
                 Just rv->do
                         putStrLn "something found!"
-                        BS.putStrLn $ encode rv
+                        BSC.putStrLn $ encode rv
                 Nothing->putStrLn "nothing found!"
 
 -- | simple type for search function
@@ -232,7 +238,7 @@ findInJSONFormatted qual typed (Just (Object m)) | Just (String name)<-HM.lookup
         tn=T.unpack name
         qn=if qual
                 then 
-                     let mo=maybe "" (\(String s)->T.unpack s ++ ".") $ HM.lookup "Module" m
+                     let mo=maybe "" addDot $ HM.lookup "Module" m
                      in mo ++ tn
                 else tn
         in if typed then
@@ -245,6 +251,10 @@ findInJSONFormatted qual typed (Just (Object m)) | Just (String name)<-HM.lookup
                        in case mt of
                                 Just (String t)->qn ++ " " ++ T.unpack t
                                 _ -> tn
+        where 
+                addDot :: Value -> String
+                addDot (String s)=T.unpack s ++ "."
+                addDot _=error "expected String value for Module key"
 findInJSONFormatted _ _ _="no info"
 
 -- | find in JSON AST
@@ -348,11 +358,12 @@ substType v t' t0 = go t0
       ForAllTy v' bt 
         | v == v'   -> t
         | otherwise -> ForAllTy v' (go bt)
+#if __GLASGOW_HASKELL__ < 704       
       PredTy pt     -> PredTy (go_pt pt) 
       
    -- XXX: this is probably not right
     go_pt (ClassP c ts)  = ClassP c (map go ts)
     go_pt (IParam i t)   = IParam i (go t)
     go_pt (EqPred t1 t2) = EqPred (go t1) (go t2)
-    
+#endif    
     

@@ -21,6 +21,7 @@ import Paths_buildwrapper
 
 import Data.Aeson
 import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString.Lazy.Char8 as BSC
 import Data.Version (showVersion)
 
 
@@ -131,5 +132,5 @@ cmdMain = cmdArgs
                 runCmd=runCmdV Normal
                 runCmdV:: (ToJSON a) => Verbosity -> BWCmd -> StateT BuildWrapperState IO a -> IO ()
                 runCmdV vb cmd f=evalStateT f (BuildWrapperState (tempFolder cmd) (cabalPath cmd) (cabalFile cmd) vb (cabalFlags cmd))
-                                >>= BS.putStrLn . BS.append "build-wrapper-json:" . encode
+                                >>= BSC.putStrLn . BS.append "build-wrapper-json:" . encode
                         
