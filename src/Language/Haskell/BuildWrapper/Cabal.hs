@@ -29,8 +29,8 @@ import Exception (ghandle)
 import Distribution.ModuleName
 import Distribution.PackageDescription ( otherModules,library,executables,testSuites,Library,hsSourceDirs,libBuildInfo,Executable(..),exeName,modulePath,buildInfo,TestSuite(..),testName,TestSuiteInterface(..),testInterface,testBuildInfo,BuildInfo,cppOptions,defaultExtensions,otherExtensions,oldExtensions )
 import Distribution.Simple.GHC
-import Distribution.Simple.LocalBuildInfo     
-
+import Distribution.Simple.LocalBuildInfo
+import Distribution.Simple.Compiler(OptimisationLevel(..))
 import qualified Distribution.PackageDescription as PD 
 import Distribution.Package
 import Distribution.InstalledPackageInfo as IPI
@@ -70,7 +70,15 @@ cabalV =do
 cabalBuild :: Bool -- ^ do we want output (True) or just compilation without linking?
         -> WhichCabal -- ^ use original cabal or temp cabal file
         -> BuildWrapper (OpResult BuildResult)
-cabalBuild output srcOrTgt= do
+cabalBuild = cabalBuild' True
+
+
+-- | run cabal build
+cabalBuild' :: Bool -- ^ can we rerun configure again
+        -> Bool -- ^ do we want output (True) or just compilation without linking?
+        -> WhichCabal -- ^ use original cabal or temp cabal file
+        -> BuildWrapper (OpResult BuildResult)
+cabalBuild' reRun output srcOrTgt= do
         dist_dir<-getDistDir
         (mr,n)<-withCabal srcOrTgt (\_->do
                 cf<-getCabalFile srcOrTgt
@@ -103,10 +111,12 @@ cabalBuild output srcOrTgt= do
             )
         case mr of
                 Nothing -> return (BuildResult False [],n)
-                Just Nothing->do
+                Just Nothing->if reRun 
+                        then do
                                 let setup_config = DSC.localBuildInfoFile dist_dir
                                 liftIO $ removeFile setup_config
-                                cabalBuild output srcOrTgt
+                                cabalBuild' False output srcOrTgt
+                        else return (BuildResult False [],n)
                 Just (Just (r,n2,fps)) -> return (BuildResult r fps, n ++ n2)
 
 -- | run cabal configure
@@ -364,7 +374,7 @@ fileGhcOptions (lbi,CabalBuildInfo bi clbi fp isLib ls)=do
                     ["-package-name", display $ packageId $ localPkgDescr lbi]
                   | inplaceExist = ["-package-conf", inplace]
                   | otherwise = []
-        return (fst $ head ls,pkg ++ ghcOptions lbi bi clbi fp)
+        return (fst $ head ls,pkg ++ ghcOptions (lbi{withOptimization=NoOptimisation}) bi clbi fp)
 
 
 -- | get CPP options for a file

@@ -95,7 +95,7 @@ withASTNotes ::  (TypecheckedModule -> Ghc a) -- ^ the final action to perform o
         -> IO (OpResult (Maybe a))
 withASTNotes f fp base_dir modul options=do
     let lflags=map noLoc options
-    -- putStrLn $ show options
+    --print options
     (_leftovers, _) <- parseStaticFlags lflags
     runGhc (Just libdir) $ do
         flg <- getSessionDynFlags
