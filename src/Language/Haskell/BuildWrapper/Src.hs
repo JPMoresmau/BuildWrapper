@@ -16,6 +16,7 @@ import Language.Haskell.BuildWrapper.Base
 
 import Language.Haskell.Exts.Annotated
 
+import qualified Data.Map as DM
 
 import qualified Data.Text as T
 
@@ -38,39 +39,44 @@ getHSEOutline :: (Module SrcSpanInfo, [Comment]) -- ^ the commented AST (even th
 getHSEOutline (Module _ _ _ _ decls,_)=concatMap declOutline decls
         where 
                 declOutline :: Decl SrcSpanInfo -> [OutlineDef]
-                declOutline (DataFamDecl l _ h _) = [OutlineDef (headDecl h) [Data,Family] (makeSpan l) []]
-                declOutline (DataInsDecl l _ t cons _) = [OutlineDef (typeDecl t) [Data,Instance] (makeSpan l) (map qualConDeclOutline cons)]
+                declOutline (DataFamDecl l _ h _) = [mkOutlineDef (headDecl h) [Data,Family] (makeSpan l)]
+                declOutline (DataInsDecl l _ t cons _) = [mkOutlineDefWithChildren (typeDecl t) [Data,Instance] (makeSpan l) (map qualConDeclOutline cons)]
                 --declOutline (GDataInsDecl l _ t cons _) = [OutlineDef (typeDecl t) [Data,Instance] (makeSpan l) (map qualConDeclOutline cons)]
-                declOutline (DataDecl l _ _ h cons _) = [OutlineDef (headDecl h) [Data] (makeSpan l) (map qualConDeclOutline cons)]
+                declOutline (DataDecl l _ _ h cons _) = [mkOutlineDefWithChildren (headDecl h) [Data] (makeSpan l) (map qualConDeclOutline cons)]
                 --declOutline (GDataDecl l _ _ h cons _) = [OutlineDef (headDecl h) [Data] (makeSpan l) (map qualConDeclOutline cons)]
-                declOutline (TypeFamDecl l h _) = [OutlineDef (headDecl h) [Type,Family] (makeSpan l) []]
-                declOutline (TypeInsDecl l t1 _) = [OutlineDef (typeDecl t1) [Type,Instance] (makeSpan l) []] -- ++ " "++(typeDecl t2)
-                declOutline (TypeDecl l h _) = [OutlineDef (headDecl h) [Type] (makeSpan l) []]
-                declOutline (ClassDecl l _ h _ cdecls) = [OutlineDef (headDecl h) [Class] (makeSpan l) (maybe [] (concatMap classDecl) cdecls)]
-                declOutline (FunBind l matches) = [OutlineDef (matchDecl $ head matches) [Function] (makeSpan l) []]
-                declOutline (PatBind l (PVar _ n) _ _ _)=[OutlineDef (nameDecl n) [Function] (makeSpan l) []]
-                declOutline (InstDecl l _ h idecls)=[OutlineDef (iheadDecl h) [Instance] (makeSpan l) (maybe [] (concatMap instDecl) idecls)]
-                declOutline (SpliceDecl l e)=[OutlineDef (spliceDecl e) [Splice] (makeSpan l) []]
+                declOutline (TypeFamDecl l h _) = [mkOutlineDef (headDecl h) [Type,Family] (makeSpan l)]
+                declOutline (TypeInsDecl l t1 _) = [mkOutlineDef (typeDecl t1) [Type,Instance] (makeSpan l)] -- ++ " "++(typeDecl t2)
+                declOutline (TypeDecl l h t) = [OutlineDef (headDecl h) [Type] (makeSpan l) [] (Just $ typeDecl t)]
+                declOutline (ClassDecl l _ h _ cdecls) = [mkOutlineDefWithChildren (headDecl h) [Class] (makeSpan l) (maybe [] (concatMap classDecl) cdecls)]
+                declOutline (FunBind l matches) = let
+                        n=matchDecl $ head matches
+                        in [OutlineDef n [Function] (makeSpan l) [] (DM.lookup n typeMap)]
+                declOutline (PatBind l (PVar _ n) _ _ _)=let
+                        nd=nameDecl n
+                        in [OutlineDef nd [Function] (makeSpan l)  [] (DM.lookup nd typeMap)]
+                declOutline (InstDecl l _ h idecls)=[mkOutlineDefWithChildren (iheadDecl h) [Instance] (makeSpan l) (maybe [] (concatMap instDecl) idecls)]
+                declOutline (SpliceDecl l e)=[mkOutlineDef (spliceDecl e) [Splice] (makeSpan l)]
                 declOutline _ = []
                 qualConDeclOutline :: QualConDecl SrcSpanInfo-> OutlineDef
                 qualConDeclOutline (QualConDecl l _ _ con)=let
                         (n,defs)=conDecl con
-                        in OutlineDef n [Constructor] (makeSpan l) defs
+                        in mkOutlineDefWithChildren n [Constructor] (makeSpan l) defs
                 declOutlineInClass :: Decl SrcSpanInfo -> [OutlineDef]
-                declOutlineInClass (TypeSig l ns _)=map (\n->OutlineDef (nameDecl n) [Function] (makeSpan l) []) ns
+                declOutlineInClass (TypeSig l ns _)=map (\n->mkOutlineDef (nameDecl n) [Function] (makeSpan l)) ns
                 declOutlineInClass o=declOutline o
                 headDecl :: DeclHead  a -> T.Text
                 headDecl (DHead _ n  _)=nameDecl n
                 headDecl (DHInfix _ _ n _)=nameDecl n
                 headDecl (DHParen _ h)=headDecl h
                 typeDecl :: Type a -> T.Text
-                typeDecl (TyForall _ _ _ t)=typeDecl t
-                typeDecl (TyVar _ n )=nameDecl n
-                typeDecl (TyCon _ qn )=qnameDecl qn
-                typeDecl (TyList _ t )=T.concat  ["[", typeDecl t, "]"]
-                typeDecl (TyParen _ t )=typeDecl t
-                typeDecl (TyApp _ t1 t2)=T.concat  [typeDecl t1, " ", typeDecl t2]
-                typeDecl _ = ""
+--                typeDecl (TyForall _ mb mc t)=typeDecl t
+--                typeDecl (TyVar _ n )=nameDecl n
+--                typeDecl (TyCon _ qn )=qnameDecl qn
+--                typeDecl (TyList _ t )=T.concat  ["[", typeDecl t, "]"]
+--                typeDecl (TyParen _ t )=typeDecl t
+--                typeDecl (TyApp _ t1 t2)=T.concat  [typeDecl t1, " ", typeDecl t2]
+--                typeDecl (TyFun _ t1 t2)=T.concat  [typeDecl t1, " -> ", typeDecl t2]
+                typeDecl = T.pack . prettyPrint 
                 matchDecl :: Match a -> T.Text
                 matchDecl (Match _ n _ _ _)=nameDecl n     
                 matchDecl (InfixMatch _ _ n _ _ _)=nameDecl n    
@@ -83,7 +89,7 @@ getHSEOutline (Module _ _ _ _ decls,_)=concatMap declOutline decls
                 conDecl (InfixConDecl _ _ n _)=(nameDecl n,[])
                 conDecl (RecDecl _ n fields)=(nameDecl n,concatMap fieldDecl fields)
                 fieldDecl :: FieldDecl SrcSpanInfo -> [OutlineDef]
-                fieldDecl (FieldDecl l ns _)=map (\n->OutlineDef (nameDecl n) [Field] (makeSpan l) []) ns
+                fieldDecl (FieldDecl l ns _)=map (\n->mkOutlineDef (nameDecl n) [Field] (makeSpan l)) ns
                 classDecl :: ClassDecl SrcSpanInfo -> [OutlineDef]
                 classDecl (ClsDecl _ d) = declOutlineInClass d
                 classDecl _ = []
@@ -98,6 +104,16 @@ getHSEOutline (Module _ _ _ _ decls,_)=concatMap declOutline decls
                 spliceName :: Splice SrcSpanInfo -> T.Text
                 spliceName (IdSplice _ n)=T.pack n
                 spliceName (ParenSplice  _ e)=spliceDecl e
+                -- | a type map name -> Type
+                typeMap :: DM.Map T.Text T.Text
+                typeMap = foldr buildTypeMap DM.empty decls
+                buildTypeMap :: Decl SrcSpanInfo -> DM.Map T.Text T.Text -> DM.Map T.Text T.Text
+                buildTypeMap (TypeSig _ ns t) m=let
+                        td=typeDecl t
+                        in if T.null td
+                                then m
+                                else foldr (\n2 m2->DM.insert (nameDecl n2) td m2) m ns 
+                buildTypeMap _ m=m
 getHSEOutline _ = []
 
 -- | get the import/export declarations

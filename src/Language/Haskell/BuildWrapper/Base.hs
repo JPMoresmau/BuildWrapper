@@ -167,18 +167,35 @@ data OutlineDef = OutlineDef
   ,od_type       :: [OutlineDefType] -- ^ types: can have several to combine
   ,od_loc        :: InFileSpan -- ^ span in source
   ,od_children   :: [OutlineDef] -- ^ children (constructors...)
+  ,od_signature  :: Maybe T.Text -- ^ type signature if any
   }
   deriving (Show,Read,Eq,Ord)
      
+-- | constructs an OutlineDef with no children and no type signature     
+mkOutlineDef :: T.Text -- ^  name
+        -> [OutlineDefType] -- ^ types: can have several to combine
+        -> InFileSpan  -- ^ span in source
+        -> OutlineDef
+mkOutlineDef n t l=  mkOutlineDefWithChildren n t l []
+
+-- | constructs an OutlineDef with children and no type signature     
+mkOutlineDefWithChildren :: T.Text -- ^  name
+        -> [OutlineDefType] -- ^ types: can have several to combine
+        -> InFileSpan  -- ^ span in source
+        -> [OutlineDef] -- ^ children (constructors...)
+        -> OutlineDef
+mkOutlineDefWithChildren n t l c=  OutlineDef n t l c Nothing 
+     
 instance ToJSON OutlineDef where
-        toJSON (OutlineDef n tps l c)=  object ["n" .= n , "t" .= map toJSON tps, "l" .= l, "c" .= map toJSON c]
+        toJSON (OutlineDef n tps l c ts)=  object ["n" .= n , "t" .= map toJSON tps, "l" .= l, "c" .= map toJSON c, "s" .= ts]
      
 instance FromJSON OutlineDef where
     parseJSON (Object v) =OutlineDef <$>
                          v .: "n" <*>
                          v .: "t" <*>
                          v .: "l" <*>
-                         v .: "c"
+                         v .: "c" <*>
+                         v .: "s"
     parseJSON _= mzero          
      
 -- | Lexer token

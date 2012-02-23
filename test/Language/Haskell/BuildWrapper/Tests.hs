@@ -410,28 +410,28 @@ testOutline api= TestLabel "testOutline" (TestCase ( do
         (OutlineResult defs es is,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
         let expected=[
-                OutlineDef "XList" [Data,Family] (InFileSpan (InFileLoc 8 1)(InFileLoc 8 20))  []
-                ,OutlineDef "XList Char" [Data,Instance] (InFileSpan (InFileLoc 11 1)(InFileLoc 11 60)) [
-                        OutlineDef "XCons" [Constructor] (InFileSpan (InFileLoc 11 28)(InFileLoc 11 53))  []
-                        ,OutlineDef "XNil" [Constructor] (InFileSpan (InFileLoc 11 56)(InFileLoc 11 60))  []
+                mkOutlineDefWithChildren "XList" [Data,Family] (InFileSpan (InFileLoc 8 1)(InFileLoc 8 20))  []
+                ,mkOutlineDefWithChildren "XList Char" [Data,Instance] (InFileSpan (InFileLoc 11 1)(InFileLoc 11 60)) [
+                        mkOutlineDef "XCons" [Constructor] (InFileSpan (InFileLoc 11 28)(InFileLoc 11 53))
+                        ,mkOutlineDef "XNil" [Constructor] (InFileSpan (InFileLoc 11 56)(InFileLoc 11 60)) 
                         ]
-                ,OutlineDef "Elem" [Type,Family] (InFileSpan (InFileLoc 13 1)(InFileLoc 13 19))  []
-                ,OutlineDef "Elem [e]" [Type,Instance] (InFileSpan (InFileLoc 15 1)(InFileLoc 15 27))  []
-                ,OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 18 1)(InFileLoc 18 25))  []
-                ,OutlineDef "testfunc1bis" [Function] (InFileSpan (InFileLoc 21 1)(InFileLoc 22 25))  []                  
-                ,OutlineDef "testMethod" [Function] (InFileSpan (InFileLoc 25 1)(InFileLoc 27 13))  []  
-                ,OutlineDef "ToString" [Class] (InFileSpan (InFileLoc 29 1)(InFileLoc 32 0))  [
-                        OutlineDef "toString" [Function] (InFileSpan (InFileLoc 30 5)(InFileLoc 30 28))  []
+                ,mkOutlineDef "Elem" [Type,Family] (InFileSpan (InFileLoc 13 1)(InFileLoc 13 19))
+                ,mkOutlineDef "Elem [e]" [Type,Instance] (InFileSpan (InFileLoc 15 1)(InFileLoc 15 27)) 
+                ,OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 18 1)(InFileLoc 18 25)) [] (Just "[Char]") 
+                ,OutlineDef "testfunc1bis" [Function] (InFileSpan (InFileLoc 21 1)(InFileLoc 22 25)) [] (Just "String -> [Char]")                
+                ,OutlineDef "testMethod" [Function] (InFileSpan (InFileLoc 25 1)(InFileLoc 27 13))  [] (Just "forall a . (Num a) => a -> a -> a") 
+                ,mkOutlineDefWithChildren "ToString" [Class] (InFileSpan (InFileLoc 29 1)(InFileLoc 32 0))  [
+                        mkOutlineDef "toString" [Function] (InFileSpan (InFileLoc 30 5)(InFileLoc 30 28))
                         ]          
-                ,OutlineDef "ToString String" [Instance] (InFileSpan (InFileLoc 32 1)(InFileLoc 35 0))  [
-                        OutlineDef "toString" [Function] (InFileSpan (InFileLoc 33 5)(InFileLoc 33 18))  []
+                ,mkOutlineDefWithChildren "ToString String" [Instance] (InFileSpan (InFileLoc 32 1)(InFileLoc 35 0))  [
+                        mkOutlineDef "toString" [Function] (InFileSpan (InFileLoc 33 5)(InFileLoc 33 18)) 
                         ]    
-                ,OutlineDef "Str" [Type] (InFileSpan (InFileLoc 35 1)(InFileLoc 35 16))  []                
-                ,OutlineDef "Type1" [Data] (InFileSpan (InFileLoc 37 1)(InFileLoc 41 10))  [
-                         OutlineDef "MkType1_1" [Constructor] (InFileSpan (InFileLoc 37 12)(InFileLoc 37 25)) []
-                        ,OutlineDef "MkType1_2" [Constructor] (InFileSpan (InFileLoc 38 7)(InFileLoc 41 10)) [
-                                OutlineDef "mkt2_s" [Field] (InFileSpan (InFileLoc 39 9)(InFileLoc 39 25)) []
-                                ,OutlineDef "mkt2_i" [Field] (InFileSpan (InFileLoc 40 9)(InFileLoc 40 22)) []
+                ,OutlineDef "Str" [Type] (InFileSpan (InFileLoc 35 1)(InFileLoc 35 16)) [] (Just "String")              
+                ,mkOutlineDefWithChildren "Type1" [Data] (InFileSpan (InFileLoc 37 1)(InFileLoc 41 10))  [
+                         mkOutlineDef "MkType1_1" [Constructor] (InFileSpan (InFileLoc 37 12)(InFileLoc 37 25)) 
+                        ,mkOutlineDefWithChildren "MkType1_2" [Constructor] (InFileSpan (InFileLoc 38 7)(InFileLoc 41 10)) [
+                                mkOutlineDef "mkt2_s" [Field] (InFileSpan (InFileLoc 39 9)(InFileLoc 39 25)) 
+                                ,mkOutlineDef "mkt2_i" [Field] (InFileSpan (InFileLoc 40 9)(InFileLoc 40 22)) 
                                 
                                 ]
                         
@@ -477,7 +477,7 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
         (OutlineResult defs1 _ _,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on getOutlinePreproc 1:"++show nsErrors1) (null nsErrors1)
         let expected1=[
-                OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25))  []
+                mkOutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25))
                 ]
         assertEqual "length of expected1" (length expected1) (length defs1)
         mapM_ (uncurry (assertEqual "outline")) (zip expected1 defs1)
@@ -499,9 +499,9 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
         (OutlineResult defs2 _ _,nsErrors2)<-getOutline api root rel
         assertBool ("errors or warnings on getOutlinePreproc:"++show nsErrors2) (null nsErrors2)
         let expected2=[
-                OutlineDef "Name" [Data] (InFileSpan (InFileLoc 5 1)(InFileLoc 9 38))  [
-                  OutlineDef "Ident" [Constructor] (InFileSpan (InFileLoc 6 6)(InFileLoc 6 18))  [],
-                  OutlineDef "Symbol" [Constructor] (InFileSpan (InFileLoc 7 6)(InFileLoc 7 19))  []
+                mkOutlineDefWithChildren "Name" [Data] (InFileSpan (InFileLoc 5 1)(InFileLoc 9 38))  [
+                  mkOutlineDef "Ident" [Constructor] (InFileSpan (InFileLoc 6 6)(InFileLoc 6 18)),
+                  mkOutlineDef "Symbol" [Constructor] (InFileSpan (InFileLoc 7 6)(InFileLoc 7 19))
                   ]
                 ] 
         assertEqual "length of expected2" (length expected2) (length defs2)
@@ -521,7 +521,7 @@ testOutlinePreproc api= TestLabel "testOutlinePreproc" (TestCase ( do
         (OutlineResult defs3 _ _,nsErrors3)<-getOutline api root rel
         assertBool ("errors or warnings on getOutlinePreproc 3:"++show nsErrors3) (null nsErrors3)
         let expected3=[
-                OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25))  []
+                mkOutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25)) 
                 ]
         assertEqual "length of expected3" (length expected3) (length defs3)
         mapM_ (uncurry (assertEqual "outline")) (zip expected3 defs3)
@@ -549,7 +549,7 @@ testOutlineLiterate api= TestLabel "testOutlineLiterate" (TestCase ( do
         (OutlineResult defs1 _ _,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on testOutlineLiterate 1:"++show nsErrors1) (null nsErrors1)
         let expected1=[
-                OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 3)(InFileLoc 6 27))  []
+                mkOutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 3)(InFileLoc 6 27)) 
                 ]
         assertEqual "length of expected1" (length expected1) (length defs1)
         mapM_ (uncurry (assertEqual "outline")) (zip expected1 defs1)
