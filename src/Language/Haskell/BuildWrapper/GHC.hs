@@ -219,20 +219,21 @@ getGhcNamesInScope f base_dir modul options=do
 -- this is using the saved JSON info if available
 getThingAtPointJSON :: Int -- ^ line
         -> Int -- ^ column
-        -> Bool -- ^ do we want the result qualified by the module
-        -> Bool -- ^ do we want the full type or just the haddock type
+--        -> Bool  ^ do we want the result qualified by the module
+--        -> Bool  ^ do we want the full type or just the haddock type
         -> FilePath -- ^ source file path
         -> FilePath -- ^ base directory
         -> String  -- ^ module name
         -> [String] -- ^  build flags
-        -> IO String
-getThingAtPointJSON line col qual typed fp base_dir modul options= do
-        mr<-withJSONAST (\v->do
+        -> IO (Maybe ThingAtPoint)
+getThingAtPointJSON line col fp base_dir modul options= do
+        mmf<-withJSONAST (\v->do
                 let f=overlap line (scionColToGhcCol col)
                 let mf=findInJSON f v
-                return $ findInJSONFormatted qual typed mf
+                --return $ findInJSONFormatted qual typed mf
+                return $ findInJSONData mf  
             ) fp base_dir modul options
-        return $ fromMaybe "no info" mr  
+        return $ fromMaybe Nothing mmf
    
   
 -- | convert a GHC SrcSpan to a Span,  ignoring the actual file info

@@ -39,7 +39,7 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | Outline {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath} 
         | TokenTypes {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath} 
         | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath,token::String}
-        | ThingAtPoint {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath, line::Int, column::Int, qualify::Bool, typed::Bool}
+        | ThingAtPointCmd {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath, line::Int, column::Int}
         | NamesInScope {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath} 
         | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String}
         | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String}
@@ -86,11 +86,9 @@ mtokenTypes= TokenTypes tf cp cf uf fp
 moccurrences :: BWCmd
 moccurrences=Occurrences tf cp cf uf fp (def &= help "text to search occurrences of" &= name "token")
 mthingAtPoint :: BWCmd
-mthingAtPoint=ThingAtPoint tf cp cf uf fp 
+mthingAtPoint=ThingAtPointCmd tf cp cf uf fp 
         (def &= help "line" &= name "line")
         (def &= help "column" &= name "column")
-        (def &= help "qualify results")
-        (def &= help "type results")
 mnamesInScope :: BWCmd
 mnamesInScope=NamesInScope tf cp cf uf fp 
 mdependencies :: BWCmd
@@ -124,7 +122,7 @@ cmdMain = cmdArgs
                 handle c@Outline{file=fi}=runCmd c (getOutline fi)
                 handle c@TokenTypes{file=fi}=runCmd c (getTokenTypes fi)
                 handle c@Occurrences{file=fi,token=t}=runCmd c (getOccurrences fi t)
-                handle c@ThingAtPoint{file=fi,line=l,column=co,qualify=q, typed=t}=runCmd c (getThingAtPoint fi l co q t )
+                handle c@ThingAtPointCmd{file=fi,line=l,column=co}=runCmd c (getThingAtPoint fi l co)
                 handle c@NamesInScope{file=fi}=runCmd c (getNamesInScope fi)
                 handle c@Dependencies{}=runCmd c getCabalDependencies
                 handle c@Components{}=runCmd c getCabalComponents

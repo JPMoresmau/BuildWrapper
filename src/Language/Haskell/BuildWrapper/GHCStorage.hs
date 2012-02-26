@@ -155,7 +155,7 @@ dataToJSON  =
         name :: Name -> Value
         name  n     = object (nameAndModule n ++["GType" .= string "Name","HType".= string (if isValOcc (nameOccName n) then "v" else "t")])
         occName :: OccName -> Value
-        occName o   = object ["OccName" .= string (OccName.occNameString o),"HType" .= string (if isValOcc o then "v" else "t")]
+        occName o   = object ["Name" .= string (OccName.occNameString o),"HType" .= string (if isValOcc o then "v" else "t")]
         modName  :: ModuleName -> Value
         modName m= object [ "Name" .= string (showSDoc $ ppr m),"GType" .= string "ModuleName","HType" .= string "m"]
         srcSpan :: SrcSpan -> Value
@@ -256,6 +256,12 @@ findInJSONFormatted qual typed (Just (Object m)) | Just (String name)<-HM.lookup
                 addDot (String s)=T.unpack s ++ "."
                 addDot _=error "expected String value for Module key"
 findInJSONFormatted _ _ _="no info"
+
+findInJSONData :: Maybe Value -> Maybe ThingAtPoint
+findInJSONData (Just o@(Object m)) | Just (String _)<-HM.lookup "Name" m=case fromJSON o of
+        Success tap->tap
+        Error _ -> Nothing 
+findInJSONData _=Nothing
 
 -- | find in JSON AST
 findInJSON :: FindFunc -- ^ the evaluation function  

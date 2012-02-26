@@ -43,7 +43,7 @@ instance APIFacade CMDAPI where
         getOutline _ r fp= runAPI r "outline" ["--file="++fp]
         getTokenTypes _ r fp= runAPI r "tokentypes" ["--file="++fp]
         getOccurrences _ r fp s= runAPI r "occurrences" ["--file="++fp,"--token="++s]
-        getThingAtPoint _ r fp l c q t= runAPI r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show c,"--qualify="++ show q,"--typed="++ show t]
+        getThingAtPoint _ r fp l c= runAPI r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show c]
         getNamesInScope _ r fp= runAPI r "namesinscope" ["--file="++fp]
         getCabalDependencies _ r= runAPI r "dependencies" []
         getCabalComponents _ r= runAPI r "components" []

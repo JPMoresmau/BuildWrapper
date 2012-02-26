@@ -329,6 +329,29 @@ instance FromJSON BuildFlags where
                          v .: "m"
    parseJSON _= mzero  
    
+data ThingAtPoint = ThingAtPoint {
+        tapName :: String,
+        tapModule :: Maybe String,
+        tapType :: Maybe String,
+        tapQType :: Maybe String,
+        tapHType :: Maybe String,
+        tapGType :: Maybe String
+        }   
+        deriving (Show,Read,Eq,Data,Typeable)
+ 
+instance ToJSON ThingAtPoint where
+        toJSON (ThingAtPoint name modu stype qtype htype gtype)=object ["Name" .= name, "Module" .= modu, "Type" .= stype, "QType" .= qtype, "HType" .= htype, "GType" .= gtype]
+        
+instance FromJSON ThingAtPoint where
+   parseJSON (Object v)=ThingAtPoint <$>
+                         v .: "Name" <*>
+                         v .: "Module" <*>
+                         v .: "Type" <*>
+                         v .: "QType" <*>
+                         v .: "HType" <*>
+                         v .: "GType"
+   parseJSON _= mzero         
+   
 -- | get the full path for the temporary directory
 getFullTempDir ::  BuildWrapper FilePath
 getFullTempDir = do

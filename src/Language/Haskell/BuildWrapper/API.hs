@@ -211,10 +211,14 @@ getOccurrences fp query=do
 getThingAtPoint :: FilePath -- ^ the source file
         -> Int -- ^ the line
         -> Int -- ^ the column
-        -> Bool -- ^ do we want the result qualified?
-        -> Bool -- ^ do we want the result typed?
-        -> BuildWrapper (OpResult (Maybe String))
-getThingAtPoint fp line col qual typed=withGHCAST fp $ BwGHC.getThingAtPointJSON line col qual typed
+--        -> Bool -- ^ do we want the result qualified?
+--        -> Bool -- ^ do we want the result typed?
+        -> BuildWrapper (OpResult (Maybe ThingAtPoint))
+getThingAtPoint fp line col=do
+        mm<-withGHCAST fp $ BwGHC.getThingAtPointJSON line col
+        return $ case mm of 
+                (Just m,ns)->(m,ns)
+                (Nothing,ns)-> (Nothing,ns)
                 
 -- | get all names in scope (GHC API)                
 getNamesInScope :: FilePath-> BuildWrapper (OpResult (Maybe [String]))
