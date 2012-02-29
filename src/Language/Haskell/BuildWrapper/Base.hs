@@ -24,6 +24,7 @@ import qualified Data.Vector as V
 
 import System.Directory
 import System.FilePath
+import Data.List (isPrefixOf)
 
 -- | State type
 type BuildWrapper=StateT BuildWrapperState IO
@@ -357,7 +358,7 @@ getFullTempDir ::  BuildWrapper FilePath
 getFullTempDir = do
         cf<-gets cabalFile
         temp<-gets tempFolder
-        let dir=(takeDirectory cf)
+        let dir=takeDirectory cf
         return (dir </> temp)
 
 -- | get the full path for the temporary dist directory (where cabal will write its output)
@@ -390,7 +391,7 @@ getFullSrc :: FilePath -- ^ relative path of source file
         -> BuildWrapper FilePath
 getFullSrc src=do
         cf<-gets cabalFile
-        let dir=(takeDirectory cf)
+        let dir=takeDirectory cf
         return (dir </> src)
 
 -- | copy a file from the normal folders to the temp folder
@@ -482,7 +483,7 @@ instance FromJSON CabalPackage where
 getRecursiveContents :: FilePath -> IO [FilePath]
 getRecursiveContents topdir = do
   names <- getDirectoryContents topdir
-  let properNames = filter (`notElem` [".", ".."]) names
+  let properNames = filter (not . isPrefixOf ".") names
   paths <- forM properNames $ \name -> do
     let path = topdir </> name
     isDirectory <- doesDirectoryExist path
@@ -498,7 +499,7 @@ fromJustDebug _ (Just a)=a
 
 -- | remove a base directory from a string representing a full path
 removeBaseDir :: FilePath -> String -> String
-removeBaseDir base_dir s= loop s
+removeBaseDir base_dir = loop
   where
     loop [] = []
     loop str =

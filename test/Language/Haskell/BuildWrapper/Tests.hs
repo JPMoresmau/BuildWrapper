@@ -52,8 +52,8 @@ tests=  [
         testNamesInScope,
         testInPlaceReference,
         testCabalComponents,
-        testCabalDependencies
-          
+        testCabalDependencies,
+        testNoSourceDir
         ]
 
 class APIFacade a where
@@ -977,6 +977,46 @@ testCabalDependencies api= TestLabel "testCabalDependencies" (TestCase ( do
         assertEqual "not executable true" (CCExecutable "BWTest" True) ex
         assertEqual "not test suite true" (CCTestSuite "BWTest-test" True) ts
                 ))
+
+
+testNoSourceDir :: (APIFacade a)=> a -> Test
+testNoSourceDir api=TestLabel "testNoSourceDir" (TestCase (do
+        root<-createTestProject
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:   base",
+                 "",
+                "executable BWTest",
+                "  main-is:        src/Main.hs",
+                "  other-modules:  B.D",
+                "  build-depends:  base",
+                ""]
+        let git=root </> ".git"
+        createDirectoryIfMissing False git
+        let gitInBW=root </> ".dist-buildwrapper" </> ".git"
+        writeFile (git </> "testfile") "test"
+        d1<-doesDirectoryExist gitInBW
+        assertBool "git exists before synchronize" (not d1)
+        
+        let bwInBw=root </> ".dist-buildwrapper" </> ".dist-buildwrapper"
+        d1b<-doesDirectoryExist bwInBw
+        assertBool ".dist-buildwrapper exists before synchronize" (not d1b)
+        
+        synchronize api root False
+        d2<-doesDirectoryExist gitInBW
+        assertBool "git exists after synchronize" (not d2)
+        
+        d2b<-doesDirectoryExist bwInBw
+        assertBool ".dist-buildwrapper exists after synchronize" (not d2b)
+        
+        ))
 
 testProjectName :: String
 testProjectName="BWTest"         

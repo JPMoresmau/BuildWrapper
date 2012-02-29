@@ -203,7 +203,7 @@ withCabal srcOrTgt f=do
         case mlbi of
                 Nothing-> return (Nothing, notes)
                 Just lbi ->do
-                        r<-(f lbi)
+                        r<-f lbi
                         return (Just r, notes)
      
 -- | parse cabal error messages and transform them in notre
@@ -406,6 +406,7 @@ getAllFiles lbi= do
                 let tests=map extractFromTest $ testSuites pd
                 mapM (\(a,b,c,isLib,d)->do
                         mf<-copyAll d
+                        liftIO $ print $ map snd mf
                         return (CabalBuildInfo a b c isLib mf)) (libs ++ exes ++ tests)
         where 
         extractFromLib :: Library -> [(BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath])]
@@ -433,7 +434,7 @@ getAllFiles lbi= do
         copyAll' :: FilePath -> BuildWrapper [(ModuleName,FilePath)]
         copyAll' fp=do
                 cf<-gets cabalFile
-                let dir=(takeDirectory cf)
+                let dir=takeDirectory cf
                 fullFP<-getFullSrc fp
                 allF<-liftIO $ getRecursiveContents fullFP
                 tf<-gets tempFolder
@@ -500,7 +501,7 @@ cabalDependencies = do
      (rs,ns)<-withCabal Source (\lbi-> liftIO $
           ghandle
             (\ (e :: IOError) ->
-               do (print e)
+               do print e
                   return [])
             $
             do pkgs <- liftIO getPkgInfos
