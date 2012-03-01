@@ -304,7 +304,7 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
         (bool3,nsErrors3)<-build1 api root rel
         assertBool "returned false on bool3" bool3
-        assertBool "no errors or warnings on nsErrors3" (not $ null nsErrors3)
+        assertEqual "not 2 errors or warnings on nsErrors3" 2 (length nsErrors3)
         let (nsError3:nsError4:[])=nsErrors3
         assertEqualNotesWithoutSpaces "not proper error 3" (BWNote BWWarning "The import of `Data.List' is redundant\n           except perhaps to import instances from `Data.List'\n         To import instances alone, use: import Data.List()" (BWLocation rel 2 1)) nsError3
         assertEqualNotesWithoutSpaces "not proper error 4" (BWNote BWWarning "Top-level binding with no type signature:\n           fA :: forall a. a" (BWLocation rel 3 1)) nsError4

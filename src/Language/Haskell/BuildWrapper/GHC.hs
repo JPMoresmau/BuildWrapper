@@ -142,7 +142,7 @@ withASTNotes f fp base_dir modul options=do
                                 return (Just a,List.nub $ notes ++ reverse (ghcMessagesToNotes base_dir (warns, emptyBag)))
 #else
                                 notes2 <- GMU.liftIO $ readIORef ref
-                                return $ (Just a,notes2)
+                                return $ (Just a,List.nub $ notes2)
 #endif
                         Failed -> return (Nothing, notes)
         where
