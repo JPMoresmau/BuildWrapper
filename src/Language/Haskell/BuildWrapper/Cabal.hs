@@ -264,7 +264,7 @@ parseCabalMessages cf cabalExe s=let
                                 else read $ head ls
  
 -- | parse messages from build
-parseBuildMessages :: String -- | the build output 
+parseBuildMessages :: String -- ^ the build output 
         -> [BWNote]
 parseBuildMessages s=let
         (m,ls)=foldl parseBuildLine (Nothing,[]) $ lines s
@@ -279,7 +279,7 @@ parseBuildMessages s=let
                                 if not (null l) && (' ' == head l)
                                        then (Just (jcn,l:msgs),ls)
                                        else (Nothing,ls++[makeNote jcn msgs])
-                        -- | Just fp<-getBuiltPath l=(currentNote,ls,fp:fps)             
+                        --  | Just fp<-getBuiltPath l=(currentNote,ls,fp:fps)
                         | Just n<-extractLocation l=(Just (n,[bwn_title n]),ls)
                         | otherwise =(Nothing,ls)
                 extractLocation el=let
