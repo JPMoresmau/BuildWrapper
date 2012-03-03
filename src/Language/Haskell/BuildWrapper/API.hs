@@ -173,7 +173,7 @@ getOutline fp=do
        (mast,bwns)<-getAST fp
        case mast of
         Just (ParseOk ast)->do
-                liftIO $ Prelude.print ast
+                --liftIO $ Prelude.print ast
                 let ods=getHSEOutline ast
                 let (es,is)=getHSEImportExport ast
                 return (OutlineResult ods es is,bwns)

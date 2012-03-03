@@ -1,5 +1,5 @@
 name:           buildwrapper
-version:        0.5.0
+version:        0.5.1
 cabal-version:  >= 1.8
 build-type:     Simple
 license:        BSD3
@@ -57,8 +57,27 @@ executable buildwrapper
   hs-source-dirs:  src-exe
   main-is:         Main.hs
   build-depends:   
-                   base < 5, buildwrapper, cmdargs, filepath, Cabal, directory, mtl, ghc, cpphs,haskell-src-exts, old-time, ghc-syb-utils, ghc-paths
-                   ,vector >= 0.8, containers, syb, process, regex-tdfa, text, aeson >=0.4, bytestring,
+                   base < 5,
+                   buildwrapper,
+                   cmdargs,
+                   filepath,
+                   Cabal,
+                   directory,
+                   mtl,
+                   ghc,
+                   cpphs,
+                   haskell-src-exts,
+                   old-time,
+                   ghc-syb-utils,
+                   ghc-paths,
+                   vector >= 0.8,
+                   containers,
+                   syb,
+                   process,
+                   regex-tdfa,
+                   text,
+                   aeson >=0.4,
+                   bytestring,
                    transformers
   ghc-options:     -Wall -fno-warn-unused-do-bind
   other-modules:   Language.Haskell.BuildWrapper.CMD
@@ -67,7 +86,21 @@ test-suite buildwrapper-test
   type:            exitcode-stdio-1.0
   hs-source-dirs:  test
   build-depends:   
-                   base < 5, buildwrapper, HUnit, mtl, filepath, directory, Cabal, old-time, aeson >=0.4, text, process, bytestring, attoparsec, test-framework, test-framework-hunit,
+                   base < 5,
+                   buildwrapper,
+                   HUnit,
+                   mtl,
+                   filepath,
+                   directory,
+                   Cabal,
+                   old-time,
+                   aeson >=0.4,
+                   text,
+                   process,
+                   bytestring,
+                   attoparsec,
+                   test-framework,
+                   test-framework-hunit,
                    transformers
   main-is:         Main.hs
   ghc-options:     -Wall -fno-warn-unused-do-bind
