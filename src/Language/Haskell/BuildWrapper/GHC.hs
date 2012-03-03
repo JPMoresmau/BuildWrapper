@@ -108,7 +108,7 @@ withASTNotes f fp base_dir modul options=do
                 -- and it takes a while to actually generate the o and hi files for big modules
                 -- if we use CompManager, it's slower for modules with lots of dependencies but we can keep hscTarget= HscNothing which makes it better for bigger modules
                 setSessionDynFlags flg'  {hscTarget = HscNothing,  ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref }
-                -- $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
+                --  $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
                 addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }
                 --c1<-GMU.liftIO getClockTime
                 let modName=mkModuleName modul
