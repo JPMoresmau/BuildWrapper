@@ -431,17 +431,17 @@ data Verbosity = Silent | Normal | Verbose | Deafening
     
 -- | component in cabal file    
 data CabalComponent
-  = CCLibrary  -- ^ library
+  = CCLibrary
         { cc_buildable :: Bool -- ^ is the library buildable
-        }
-  | CCExecutable -- executable
+        } -- ^ library
+  | CCExecutable
         { cc_exe_name :: String -- ^ executable name
         , cc_buildable :: Bool -- ^ is the executable buildable
-       }
-  | CCTestSuite -- est suite
+       }  -- ^ executable
+  | CCTestSuite 
         { cc_test_name :: String -- ^ test suite name
         , cc_buildable :: Bool -- ^ is the test suite buildable
-        }      
+        } -- ^ test suite
   deriving (Eq, Show)
 
 instance ToJSON CabalComponent where

@@ -135,22 +135,22 @@ getGHCAST fp = withGHCAST' fp (\_->BwGHC.getAST)
 
 -- | perform an action on the GHC AST
 withGHCAST ::  FilePath -- ^ the source file
-        -> (FilePath -- ^ the source file
-                -> FilePath -- ^ the base directory
-                ->  String -- ^ the module name 
-                -> [String] -- ^ the GHC options 
-                -> IO a) 
+        -> (FilePath --  ^ the source file
+                -> FilePath --  ^ the base directory
+                ->  String --  ^ the module name
+                -> [String] --  ^ the GHC options
+                -> IO a)
         -> BuildWrapper (OpResult (Maybe a))
 withGHCAST fp f=withGHCAST' fp (\n a b c d->do
         r<- f a b c d
         return (Just r,n))
 
 withGHCAST' ::  FilePath -- ^ the source file
-        -> ([BWNote] -- ^ the notes from getting the flags
-        -> FilePath -- ^ the source file
-        -> FilePath -- ^ the base directory
-        ->  String -- ^ the module name 
-        -> [String] -- ^ the GHC options 
+        -> ([BWNote] --  ^ the notes from getting the flags
+        -> FilePath --  ^ the source file
+        -> FilePath --  ^ the base directory
+        ->  String --  ^ the module name
+        -> [String] --  ^ the GHC options
         ->  IO (OpResult (Maybe a))) -> BuildWrapper (OpResult (Maybe a))
 withGHCAST'  fp f= do
         (bf,ns)<-getBuildFlags fp
