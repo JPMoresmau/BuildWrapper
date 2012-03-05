@@ -406,7 +406,6 @@ getAllFiles lbi= do
                 let tests=map extractFromTest $ testSuites pd
                 mapM (\(a,b,c,isLib,d)->do
                         mf<-copyAll d
-                        liftIO $ print $ map snd mf
                         return (CabalBuildInfo a b c isLib mf)) (libs ++ exes ++ tests)
         where 
         extractFromLib :: Library -> [(BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath])]
