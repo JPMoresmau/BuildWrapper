@@ -11,9 +11,7 @@ This executable is *short-lived*, it is not a running server as scion (the proje
 BuildWrapper uses a temporary work folder inside the project to store both a copy of the source files and the result of its operations. In an IDE setting, the content of the temporary folder may contain files representing unsaved data, which allow BuildWrapper to use Cabal and file based operations regardless.
 
 
-You can run
-	buildwrapper --help
-to get a feel for the different options you can call buildwrapper with
+You can run `buildwrapper --help` to get a feel for the different options you can call buildwrapper with. You can also run EclipseFP with the debug mode preference on to see the BuildWrapper interaction in an Eclipse console view.
 
 ## Generic options
 These options apply to all commands
