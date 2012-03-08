@@ -144,14 +144,36 @@ data InFileSpan=InFileSpan {ifs_start::InFileLoc -- ^ start location
         deriving (Show,Read,Eq,Ord)
 
 instance ToJSON InFileSpan  where
-    toJSON  (InFileSpan (InFileLoc sr sc) (InFileLoc er ec))=toJSON $ map toJSON [sr,sc,er,ec]   
+    toJSON  (InFileSpan (InFileLoc sr sc) (InFileLoc er ec))
+        | sr==er = if ec==sc+1 
+                then toJSON $ map toJSON [sr,sc]
+                else toJSON $ map toJSON [sr,sc,ec]  
+        | otherwise = toJSON $ map toJSON [sr,sc,er,ec]   
 
 instance FromJSON InFileSpan where
-    parseJSON (Array v) |
-        Success v0 <- fromJSON (v V.! 0),
-        Success v1 <- fromJSON (v V.! 1),
-        Success v2 <- fromJSON (v V.! 2),
-        Success v3 <- fromJSON (v V.! 3)=return $ InFileSpan (InFileLoc v0 v1) (InFileLoc v2 v3)
+    parseJSON (Array v) =do
+        let
+                l=V.length v
+        case l of
+                2->do 
+                     let 
+                        Success v0 = fromJSON (v V.! 0)
+                        Success v1 = fromJSON (v V.! 1)
+                     return $ InFileSpan (InFileLoc v0 v1) (InFileLoc v0 (v1+1))
+                3->do
+                     let 
+                        Success v0 = fromJSON (v V.! 0)
+                        Success v1 = fromJSON (v V.! 1)
+                        Success v2 = fromJSON (v V.! 2)
+                     return $ InFileSpan (InFileLoc v0 v1) (InFileLoc v0 v2)  
+                3->do 
+                     let 
+                        Success v0 = fromJSON (v V.! 0)
+                        Success v1 = fromJSON (v V.! 1)
+                        Success v2 = fromJSON (v V.! 2)
+                        Success v3 = fromJSON (v V.! 3)
+                     return $  InFileSpan (InFileLoc v0 v1) (InFileLoc v2 v3)                            
+                _ -> mzero
     parseJSON _= mzero        
 
 -- | construct a file span

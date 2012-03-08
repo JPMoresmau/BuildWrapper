@@ -47,6 +47,7 @@ import StringBuffer
 import System.FilePath
 
 import qualified MonadUtils as GMU
+import Control.Monad.IO.Class (liftIO)
 
 
 -- | get the GHC typechecked AST
@@ -407,17 +408,15 @@ generateTokens :: FilePath                        -- ^ The project's root direct
                -> ([Located Token] -> [TokenDef]) -- ^ Transform function from GHC tokens to TokenDefs
                -> ([TokenDef] -> a)               -- ^ The TokenDef filter function
                -> IO (Either BWNote a)
-generateTokens projectRoot contents literate options  xform filterFunc =
-  let (ppTs, ppC) = preprocessSource contents literate
-  in   ghctokensArbitrary projectRoot ppC options
-       >>= (\result ->
-             case result of 
-               Right toks ->
-                 let filterResult = filterFunc $ List.sortBy (comparing td_loc) (ppTs ++ xform toks)
-                 --liftIO $ putStrLn $ show tokenList
-                 in return $ Right filterResult
-               Left n -> return $ Left n
-               )
+generateTokens projectRoot contents literate options  xform filterFunc =do
+     let (ppTs, ppC) = preprocessSource contents literate
+     result<-  ghctokensArbitrary projectRoot ppC options
+     case result of 
+       Right toks ->do
+         let filterResult = filterFunc $ List.sortBy (comparing td_loc) (ppTs ++ xform toks)
+         return $ Right filterResult
+       Left n -> return $ Left n
+               
      
 -- | Preprocess some source, returning the literate and Haskell source as tuple.
 preprocessSource ::  String -- ^ the source contents
