@@ -166,7 +166,7 @@ instance FromJSON InFileSpan where
                         Success v1 = fromJSON (v V.! 1)
                         Success v2 = fromJSON (v V.! 2)
                      return $ InFileSpan (InFileLoc v0 v1) (InFileLoc v0 v2)  
-                3->do 
+                4->do 
                      let 
                         Success v0 = fromJSON (v V.! 0)
                         Success v1 = fromJSON (v V.! 1)
