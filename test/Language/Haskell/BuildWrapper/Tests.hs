@@ -34,7 +34,7 @@ tests :: (APIFacade a)=> [a -> Test]
 tests=  [
         testSynchronizeAll,
         testConfigureWarnings , 
-        testConfigureErrors ,
+        testConfigureErrors,
         testBuildErrors,
         testBuildWarnings,
         testBuildOutput,
@@ -53,7 +53,8 @@ tests=  [
         testInPlaceReference,
         testCabalComponents,
         testCabalDependencies,
-        testNoSourceDir
+        testNoSourceDir,
+        testFlags
         ]
 
 class APIFacade a where
@@ -61,6 +62,7 @@ class APIFacade a where
         synchronize1 :: a  -> FilePath -> Bool -> FilePath -> IO (Maybe FilePath)
         write :: a -> FilePath -> FilePath -> String -> IO ()
         configure :: a -> FilePath -> WhichCabal -> IO (OpResult Bool)
+        configureWithFlags :: a -> FilePath -> WhichCabal -> String -> IO (OpResult Bool)
         build :: a -> FilePath -> Bool -> WhichCabal -> IO (OpResult BuildResult)
         build1 :: a -> FilePath -> FilePath -> IO (OpResult Bool)
         getBuildFlags :: a -> FilePath -> FilePath -> IO (OpResult BuildFlags)
@@ -1017,6 +1019,47 @@ testNoSourceDir api=TestLabel "testNoSourceDir" (TestCase (do
         assertBool ".dist-buildwrapper exists after synchronize" (not d2b)
         
         ))
+
+testFlags  :: (APIFacade a)=> a -> Test
+testFlags api=TestLabel "testFlags" (TestCase (do
+        root<-createTestProject
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "flag server",
+                "  description: Install the scion-server.",
+                "  default: False",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:  base",
+                "",
+                "executable BWTest",
+                "  if !flag(server)",
+                "    buildable: False",
+                "  hs-source-dirs:  src",
+                "  main-is:         Main.hs",
+                "  other-modules:  B.D",
+                "  build-depends:  base",
+                ""
+                ]
+        configure api root Source
+        build api root True Source
+        let exePath=root </> ".dist-buildwrapper" </> "dist" </> "build" </> testProjectName </> "BWTest.exe"
+        ex1<-doesFileExist exePath
+        assertBool "exe exists!" (not ex1)
+        
+        configureWithFlags api root Source "server"
+        build api root True Source
+        ex2<-doesFileExist exePath
+        assertBool "exe doesn't exists!" ex2
+        
+        ))    
 
 testProjectName :: String
 testProjectName="BWTest"         

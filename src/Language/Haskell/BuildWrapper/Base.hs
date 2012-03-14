@@ -36,6 +36,7 @@ data BuildWrapperState=BuildWrapperState{
         ,cabalFile::FilePath -- ^ path of the project cabal file
         ,verbosity::Verbosity -- ^ verbosity of logging
         ,cabalFlags::String -- ^ flags to pass cabal
+        ,cabalOpts::[String] -- ^ extra arguments to cabal configure
         }
 
 -- | status of notes: error or warning
@@ -75,7 +76,8 @@ data BWNote=BWNote {
         }
         deriving (Show,Read,Eq)
       
-        
+isBWNoteError :: BWNote -> Bool
+isBWNoteError bw=(bwn_status bw) == BWError
         
 instance ToJSON BWNote  where
     toJSON (BWNote s t l)= object ["s" .= s, "t" .= t, "l" .= l]       

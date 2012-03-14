@@ -37,6 +37,7 @@ instance APIFacade CMDAPI where
         synchronize1 _ r ff fp= runAPI r "synchronize1" ["--force="++show ff,"--file="++fp]
         write _ r fp s= runAPI r "write" ["--file="++fp,"--contents="++s]
         configure _ r t= runAPI r "configure" ["--cabaltarget="++ show t]
+        configureWithFlags _ r t fgs= runAPI r "configure" ["--cabaltarget="++ show t,"--cabalflags="++ fgs]
         build _ r b wc= runAPI r "build" ["--output="++ show b,"--cabaltarget="++ show wc]
         build1 _ r fp= runAPI r "build1" ["--file="++fp]
         getBuildFlags _ r fp= runAPI r "getbuildflags" ["--file="++fp]

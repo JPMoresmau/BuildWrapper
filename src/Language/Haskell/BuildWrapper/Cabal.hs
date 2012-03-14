@@ -132,14 +132,16 @@ cabalConfigure srcOrTgt= do
                 v<-cabalV
                 dist_dir<-getDistDir
                 uf<-gets cabalFlags
+                copts<-gets cabalOpts
                 let args=[
                         "configure",
                         "--verbose=" ++ show (fromEnum v),
                         "--user",
                         "--enable-tests",
-                        "--builddir="++dist_dir,
-                        "--flags="++uf
-                        ]
+                        "--builddir="++dist_dir
+                        ] 
+                        ++ (if null uf then [] else ["--flags="++uf])
+                        ++ copts
                 liftIO $ do
                         cd<-getCurrentDirectory
                         setCurrentDirectory (takeDirectory cf)
@@ -147,9 +149,11 @@ cabalConfigure srcOrTgt= do
                         putStrLn err
                         let msgs=(parseCabalMessages (takeFileName cf) (takeFileName cp) err) -- ++ (parseCabalMessages (takeFileName cf) out)
                         ret<-case ex of
-                                ExitSuccess  -> do
-                                        lbi<-DSC.getPersistBuildConfig dist_dir
-                                        return (Just lbi,msgs)
+                                ExitSuccess  -> if any isBWNoteError msgs 
+                                        then return (Nothing,msgs)
+                                        else do 
+                                                lbi<-DSC.getPersistBuildConfig dist_dir
+                                                return (Just lbi,msgs)
                                 ExitFailure ec -> if null msgs
                                                 then return (Nothing,[BWNote BWError ("Cabal configure returned error code " ++ show ec) (BWLocation cf 0 1)])   
                                                 else return (Nothing, msgs)

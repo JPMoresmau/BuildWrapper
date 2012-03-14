@@ -30,20 +30,20 @@ type CabalPath = FilePath
 type TempFolder = FilePath
 
 -- | all the different actions and their parameters
-data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, force::Bool}
-        | Synchronize1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, force::Bool, file:: FilePath}
-        | Write {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath, contents::String}  
-        | Configure {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, verbosity::Verbosity,cabalTarget::WhichCabal}
-        | Build {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, verbosity::Verbosity,output::Bool,cabalTarget::WhichCabal}
-        | Build1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath}
-        | Outline {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath} 
-        | TokenTypes {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath} 
-        | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath,token::String}
-        | ThingAtPointCmd {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath, line::Int, column::Int}
-        | NamesInScope {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath} 
-        | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String}
-        | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String}
-        | GetBuildFlags {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, file:: FilePath}
+data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], force::Bool}
+        | Synchronize1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], force::Bool, file:: FilePath}
+        | Write {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, contents::String}  
+        | Configure {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], verbosity::Verbosity,cabalTarget::WhichCabal}
+        | Build {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], verbosity::Verbosity,output::Bool,cabalTarget::WhichCabal}
+        | Build1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath}
+        | Outline {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath} 
+        | TokenTypes {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath} 
+        | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath,token::String}
+        | ThingAtPointCmd {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, line::Int, column::Int}
+        | NamesInScope {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath} 
+        | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String]}
+        | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String]}
+        | GetBuildFlags {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath}
     deriving (Show,Read,Data,Typeable)    
   
 
@@ -59,6 +59,8 @@ ff :: Bool
 ff=def &= help "overwrite newer file"
 uf :: String
 uf=def &= help "user cabal flags"
+co :: [String]
+co=def &= help "cabal extra parameters"
 
 v :: Verbosity
 v=Normal &= help "verbosity"
@@ -66,35 +68,35 @@ wc :: WhichCabal
 wc=Target &= help "which cabal file to use: original or temporary"
 
 msynchronize :: BWCmd
-msynchronize = Synchronize tf cp cf uf ff
+msynchronize = Synchronize tf cp cf uf co ff
 msynchronize1 :: BWCmd
-msynchronize1 = Synchronize1 tf cp cf uf ff fp
+msynchronize1 = Synchronize1 tf cp cf uf co ff fp
 mconfigure :: BWCmd
-mconfigure = Configure tf cp cf uf v wc
+mconfigure = Configure tf cp cf uf co v wc
 mwrite :: BWCmd
-mwrite= Write tf cp cf uf fp (def &= help "file contents")
+mwrite= Write tf cp cf uf co fp (def &= help "file contents")
 mbuild :: BWCmd
-mbuild = Build tf cp cf uf v (def &= help "output compilation and linking result") wc
+mbuild = Build tf cp cf uf co v (def &= help "output compilation and linking result") wc
 mbuild1 :: BWCmd
-mbuild1 = Build1 tf cp cf uf fp
+mbuild1 = Build1 tf cp cf uf co fp
 mgetbf :: BWCmd
-mgetbf = GetBuildFlags tf cp cf uf fp
+mgetbf = GetBuildFlags tf cp cf uf co fp
 moutline :: BWCmd
-moutline = Outline tf cp cf uf fp
+moutline = Outline tf cp cf uf co fp
 mtokenTypes :: BWCmd
-mtokenTypes= TokenTypes tf cp cf uf fp
+mtokenTypes= TokenTypes tf cp cf uf co fp
 moccurrences :: BWCmd
-moccurrences=Occurrences tf cp cf uf fp (def &= help "text to search occurrences of" &= name "token")
+moccurrences=Occurrences tf cp cf uf co fp (def &= help "text to search occurrences of" &= name "token")
 mthingAtPoint :: BWCmd
-mthingAtPoint=ThingAtPointCmd tf cp cf uf fp 
+mthingAtPoint=ThingAtPointCmd tf cp cf uf co fp 
         (def &= help "line" &= name "line")
         (def &= help "column" &= name "column")
 mnamesInScope :: BWCmd
-mnamesInScope=NamesInScope tf cp cf uf fp 
+mnamesInScope=NamesInScope tf cp cf uf co fp 
 mdependencies :: BWCmd
-mdependencies=Dependencies tf cp cf uf
+mdependencies=Dependencies tf cp cf uf co
 mcomponents :: BWCmd
-mcomponents=Components tf cp cf uf
+mcomponents=Components tf cp cf uf co
 
 -- | main method for command handling
 cmdMain :: IO ()
@@ -122,13 +124,13 @@ cmdMain = cmdArgs
                 handle c@Outline{file=fi}=runCmd c (getOutline fi)
                 handle c@TokenTypes{file=fi}=runCmd c (getTokenTypes fi)
                 handle c@Occurrences{file=fi,token=t}=runCmd c (getOccurrences fi t)
-                handle c@ThingAtPointCmd{file=fi,line=l,column=co}=runCmd c (getThingAtPoint fi l co)
+                handle c@ThingAtPointCmd{file=fi,line=l,column=col}=runCmd c (getThingAtPoint fi l col)
                 handle c@NamesInScope{file=fi}=runCmd c (getNamesInScope fi)
                 handle c@Dependencies{}=runCmd c getCabalDependencies
                 handle c@Components{}=runCmd c getCabalComponents
                 runCmd :: (ToJSON a) => BWCmd -> StateT BuildWrapperState IO a -> IO ()
                 runCmd=runCmdV Normal
                 runCmdV:: (ToJSON a) => Verbosity -> BWCmd -> StateT BuildWrapperState IO a -> IO ()
-                runCmdV vb cmd f=evalStateT f (BuildWrapperState (tempFolder cmd) (cabalPath cmd) (cabalFile cmd) vb (cabalFlags cmd))
+                runCmdV vb cmd f=evalStateT f (BuildWrapperState (tempFolder cmd) (cabalPath cmd) (cabalFile cmd) vb (cabalFlags cmd) (cabalOption cmd))
                                 >>= BSC.putStrLn . BS.append "build-wrapper-json:" . encode
                         
