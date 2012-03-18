@@ -487,7 +487,7 @@ data CabalPackage=CabalPackage {
         ,cp_version::String -- ^ version
         ,cp_exposed::Bool -- ^ is the package exposed or hidden
         ,cp_dependent::[CabalComponent] -- ^ components in the cabal file that use this package
-        ,cp_exposedModules::[String] -- ^ exposed modules
+        ,cp_modules::[String] -- ^ all modules. We keep all modules so that we can try to open non exposed but imported modules directly
         }
    deriving (Eq, Show)
 
