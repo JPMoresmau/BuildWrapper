@@ -27,7 +27,7 @@ getHSEAST :: String -- ^ input text
         -> [String] -- ^ options
         -> IO (ParseResult (Module SrcSpanInfo, [Comment]))
 getHSEAST input options=do
-        let exts=map classifyExtension options
+        let exts=MultiParamTypeClasses : map classifyExtension options
         let extsFull=if "-fglasgow-exts" `elem` options
                 then exts ++ glasgowExts
                 else exts
