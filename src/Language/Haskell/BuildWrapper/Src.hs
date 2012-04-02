@@ -24,13 +24,15 @@ import Data.List (foldl')
 
 -- | get the AST
 getHSEAST :: String -- ^ input text
-        -> [String] -- ^ options
         -> IO (ParseResult (Module SrcSpanInfo, [Comment]))
-getHSEAST input options=do
-        let exts=MultiParamTypeClasses : map classifyExtension options
-        let extsFull=if "-fglasgow-exts" `elem` options
-                then exts ++ glasgowExts
-                else exts
+getHSEAST input =do
+        --   -> [String] -- ^ options
+        -- options
+        --let exts=MultiParamTypeClasses : map classifyExtension options
+        --let extsFull=if "-fglasgow-exts" `elem` options
+        --        then exts ++ glasgowExts
+        --        else exts
+        let extsFull=knownExtensions
         -- fixities necessary (see http://trac.haskell.org/haskell-src-exts/ticket/189 and https://sourceforge.net/projects/eclipsefp/forums/forum/371922/topic/4808590)
         let parseMode=defaultParseMode {extensions=extsFull,ignoreLinePragmas=False,ignoreLanguagePragmas=False,fixities = Just baseFixities} 
         return $ parseFileContentsWithComments parseMode input
