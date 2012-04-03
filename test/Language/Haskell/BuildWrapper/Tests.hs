@@ -45,6 +45,7 @@ tests=  [
         testOutlineLiterate,
         testOutlineComments,
         testOutlineMultiParam,
+        testOutlineOperator,
         testPreviewTokenTypes,
         testThingAtPoint ,
         testThingAtPointNotInCabal,
@@ -692,6 +693,28 @@ testOutlineMultiParam api= TestLabel "testOutlineMultiParam" (TestCase ( do
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
         assertBool "no outline" (not $ null or)
         ))
+    
+testOutlineOperator  :: (APIFacade a)=> a -> Test
+testOutlineOperator api= TestLabel "testOutlineMultiParam" (TestCase ( do
+        root<-createTestProject
+        synchronize api root False
+        let rel="src"</>"A.hs"      
+        write api root rel $ unlines [
+                "{-# LANGUAGE MultiParamTypeClasses #-}",
+                "module A           (  Collection (",
+                "                     (>-)",
+                "                    )",
+                "   )where",
+                "    infixl 5  >-",
+                "    class Collection a where",  
+                "        (>-)     :: Eq b => a b -> a b -> a b"
+                ]
+        (_,nsErrors3f)<-getBuildFlags api root rel
+        assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
+        (OutlineResult or _ _,nsErrors1)<-getOutline api root rel
+        assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
+        assertBool "no outline" (not $ null or)
+        ))    
                 
 testPreviewTokenTypes :: (APIFacade a)=> a -> Test
 testPreviewTokenTypes api= TestLabel "testPreviewTokenTypes" (TestCase ( do
