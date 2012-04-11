@@ -153,7 +153,7 @@ generateAST cc= do
                                 let nameKey=usName u
                                 --  , ",", (usType u)
                                 (Array lines)<- names .:?  nameKey .!= (Array V.empty)
-                                let lineV=Number $ I $ usLine u
+                                let lineV= usLoc u  -- Number $ I $ usLine u
                                 let lines2=if V.elem lineV lines
                                         then lines
                                         else V.cons lineV lines
@@ -172,8 +172,7 @@ generateAST cc= do
                         Just (String mo)<-HM.lookup "Module" m,
                         Just (String p)<-HM.lookup "Package" m,
                         Just (String ht)<-HM.lookup "HType" m,
-                        Just (Array arr)<-HM.lookup "Pos" m,
-                        Number (I l)<-arr V.! 0 = [Usage (if p=="main" then pkg else p) mo s (ht=="t") l]
+                        Just arr<-HM.lookup "Pos" m= [Usage (if p=="main" then pkg else p) mo s (ht=="t") arr]
                 ghcValToUsage _ _=[]
                 
 
@@ -182,9 +181,9 @@ data Usage = Usage {
         usModule::T.Text,
         usName::T.Text,
         usType::Bool,
-        usLine::Integer
+        usLoc::Value
         } 
-        deriving (Read,Show,Eq,Ord)
+        deriving (Show,Eq)
 
 -- | build one source file in GHC
 build1 :: FilePath -- ^ the source file

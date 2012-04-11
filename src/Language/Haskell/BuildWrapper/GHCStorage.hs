@@ -352,7 +352,7 @@ extractUsages  _= []
 
 extractName :: Value -> Value -> [Maybe Value]
 extractName src (Object m) |
-        Just (l1,c1,l2,c2)<-extractSource src,
+        Just ifl<-extractSource src,
         Just (String s)<-HM.lookup "Name" m,
         Just (String mo)<-HM.lookup "Module" m,
         not $ T.null mo,
@@ -360,13 +360,14 @@ extractName src (Object m) |
         --Just (String qt)<-HM.lookup "QType" m, ,"QType" .= qt
         Just (String t)<-HM.lookup "HType" m,
         at<-fromMaybe (Array V.empty) $ HM.lookup "AllTypes" m
-                =[Just $ object ["Name" .= s,"Module" .= mo,"Package" .= p,"HType" .= t,"AllTypes" .= at, "Pos" .= toJSON [l1,c1,l2,c2]]]
+                =[Just $ object ["Name" .= s,"Module" .= mo,"Package" .= p,"HType" .= t,"AllTypes" .= at, "Pos" .= toJSON ifl]]
 --extractName src (Array arr) | not $ V.null arr && isNothing (extractSource $ arr V.! 0)=concatMap (extractName src) $ V.toList arr
 extractName _ _=[]
 
-extractSource :: Value ->  Maybe (Int,Int,Int,Int)
+extractSource :: Value ->  Maybe InFileSpan
 extractSource (Object m) | 
-        Just pos<-HM.lookup "SrcSpan" m=extractSourceSpan pos
+        Just pos<-HM.lookup "SrcSpan" m,
+        Just (sl,sc,el,ec)<-extractSourceSpan pos=Just $ InFileSpan (InFileLoc sl sc) (InFileLoc el ec)
 extractSource _=Nothing
 
 -- | extract the source span from JSON
