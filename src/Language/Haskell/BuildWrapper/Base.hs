@@ -21,6 +21,7 @@ import Data.Aeson
 import qualified Data.Text as T
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Vector as V
+import qualified Data.Set as S
 
 import System.Directory
 import System.FilePath
@@ -503,6 +504,18 @@ instance FromJSON CabalPackage where
                          v .: "m"
     parseJSON _= mzero
 
+data LoadContents = SingleFile {
+                lmFile :: FilePath
+                ,lmModule :: String
+        } 
+        | MultipleFile {
+                lmFiles :: [(FilePath,String)]
+        }
+
+getLoadFiles :: LoadContents -> [(FilePath,String)]
+getLoadFiles SingleFile{lmFile=f,lmModule=m}=[(f,m)]
+getLoadFiles MultipleFile{lmFiles=fs}=fs
+
 -- |  http://book.realworldhaskell.org/read/io-case-study-a-library-for-searching-the-filesystem.html
 getRecursiveContents :: FilePath -> IO [FilePath]
 getRecursiveContents topdir = do
@@ -534,3 +547,13 @@ removeBaseDir base_dir = loop
         else head str : loop (tail str)      -- no: keep looking
     n = length base_dir_sep
     base_dir_sep=base_dir ++ [pathSeparator] 
+    
+nubOrd :: Ord a => [a] -> [a]
+nubOrd=S.toList . S.fromList
+
+formatJSON :: String -> String
+formatJSON s=snd $ foldl f (0,"") s
+        where 
+                f (i,s) '['=((i+4),s ++ "\n" ++(map (const ' ') [0 .. i]) ++ "[")
+                f (i,s) ']'  =((i-4),s ++ "\n" ++(map (const ' ') [0 .. i]) ++ "]")
+                f (i,s) c =(i,s++[c])

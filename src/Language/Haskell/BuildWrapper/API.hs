@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, ScopedTypeVariables #-}
+{-# LANGUAGE CPP, ScopedTypeVariables, OverloadedStrings #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.API
 -- Author      : JP Moresmau
@@ -12,25 +12,38 @@
 -- API entry point, with all exposed methods
 module Language.Haskell.BuildWrapper.API where
 
+import Distribution.Simple.LocalBuildInfo (localPkgDescr)
+import Distribution.Package (packageId)
+import Distribution.Text (display)
+import qualified Data.Aeson.Types as Data.Aeson.Types (parse)
+import Data.Aeson.Types (Parser)
 import Language.Haskell.BuildWrapper.Base
 import Language.Haskell.BuildWrapper.Cabal
 import qualified Language.Haskell.BuildWrapper.GHC as BwGHC
 import Language.Haskell.BuildWrapper.GHCStorage
 import Language.Haskell.BuildWrapper.Src
 
+import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString.Lazy.Char8 as BSC
 import qualified Data.Text as T
-
+import qualified Data.HashMap.Lazy as HM
+import qualified MonadUtils as GMU
 import Prelude hiding (readFile, writeFile)
+import qualified Data.Vector as V
+import Data.Attoparsec.Number (Number(I))
 
 import System.IO.UTF8
 
 import Control.Monad.State
-import Language.Haskell.Exts.Annotated
+import Language.Haskell.Exts.Annotated hiding (String)
 import Language.Preprocessor.Cpphs
 import Data.Maybe
 import System.Directory
 import System.FilePath
-import GHC (TypecheckedSource)
+import GHC (RenamedSource, TypecheckedSource, TypecheckedModule(..), Ghc, ms_mod, pm_mod_summary)
+import qualified GHC  as GHC (Module)
+import Data.Tuple (swap)
+import Data.Aeson
 
 -- | copy all files from the project to the temporary folder
 synchronize ::  Bool -- ^ if true copy all files, if false only copy files newer than their corresponding temp files
@@ -74,6 +87,104 @@ build :: Bool -- ^ do we want output (True) or just compilation without linking?
         -> WhichCabal -- ^ use original cabal or temp cabal file
         -> BuildWrapper (OpResult BuildResult)
 build = cabalBuild
+
+generateAST :: CabalComponent -> BuildWrapper()
+generateAST cc= do
+        (_,ns)<-withCabal Source (\lbi -> do 
+                cbis<-getAllFiles lbi
+                cf<-gets cabalFile
+                temp<-getFullTempDir
+                let dir=takeDirectory cf
+                let pkg=T.pack $ display $ packageId $ localPkgDescr lbi
+                mapM_ (\cbi->do
+                        let 
+                                mps=map (\(m,f)->(f,moduleToString m)) $ cbiModulePaths cbi
+                        opts<-fmap snd $ fileGhcOptions (lbi,cbi)        
+                        modules<-liftIO $ do
+                                cd<-getCurrentDirectory
+                                setCurrentDirectory dir
+                                (mods,ns)<-BwGHC.withASTNotes getModule (temp </>) dir (MultipleFile mps) opts     
+                                setCurrentDirectory cd 
+                                return mods
+                        mapM_ (generate pkg) modules
+                        ) $ filter (\cbi->cbiComponent cbi==cc) cbis
+                )
+        liftIO $ Prelude.print ns        
+        return ()
+        where
+                getModule ::  FilePath -> TypecheckedModule -> Ghc(FilePath,GHC.Module,RenamedSource)
+                getModule f tm=return (f,ms_mod $ pm_mod_summary $ tm_parsed_module tm,fromJust $ tm_renamed_source tm)
+                generate :: T.Text -> (FilePath,GHC.Module,RenamedSource) -> BuildWrapper()
+                generate pkg (fp,mod,(hsg,_,_,_))=do
+                        tgt<-getTargetPath fp
+                        --mv<-liftIO $ readGHCInfo tgt
+                        let v = dataToJSON hsg
+                        --liftIO $ Prelude.putStrLn tgt
+                        --liftIO $ Prelude.putStrLn $ formatJSON $ BSC.unpack $ encode v
+                        --case mv of
+                        --        Just v->do
+                        let vals=catMaybes $ extractUsages v
+                        --liftIO $ mapM_ (Prelude.putStrLn . formatJSON . BSC.unpack . encode) vals
+                        (mast,ns)<-getAST fp
+                        case mast of
+                                Just (ParseOk ast)->do
+                                        let ods=getHSEOutline ast
+                                        let (es,is)=getHSEImportExport ast
+                                        let val=reconcile pkg mod vals ods es is
+                                        liftIO $ setUsageInfo tgt val
+                                        return ()
+                                _ -> return ()
+                        return ()
+                        --        Nothing -> do
+                        --               liftIO $ Prelude.putStrLn "no ghc info"
+                        --                return ()
+                        return ()
+                reconcile :: T.Text ->GHC.Module->  [Value] -> [OutlineDef] -> [ExportDef] -> [ImportDef] -> Value
+                reconcile pkg mod vals ods es is=foldr usageToJSON (object []) (concatMap (ghcValToUsage pkg) vals)
+                usageToJSON :: Usage -> Value -> Value
+                usageToJSON u o=
+                        let r=Data.Aeson.Types.parse (\(Object pkgs)-> do
+                                (Object mods) <- pkgs .:? (usPackage u) .!= object []
+                                (Object types)<- mods .:? (usModule u) .!= object []
+                                let typeKey=if usType u
+                                        then "types"
+                                        else "vars"
+                                (Object names)<- types .:? typeKey .!= object []        
+                                let nameKey=usName u
+                                --  , ",", (usType u)
+                                (Array lines)<- names .:?  nameKey .!= (Array V.empty)
+                                let lineV=Number $ I $ usLine u
+                                let lines2=if V.elem lineV lines
+                                        then lines
+                                        else V.cons lineV lines
+                                let names2=HM.insert nameKey (Array lines2) names
+                                let types2=HM.insert typeKey (Object names2) types
+                                let mods2=HM.insert (usModule u) (Object types2) mods
+                                return $ Object $ HM.insert (usPackage u) (Object mods2) pkgs
+                                ) o
+                        in case r of
+                                Error st->object ["error" .= st]
+                                Success a->a
+                usageToJSON _ a=a
+                ghcValToUsage ::  T.Text -> Value -> [Usage]
+                ghcValToUsage pkg (Object m) |
+                        Just (String s)<-HM.lookup "Name" m,
+                        Just (String mo)<-HM.lookup "Module" m,
+                        Just (String p)<-HM.lookup "Package" m,
+                        Just (String ht)<-HM.lookup "HType" m,
+                        Just (Array arr)<-HM.lookup "Pos" m,
+                        Number (I l)<-arr V.! 0 = [Usage (if p=="main" then pkg else p) mo s (ht=="t") l]
+                ghcValToUsage _ _=[]
+                
+
+data Usage = Usage {
+        usPackage::T.Text,
+        usModule::T.Text,
+        usName::T.Text,
+        usType::Bool,
+        usLine::Integer
+        } 
+        deriving (Read,Show,Eq,Ord)
 
 -- | build one source file in GHC
 build1 :: FilePath -- ^ the source file

@@ -356,6 +356,7 @@ data CabalBuildInfo=CabalBuildInfo {
         ,cbiBuildFolder::FilePath -- ^ the folder to build that component into
         ,cbiIsLibrary::Bool -- ^ is the component the library
         ,cbiModulePaths::[(ModuleName,FilePath)]  -- ^ the module name and corresponding source file for each contained Haskell module
+        ,cbiComponent::CabalComponent -- ^  the component handle
          } 
             
 -- | canonicalize the paths in the build info
@@ -407,7 +408,7 @@ getBuildInfo fp=do
 -- | get GHC options for a file            
 fileGhcOptions :: (LocalBuildInfo,CabalBuildInfo) -- ^ the cabal info
         -> BuildWrapper(ModuleName,[String]) -- ^ the module name and the options to pass GHC
-fileGhcOptions (lbi,CabalBuildInfo bi clbi fp isLib ls)=do
+fileGhcOptions (lbi,CabalBuildInfo bi clbi fp isLib ls _)=do
         dist_dir<-getDistDir
         let inplace=dist_dir </> "package.conf.inplace"
         inplaceExist<-liftIO $ doesFileExist inplace
@@ -417,7 +418,6 @@ fileGhcOptions (lbi,CabalBuildInfo bi clbi fp isLib ls)=do
                   | inplaceExist = ["-package-conf", inplace]
                   | otherwise = []
         return (fst $ head ls,pkg ++ ghcOptions (lbi{withOptimization=NoOptimisation}) bi clbi fp)
-
 
 -- | get CPP options for a file
 fileCppOptions :: CabalBuildInfo -- ^ the cabal info
@@ -446,28 +446,28 @@ getAllFiles lbi= do
                 let libs=maybe [] extractFromLib $ library pd
                 let exes=map extractFromExe $ executables pd
                 let tests=map extractFromTest $ testSuites pd
-                mapM (\(a,b,c,isLib,d)->do
+                mapM (\(a,b,c,isLib,d,cc)->do
                         mf<-copyAll d
-                        return (CabalBuildInfo a b c isLib mf)) (libs ++ exes ++ tests)
+                        return (CabalBuildInfo a b c isLib mf cc)) (libs ++ exes ++ tests)
         where 
-        extractFromLib :: Library -> [(BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath])]
+        extractFromLib :: Library -> [(BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath],CabalComponent)]
         extractFromLib l=let
                 lib=libBuildInfo l
-                in [(lib, fromJustDebug "extractFromLibAll" $ libraryConfig lbi,buildDir lbi, True, getSourceDirs lib)]
-        extractFromExe :: Executable -> (BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath])
+                in [(lib, fromJustDebug "extractFromLibAll" $ libraryConfig lbi,buildDir lbi, True, getSourceDirs lib,cabalComponentFromLibrary l)]
+        extractFromExe :: Executable -> (BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath],CabalComponent)
         extractFromExe e@Executable{exeName=exeName'}=let
                 ebi=buildInfo e
                 targetDir = buildDir lbi </> exeName'
                 exeDir    = targetDir </> (exeName' ++ "-tmp")
                 hsd=getSourceDirs ebi
-                in (ebi,fromJustDebug "extractFromExeAll" $ lookup exeName' $ executableConfigs lbi,exeDir,False, hsd) 
-        extractFromTest :: TestSuite -> (BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath])
+                in (ebi,fromJustDebug "extractFromExeAll" $ lookup exeName' $ executableConfigs lbi,exeDir,False, hsd,cabalComponentFromExecutable e) 
+        extractFromTest :: TestSuite -> (BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath],CabalComponent)
         extractFromTest t@TestSuite {testName=testName'} =let
                 tbi=testBuildInfo t
                 targetDir = buildDir lbi </> testName'
                 testDir    = targetDir </> (testName' ++ "-tmp")
                 hsd=getSourceDirs tbi
-                in (tbi,fromJustDebug "extractFromTestAll" $ lookup testName' $ testSuiteConfigs lbi,testDir,False,hsd)
+                in (tbi,fromJustDebug "extractFromTestAll" $ lookup testName' $ testSuiteConfigs lbi,testDir,False,hsd,cabalComponentFromTestSuite t)
         copyAll :: [FilePath] -> BuildWrapper [(ModuleName,FilePath)]
         copyAll fps= do 
                   allF<-mapM copyAll' fps
@@ -498,7 +498,7 @@ getReferencedFiles lbi= do
                 lib=libBuildInfo l
                 modules=PD.exposedModules l ++ otherModules lib
                 in [CabalBuildInfo lib (fromJustDebug "extractFromLibRef" $ libraryConfig lbi)
-                        (buildDir lbi) True (copyModules modules (getSourceDirs lib))]
+                        (buildDir lbi) True (copyModules modules (getSourceDirs lib)) (cabalComponentFromLibrary l)]
         extractFromExe :: Executable ->CabalBuildInfo
         extractFromExe e@Executable{exeName=exeName'}=let
                 ebi=buildInfo e
@@ -506,7 +506,7 @@ getReferencedFiles lbi= do
                 exeDir    = targetDir </> (exeName' ++ "-tmp")
                 modules= (otherModules ebi)
                 hsd=getSourceDirs ebi
-                in CabalBuildInfo ebi (fromJustDebug "extractFromExeRef" $ lookup exeName' $ executableConfigs lbi) exeDir False (copyMain (modulePath e) hsd ++ copyModules modules hsd ) 
+                in CabalBuildInfo ebi (fromJustDebug "extractFromExeRef" $ lookup exeName' $ executableConfigs lbi) exeDir False (copyMain (modulePath e) hsd ++ copyModules modules hsd) (cabalComponentFromExecutable e) 
         extractFromTest :: TestSuite -> CabalBuildInfo
         extractFromTest t@TestSuite {testName=testName'} =let
                 tbi=testBuildInfo t
@@ -518,7 +518,7 @@ getReferencedFiles lbi= do
                     (TestSuiteExeV10 _ mp) -> copyMain mp hsd
                     (TestSuiteLibV09 _ mn) -> copyModules [mn] hsd
                     _ -> []
-                in CabalBuildInfo tbi (fromJustDebug ("extractFromTestRef:"++testName' ++ show (testSuiteConfigs lbi)) $ lookup testName' $ testSuiteConfigs lbi) testDir False (extras ++ copyModules modules hsd)
+                in CabalBuildInfo tbi (fromJustDebug ("extractFromTestRef:"++testName' ++ show (testSuiteConfigs lbi)) $ lookup testName' $ testSuiteConfigs lbi) testDir False (extras ++ copyModules modules hsd) (cabalComponentFromTestSuite t)
         copyModules :: [ModuleName] -> [FilePath] -> [(ModuleName,FilePath)]
         copyModules mods=copyFiles (concatMap (\m->[toFilePath m <.> "hs", toFilePath m <.> "lhs"]) mods)
         copyFiles :: [FilePath] -> [FilePath] -> [(ModuleName,FilePath)]
@@ -584,12 +584,19 @@ dependencies pd pkgs=let
 -- | get all components from the package description        
 cabalComponentsFromDescription :: PD.PackageDescription -- ^ the package description
         -> [CabalComponent]
-cabalComponentsFromDescription pd= [CCLibrary
-           (PD.buildable $ PD.libBuildInfo $ fromJust (PD.library pd))
+cabalComponentsFromDescription pd= [cabalComponentFromLibrary $ fromJust (PD.library pd)
          | isJust (PD.library pd)] ++
-              [ CCExecutable (PD.exeName e) (PD.buildable $ PD.buildInfo e)
-              | e <- PD.executables pd ]
-               ++ [ CCTestSuite (PD.testName e) (PD.buildable $ PD.testBuildInfo e)
-                | e <- PD.testSuites pd ]
+              (map cabalComponentFromExecutable $ PD.executables pd)
+               ++ (map cabalComponentFromTestSuite $ PD.testSuites pd)
+             
+
+cabalComponentFromLibrary :: Library -> CabalComponent
+cabalComponentFromLibrary =CCLibrary . PD.buildable . PD.libBuildInfo
+
+cabalComponentFromExecutable :: Executable -> CabalComponent
+cabalComponentFromExecutable e =CCExecutable (PD.exeName e) (PD.buildable $ PD.buildInfo e)
+
+cabalComponentFromTestSuite :: TestSuite -> CabalComponent
+cabalComponentFromTestSuite ts=CCTestSuite (PD.testName ts) (PD.buildable $ PD.testBuildInfo ts)
 
 

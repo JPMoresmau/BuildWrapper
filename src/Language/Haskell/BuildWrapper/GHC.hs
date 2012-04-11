@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, OverloadedStrings, TypeSynonymInstances,StandaloneDeriving,DeriveDataTypeable,ScopedTypeVariables, MultiParamTypeClasses, PatternGuards  #-}
+{-# LANGUAGE CPP, OverloadedStrings, TypeSynonymInstances,StandaloneDeriving,DeriveDataTypeable,ScopedTypeVariables, MultiParamTypeClasses, PatternGuards, NamedFieldPuns  #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.GHC
@@ -30,7 +30,8 @@ import DynFlags
 import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,WarningMessages, Message )
 import GHC
 import GHC.Paths ( libdir )
-import HscTypes ( srcErrorMessages, SourceError)
+import HscTypes ( srcErrorMessages, SourceError, GhcApiError)
+import HsDoc
 import Outputable
 import FastString (FastString,unpackFS,concatFS,fsLit,mkFastString)
 import Lexer hiding (loc)
@@ -47,8 +48,11 @@ import StringBuffer
 import System.FilePath
 
 import qualified MonadUtils as GMU
-import Control.Monad.IO.Class (liftIO)
+import SrcLoc (Located)
+import HsDecls (HsConDeclDetails(..))
+-- import Control.Monad.IO.Class (liftIO)
 
+type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
 -- | get the GHC typechecked AST
 getAST :: FilePath -- ^ the source file
@@ -56,19 +60,20 @@ getAST :: FilePath -- ^ the source file
         ->  String -- ^ the module name 
         -> [String] -- ^ the GHC options 
         -> IO (OpResult (Maybe TypecheckedSource))
-getAST =withASTNotes (return . tm_typechecked_source
-        )
+getAST fp base_dir modul opts=do
+        (a,n)<-withASTNotes (\_ -> return . tm_typechecked_source) id base_dir (SingleFile fp modul) opts
+        return (listToMaybe a,n) 
 
 -- | perform an action on the GHC Typechecked module
 withAST ::  (TypecheckedModule -> Ghc a) -- ^ the action
         -> FilePath -- ^ the source file
         -> FilePath -- ^ the base directory
-        ->  String -- ^ the module name 
+        ->  String -- ^ the module name
         -> [String] -- ^ the GHC options
         -> IO (Maybe a)
 withAST f fp base_dir modul options= do
-        (a,_)<-withASTNotes f fp base_dir modul options
-        return a
+        (a,_)<-withASTNotes (\_ ->f) id base_dir (SingleFile fp modul) options
+        return $ listToMaybe a
 
 -- | perform an action on the GHC JSON AST
 withJSONAST :: (Value -> IO a) -- ^ the action
@@ -88,15 +93,15 @@ withJSONAST f fp base_dir modul options=do
                                 Nothing -> return Nothing
 
 -- | the main method loading the source contents into GHC
-withASTNotes ::  (TypecheckedModule -> Ghc a) -- ^ the final action to perform on the result
-         -> FilePath -- ^ the source file
+withASTNotes ::  GHCApplyFunction a -- ^ the final action to perform on the result
+        -> (FilePath -> FilePath) -- ^ transform given file path to find bwinfo path
         -> FilePath -- ^ the base directory
-        ->  String -- ^ the module name 
+        ->  LoadContents -- ^ what to load
         -> [String] -- ^ the GHC options 
-        -> IO (OpResult (Maybe a))
-withASTNotes f fp base_dir modul options=do
+        -> IO (OpResult [a])
+withASTNotes f ff base_dir contents options=do
     let lflags=map noLoc options
-    --print options
+    -- print options
     (_leftovers, _) <- parseStaticFlags lflags
     runGhc (Just libdir) $ do
         flg <- getSessionDynFlags
@@ -110,51 +115,76 @@ withASTNotes f fp base_dir modul options=do
                 -- if we use CompManager, it's slower for modules with lots of dependencies but we can keep hscTarget= HscNothing which makes it better for bigger modules
                 setSessionDynFlags flg'  {hscTarget = HscNothing,  ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref }
                 --  $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
-                addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }
+                let fps=getLoadFiles contents
+                mapM_ (\(fp,_)-> addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }) fps
                 --c1<-GMU.liftIO getClockTime
-                let modName=mkModuleName modul
+                let howMuch=case contents of
+                        SingleFile{lmModule=m}->LoadUpTo $ mkModuleName m
+                        MultipleFile{}->LoadAllTargets
                 -- loadWithLogger (logWarnErr ref)
-                res<- load (LoadUpTo modName) -- LoadAllTargets
+                res<- load howMuch
                            `gcatch` (\(e :: SourceError) -> handle_error ref e)
                 --(warns, errs) <- GMU.liftIO $ readIORef ref
                 --let notes = ghcMessagesToNotes base_dir (warns, errs)
                 notes <- GMU.liftIO $ readIORef ref
                 --c2<-GMU.liftIO getClockTime
                 --GMU.liftIO $ putStrLn ("load all targets: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
-                case res of 
-                        Succeeded -> do
-                                modSum <- getModSummary modName
-                                p <- parseModule modSum
-                                --return $ showSDocDump $ ppr $ pm_mod_summary p
-                                t <- typecheckModule p
-                                d <- desugarModule t -- to get warnings
-                                l <- loadModule d
-                                --c3<-GMU.liftIO getClockTime
-#if __GLASGOW_HASKELL__ < 704
-                                setContext [ms_mod modSum] []
-#else
-                                setContext [IIModule $ ms_mod modSum]
-#endif                                
-                                GMU.liftIO $ storeGHCInfo fp (typecheckedSource $ dm_typechecked_module l)
-                                --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
-                                a<-f (dm_typechecked_module l)
+                GMU.liftIO $ print fps
+                a<-fmap catMaybes $ mapM (\(fp,m)->(do
+                                --mg<-getModuleGraph
+                                modSum <- getModSummary $ mkModuleName m
+                                fmap Just $ workOnResult f fp modSum)
+                                `gcatch` (\(_ :: GhcApiError) -> return Nothing)
+                        ) fps
+--                a<-case contents of
+--                        SingleFile{lmFile=fp,lmModule=m}->                
+--                                case res of 
+--                                        Succeeded -> do
+--                                                modSum <- getModSummary $ mkModuleName m
+--                                                r<-workOnResult f fp modSum
+--                                                return [r]
+--                                        Failed -> return []
+--                        MultipleFile{lmFiles=fs}->do
+--                                --mg<-getModuleGraph
+--                                fmap catMaybes $ mapM (\(fp,m)->(do
+--                                                modSum <- getModSummary $ mkModuleName m
+--                                                fmap Just $ workOnResult f fp modSum)
+--                                                `gcatch` (\(_ :: GhcApiError) -> return Nothing)
+--                                        ) fs
+--                                mg<-getModuleGraph
+--                                fmap catMaybes $ mapM (\ms->do
+--                                        let mf=ml_hs_file $ ms_location ms
+--                                        case mf of
+--                                                Just ffp->fmap Just $ workOnResult f (makeRelative base_dir ffp) ms
+--                                                Nothing->return Nothing
+--                                        ) mg
 #if __GLASGOW_HASKELL__ < 702                           
-                                warns <- getWarnings
-                                return (Just a,List.nub $ notes ++ reverse (ghcMessagesToNotes base_dir (warns, emptyBag)))
+                warns <- getWarnings
+                return (a,List.nub $ notes ++ reverse (ghcMessagesToNotes base_dir (warns, emptyBag)))
 #else
-                                notes2 <- GMU.liftIO $ readIORef ref
-                                return $ (Just a,List.nub $ notes2)
+                notes2 <- GMU.liftIO $ readIORef ref
+                return $ (a,List.nub $ notes2)
 #endif
-                        Failed -> return (Nothing, notes)
         where
---            logWarnErr :: GhcMonad m => IORef [BWNote] -> Maybe SourceError -> m ()
---            logWarnErr ref err = do
---              let errs = case err of
---                           Nothing -> mempty
---                           Just exc -> srcErrorMessages exc
---              warns <- getWarnings
---              clearWarnings
---              add_warn_err ref warns errs
+            workOnResult :: GHCApplyFunction a -> FilePath -> ModSummary -> Ghc a
+            workOnResult f2 fp modSum= do
+                GMU.liftIO $ putStrLn ("parsing " ++ fp)
+                p <- parseModule modSum
+                --return $ showSDocDump $ ppr $ pm_mod_summary p 
+                t <- typecheckModule p
+                d <- desugarModule t -- to get warnings
+                l <- loadModule d
+                --c3<-GMU.liftIO getClockTime
+#if __GLASGOW_HASKELL__ < 704
+                setContext [ms_mod modSum] []
+#else
+                setContext [IIModule $ ms_mod modSum]
+#endif                         
+                let fullfp=ff fp
+                GMU.liftIO $ putStrLn ("writing " ++ fullfp)
+                GMU.liftIO $ storeGHCInfo fullfp (typecheckedSource $ dm_typechecked_module l)
+                --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
+                f2 fp $ dm_typechecked_module l                
         
             add_warn_err :: GhcMonad m => IORef [BWNote] -> WarningMessages -> ErrorMessages -> m()
             add_warn_err ref warns errs = do
@@ -756,3 +786,28 @@ end (UnhelpfulSpan _)=error "UnhelpfulSpan in cmpOverlap start"
 #endif
         
         
+--getGHCOutline :: ParsedSource
+--        -> [OutlineDef]
+--getGHCOutline (L src mod)=concatMap ldeclOutline (hsmodDecls mod)
+--        where 
+--                ldeclOutline :: LHsDecl RdrName -> [OutlineDef]
+--                ldeclOutline  (L src1 (TyClD decl))=ltypeOutline decl
+--                ldeclOutline _ = []
+--                ltypeOutline :: TyClDecl RdrName -> [OutlineDef]
+--                ltypeOutline (TyFamily{tcdLName})=[mkOutlineDef (nameDecl $ unLoc tcdLName) [Type,Family] (ghcSpanToLocation $ getLoc tcdLName)]
+--                ltypeOutline (TyData{tcdLName,tcdCons})=[mkOutlineDef (nameDecl $ unLoc tcdLName) [Data] (ghcSpanToLocation $ getLoc tcdLName)]
+--                        ++ concatMap lconOutline tcdCons
+--                lconOutline :: LConDecl RdrName -> [OutlineDef]
+--                lconOutline (L src ConDecl{con_name,con_doc,con_details})=[(mkOutlineDef (nameDecl $ unLoc con_name) [Constructor] (ghcSpanToLocation $ getLoc con_name)){od_comment=commentDecl con_doc}]
+--                        ++ detailOutline con_details
+--                detailOutline (HsConDetails _ fields)=concatMap lfieldOutline fields
+--                lfieldOutline (ConDeclField{cd_fld_name,cd_fld_doc})=[(mkOutlineDef (nameDecl $ unLoc cd_fld_name) [Function] (ghcSpanToLocation $ getLoc cd_fld_name)){od_comment=commentDecl cd_fld_doc}]
+--                nameDecl:: RdrName -> T.Text
+--                nameDecl (Unqual occ)=T.pack $ showSDoc $ ppr occ
+--                nameDecl (Qual _ occ)=T.pack $ showSDoc $ ppr occ
+--                commentDecl :: Maybe LHsDocString -> Maybe T.Text
+--                commentDecl (Just st)=Just $ T.pack $ showSDoc $ ppr st
+--                commentDecl _=Nothing
+--                -- ghcSpanToLocation
+                 
+                

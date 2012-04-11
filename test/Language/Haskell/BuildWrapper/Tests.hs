@@ -47,7 +47,7 @@ tests=  [
         testOutlineMultiParam,
         testOutlineOperator,
         testPreviewTokenTypes,
-        testThingAtPoint ,
+        testThingAtPoint,
         testThingAtPointNotInCabal,
         testThingAtPointMain,
         testThingAtPointMainSubFolder ,
@@ -75,6 +75,7 @@ class APIFacade a where
         getNamesInScope :: a -> FilePath -> FilePath-> IO (OpResult (Maybe [String]))
         getCabalDependencies :: a -> FilePath -> IO (OpResult [(FilePath,[CabalPackage])])
         getCabalComponents :: a -> FilePath -> IO (OpResult [CabalComponent])
+        generateAST :: a -> FilePath -> CabalComponent -> IO ()
         
 testSynchronizeAll :: (APIFacade a)=> a -> Test
 testSynchronizeAll api= TestLabel "testSynchronizeAll" (TestCase ( do

@@ -12,6 +12,7 @@
 module Main where
 
 import Language.Haskell.BuildWrapper.APITest
+import Language.Haskell.BuildWrapper.BuildForDBTests
 import Language.Haskell.BuildWrapper.CMDTests
 import Language.Haskell.BuildWrapper.GHCTests
 
@@ -25,5 +26,6 @@ tests :: [Test]
 tests = [testGroup "Unit Tests" (concatMap hUnitTestToTests unitTests)
         ,testGroup "GHC Tests" (concatMap hUnitTestToTests ghcTests)
         ,testGroup "Command Tests" (concatMap hUnitTestToTests cmdTests)
+        ,testGroup "Build for DB Tests" (concatMap hUnitTestToTests buildForDBTests)
         ]
 

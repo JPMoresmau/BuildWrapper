@@ -22,7 +22,6 @@ import System.FilePath
 import PprTyThing
 import GHC
 import Outputable
-import qualified OccName(occNameString)
 import Bag(Bag,bagToList)
 import Var(Var,varType,varName)
 import FastString(FastString)
@@ -55,6 +54,9 @@ import qualified Data.HashMap.Lazy as HM
 import qualified Data.Vector as V
 import Data.Attoparsec.Number (Number(I))
 import System.Time (ClockTime)
+-- import GHC.SYB.Utils (showData, Stage(..))
+import Type (splitFunTys, splitAppTys)
+import Unique (getUnique)
 
 
 -- | get the file storing the information for the given source file
@@ -63,6 +65,13 @@ getInfoFile :: FilePath -- ^ the source file
 getInfoFile fp= let 
         (dir,file)=splitFileName fp
         in combine dir ('.' : addExtension file ".bwinfo")
+
+-- | get the file storing the information for the given source file
+getUsageFile :: FilePath -- ^ the source file
+        -> FilePath
+getUsageFile fp= let 
+        (dir,file)=splitFileName fp
+        in combine dir ('.' : addExtension file ".bwusage")
 
 -- | remove the storage file
 clearInfo :: FilePath -- ^ the source file
@@ -81,7 +90,9 @@ storeBuildFlagsInfo fp bf=setStoredInfo fp "BuildFlags"  (toJSON bf)
 storeGHCInfo :: FilePath -- ^ the source file
         -> TypecheckedSource -- ^ the GHC AST
         -> IO()
-storeGHCInfo fp tcs=setStoredInfo fp "AST"  (dataToJSON tcs)
+storeGHCInfo fp tcs= -- do
+        -- putStrLn $ showData TypeChecker 4 tcs
+        setStoredInfo fp "AST"  (dataToJSON tcs)
 
 -- | read the GHC AST as a JSON value
 readGHCInfo :: FilePath -- ^ the source file
@@ -132,13 +143,20 @@ readStoredInfo fp=do
                 else return Nothing
        return $ fromMaybe (object []) mv
 
+setUsageInfo :: FilePath -- ^ the source file
+        -> Value -- ^ the value
+        -> IO()
+setUsageInfo fp v=do
+        let usageFile=getUsageFile fp
+        BSS.writeFile usageFile $ BSS.concat $ BS.toChunks $ encode v
+
 -- | convert a Data into a JSON value, with specific treatment for interesting GHC AST objects, and avoiding the holes
 dataToJSON :: Data a =>a -> Value
 dataToJSON  = 
   generic `ext1Q` list `extQ` string `extQ` fastString `extQ` srcSpan 
           `extQ` name `extQ` occName `extQ` modName `extQ` var `extQ` exprVar `extQ` dataCon
           `extQ` bagName `extQ` bagRdrName `extQ` bagVar `extQ` nameSet
-          `extQ` postTcType `extQ` fixity
+          `extQ` postTcType `extQ` fixity  `extQ` hsBind
   where generic :: Data a => a -> Value
         generic t =arr $ gmapQ dataToJSON t
                 -- object [(T.pack $ showConstr (toConstr t)) .= sub ] 
@@ -155,7 +173,8 @@ dataToJSON  =
         name :: Name -> Value
         name  n     = object (nameAndModule n ++["GType" .= string "Name","HType".= string (if isValOcc (nameOccName n) then "v" else "t")])
         occName :: OccName -> Value
-        occName o   = object ["Name" .= string (OccName.occNameString o),"HType" .= string (if isValOcc o then "v" else "t")]
+        occName o   = name (mkSystemName (getUnique o) o) 
+                --object ["Name" .= string (OccName.occNameString o),"HType" .= string (if isValOcc o then "v" else "t")]
         modName  :: ModuleName -> Value
         modName m= object [ "Name" .= string (showSDoc $ ppr m),"GType" .= string "ModuleName","HType" .= string "m"]
         srcSpan :: SrcSpan -> Value
@@ -175,7 +194,11 @@ dataToJSON  =
         var :: Var -> Value
         var  v     = typedVar v (varType v)
         dataCon ::  DataCon -> Value
-        dataCon  d  = object (nameAndModule (dataConName d) ++ ["GType" .= string "DataCon"])
+        dataCon  d  = let
+                t=dataConUserType d
+                in object (nameAndModule (dataConName d) ++ typeToJSON t ++ [
+                        "GType" .= string "DataCon",
+                        "HType" .=  string "v"])
 --        simple:: T.Text -> String -> Value
 --        simple nm v=object [nm .= T.pack v]
         simpleV:: T.Text -> Value -> Value
@@ -193,10 +216,8 @@ dataToJSON  =
                         Just (t,v)-> typedVar v t
                         Nothing->generic ev
         typedVar :: Var -> Type -> Value
-        typedVar v t=object (nameAndModule (varName v) ++
+        typedVar v t=object (nameAndModule (varName v) ++ typeToJSON t ++
                 ["GType" .= string "Var",
-                "Type" .= string (showSDocUnqual $ pprTypeForUser True t),
-                "QType" .= string (showSDoc $ pprTypeForUser True t),
                 "HType" .=  string (if isValOcc (nameOccName (Var.varName v)) then "v" else "t")])
 
         nameSet = const $ Data.Aeson.String "{!NameSet placeholder here!}" :: NameSet -> Value
@@ -205,12 +226,32 @@ dataToJSON  =
 
         fixity  = const Null :: GHC.Fixity -> Value --simple "Fixity" . showSDoc . ppr 
 
+        typeToJSON :: Type -> [(T.Text,Value)]
+        typeToJSON t =  -- let
+                --appT=let (a,b)= splitAppTys t in (a:b)
+                --allT2=concatMap typesInsideType appT
+                -- allT=typesInsideType t
+                -- allT2=allT ++ concatMap (\t2->let (a,b)= splitAppTys t2 in (a:b)) allT
+                -- in
+                ["Type" .= string (showSDocUnqual $ pprTypeForUser True t),
+                "QType" .= string (showSDoc $ pprTypeForUser True t)]
+              --  ,"AllTypes" .= (map string $ filter ("[]" /=) $ nubOrd $ map (showSDoc . withPprStyle (mkUserStyle ((\_ _ -> NameNotInScope2), const True) AllTheWay) . pprTypeForUser True) allT2)]
+        hsBind :: HsBindLR Name Name -> Value
+        hsBind (FunBind fid _ (MatchGroup matches _) _ _ _) =arr $ map (\m->arr [arr [dataToJSON $ getLoc m,dataToJSON $ unLoc fid],dataToJSON m]) matches
+        hsBind a=generic a
         -- nameAndModule :: Name -> [Pair]
         nameAndModule n=let
-                mn=maybe "" (showSDoc . ppr . moduleName) $ nameModule_maybe n
+                mm=nameModule_maybe n
+                mn=maybe "" (showSDoc . ppr . moduleName) mm
+                pkg=maybe "" (showSDoc . ppr . modulePackageId) mm
                 na=showSDocUnqual $ ppr n
-                in ["Module" .= string mn, "Name" .= string na]
+                in ["Module" .= string mn,"Package" .= string pkg, "Name" .= string na]
 
+typesInsideType :: Type -> [Type]
+typesInsideType t=let
+         (f1,f2)=splitFunTys t
+         in f2 : concatMap typesInsideType f1
+        
 -- | debug function: shows on standard output the JSON representation of the given data
 debugToJSON :: Data a =>a -> IO()
 debugToJSON = BSC.putStrLn . encode . dataToJSON
@@ -295,6 +336,38 @@ overlap l c (Object m) |
         Just pos<-HM.lookup "SrcSpan" m,
         Just (l1,c1,l2,c2)<-extractSourceSpan pos=l1<=l && c1<=c && l2>=l && c2>=c
 overlap _ _ _=False
+
+extractUsages :: Value -- ^ the root object containing the AST 
+        -> [Maybe Value]
+extractUsages (Array arr) | not $ V.null arr=let
+        v1=arr V.! 0
+        msrc=extractSource v1
+        in if isJust msrc && V.length arr==2 -- we have an array of two elements, the first one being a matching SrcSpan we go down the second element
+           then (extractName v1 $ arr V.! 1)  ++
+                         (extractUsages $ arr V.! 1)
+           else concat $ V.toList $ fmap extractUsages arr -- other case of arrays: check on each element
+extractUsages (Object obj)=(concatMap extractUsages $ HM.elems obj) -- in a complex object: check on contained elements
+        -- (extractName o) : 
+extractUsages  _= []
+
+extractName :: Value -> Value -> [Maybe Value]
+extractName src (Object m) |
+        Just (l1,c1,l2,c2)<-extractSource src,
+        Just (String s)<-HM.lookup "Name" m,
+        Just (String mo)<-HM.lookup "Module" m,
+        not $ T.null mo,
+        Just (String p)<-HM.lookup "Package" m,
+        --Just (String qt)<-HM.lookup "QType" m, ,"QType" .= qt
+        Just (String t)<-HM.lookup "HType" m,
+        at<-fromMaybe (Array V.empty) $ HM.lookup "AllTypes" m
+                =[Just $ object ["Name" .= s,"Module" .= mo,"Package" .= p,"HType" .= t,"AllTypes" .= at, "Pos" .= toJSON [l1,c1,l2,c2]]]
+--extractName src (Array arr) | not $ V.null arr && isNothing (extractSource $ arr V.! 0)=concatMap (extractName src) $ V.toList arr
+extractName _ _=[]
+
+extractSource :: Value ->  Maybe (Int,Int,Int,Int)
+extractSource (Object m) | 
+        Just pos<-HM.lookup "SrcSpan" m=extractSourceSpan pos
+extractSource _=Nothing
 
 -- | extract the source span from JSON
 extractSourceSpan :: Value -> Maybe (Int,Int,Int,Int)

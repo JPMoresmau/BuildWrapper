@@ -1,5 +1,5 @@
 name:           buildwrapper
-version:        0.5.2
+version:        0.6.0
 cabal-version:  >= 1.8
 build-type:     Simple
 license:        BSD3
@@ -102,13 +102,17 @@ test-suite buildwrapper-test
                    attoparsec,
                    test-framework,
                    test-framework-hunit,
-                   transformers
+                   transformers,
+                   vector,
+                   unordered-containers,
+                   containers
   main-is:         Main.hs
   ghc-options:     -Wall -fno-warn-unused-do-bind
   x-uses-tf:       true
   other-modules:   
                    Language.Haskell.BuildWrapper.APITest, Language.Haskell.BuildWrapper.Tests, Language.Haskell.BuildWrapper.CMDTests,
-                   Language.Haskell.BuildWrapper.GHCTests
+                   Language.Haskell.BuildWrapper.GHCTests,
+                   Language.Haskell.BuildWrapper.BuildForDBTests
 
 source-repository head
   type:     git

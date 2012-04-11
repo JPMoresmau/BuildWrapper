@@ -21,6 +21,7 @@ import Data.Attoparsec
 import Data.Aeson
 import Data.Aeson.Parser
 import qualified Data.ByteString.Char8 as BS
+import qualified Data.ByteString.Lazy.Char8 as BSC
 import Data.List
 import System.Exit
 import System.Process
@@ -48,6 +49,7 @@ instance APIFacade CMDAPI where
         getNamesInScope _ r fp= runAPI r "namesinscope" ["--file="++fp]
         getCabalDependencies _ r= runAPI r "dependencies" []
         getCabalComponents _ r= runAPI r "components" []
+        generateAST _ r cc=runAPI r "generateast" ["--cabalcomponent="++(BSC.unpack $ encode cc)]
         
 exeExtension :: String
 #ifdef mingw32_HOST_OS
