@@ -103,7 +103,7 @@ generateAST cc= do
                         modules<-liftIO $ do
                                 cd<-getCurrentDirectory
                                 setCurrentDirectory dir
-                                (mods,ns)<-BwGHC.withASTNotes getModule (temp </>) dir (MultipleFile mps) opts     
+                                (mods,ns)<-BwGHC.withASTNotes (getModule pkg) (temp </>) dir (MultipleFile mps) opts     
                                 setCurrentDirectory cd 
                                 return mods
                         mapM_ (generate pkg) modules
@@ -112,10 +112,14 @@ generateAST cc= do
         liftIO $ Prelude.print ns        
         return ()
         where
-                getModule ::  FilePath -> TypecheckedModule -> Ghc(FilePath,GHC.Module,RenamedSource)
-                getModule f tm=return (f,ms_mod $ pm_mod_summary $ tm_parsed_module tm,fromJust $ tm_renamed_source tm)
-                generate :: T.Text -> (FilePath,GHC.Module,RenamedSource) -> BuildWrapper()
-                generate pkg (fp,mod,(hsg,_,_,_))=do
+                getModule :: T.Text ->  FilePath -> TypecheckedModule -> Ghc(FilePath,RenamedSource,[Usage])
+                getModule pkg f tm=do
+                        let rs@(_,imps,_,_)=fromJust $ tm_renamed_source tm
+                        ius<-mapM (BwGHC.ghcImportToUsage pkg) imps
+                        --ms_mod $ pm_mod_summary $ tm_parsed_module tm
+                        return (f,rs,concat ius)
+                generate :: T.Text -> (FilePath,RenamedSource,[Usage]) -> BuildWrapper()
+                generate pkg (fp,(hsg,_,_,_),ius)=do
                         tgt<-getTargetPath fp
                         --mv<-liftIO $ readGHCInfo tgt
                         let v = dataToJSON hsg
@@ -129,8 +133,8 @@ generateAST cc= do
                         case mast of
                                 Just (ParseOk ast)->do
                                         let ods=getHSEOutline ast
-                                        let (es,is)=getHSEImportExport ast
-                                        let val=reconcile pkg mod vals ods es is
+                                        let (es,_)=getHSEImportExport ast
+                                        let val=reconcile pkg vals ods es ius
                                         liftIO $ setUsageInfo tgt val
                                         return ()
                                 _ -> return ()
@@ -139,9 +143,9 @@ generateAST cc= do
                         --               liftIO $ Prelude.putStrLn "no ghc info"
                         --                return ()
                         return ()
-                reconcile :: T.Text ->GHC.Module->  [Value] -> [OutlineDef] -> [ExportDef] -> [ImportDef] -> Value
-                reconcile pkg mod vals ods es is=foldr usageToJSON (object []) 
-                        ((concatMap importToUsage is) ++ (concatMap (ghcValToUsage pkg) vals))
+                reconcile :: T.Text ->  [Value] -> [OutlineDef] -> [ExportDef] -> [Usage] -> Value
+                reconcile pkg vals ods es ius=foldr usageToJSON (object []) 
+                        (ius ++ (concatMap (ghcValToUsage pkg) vals))
                 usageToJSON :: Usage -> Value -> Value
                 usageToJSON u v@(Object pkgs) | Just pkg<-usagePackage u v=
                         let 
@@ -207,14 +211,6 @@ generateAST cc= do
                 importToUsage imd=[Usage (i_package imd) (i_module imd) "" False (toJSON $ i_loc imd)]
                 
 
-data Usage = Usage {
-        usPackage::Maybe T.Text,
-        usModule::T.Text,
-        usName::T.Text,
-        usType::Bool,
-        usLoc::Value
-        } 
-        deriving (Show,Eq)
 
 -- | build one source file in GHC
 build1 :: FilePath -- ^ the source file

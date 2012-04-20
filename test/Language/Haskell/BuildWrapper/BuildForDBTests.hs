@@ -29,7 +29,8 @@ buildForDBTests= map (\f->f CMDAPI) bfdbtests
 
 bfdbtests :: (APIFacade a)=> [a -> Test]
 bfdbtests= [ testGenerateASTCreatesBWUsage,
-        testGenerateReferencesSimple]
+        testGenerateReferencesSimple,
+        testGenerateReferencesImports]
 
 testGenerateASTCreatesBWUsage :: (APIFacade a)=> a -> Test
 testGenerateASTCreatesBWUsage api= TestLabel "testGenerateASTCreatesBWUsage" (TestCase ( do
@@ -115,10 +116,10 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         assertTypeUsage "base" "GHC.Show" "Show" [[5,15,5,19]] v
         
         vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
-        --sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
-        --putStrLn sUMain
+        sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
+        putStrLn sUMain
         
-        assertVarUsage "BWTest-0.1" "A" "" [[2,1,2,9]] vMain
+        assertVarUsage "BWTest-0.1" "A" "" [[2,8,2,9]] vMain
         assertVarUsage "BWTest-0.1" "A" "Cons2" [[3,22,3,27]] vMain
         assertVarUsage "BWTest-0.1" "A" "reset" [[3,14,3,19]] vMain
         assertVarUsage "BWTest-0.1" "Main" "main" [[3,1,3,29]] vMain
@@ -127,7 +128,35 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         return ()
         ))
 
-
+testGenerateReferencesImports :: (APIFacade a)=> a -> Test
+testGenerateReferencesImports api= TestLabel "testGenerateReferencesImports" (TestCase ( do
+        root<-createTestProject
+        let relMain="src"</>"Main.hs"
+        writeFile (root</> relMain) $ unlines [
+                  "module Main where",
+                  "import Data.Ord",
+                  "import Data.Maybe (Maybe(..))",
+                  "import Data.Complex (Complex((:+)))",
+                  "",
+                  "main=undefined"
+                  ] 
+        _<-synchronize api root True          
+        (BuildResult bool1 _,nsErrors1)<-build api root False Source
+        assertBool ("returned false on bool1:" ++ show nsErrors1)  bool1
+        assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
+        (comps,_)<-getCabalComponents api root    
+        mapM_ (generateAST api root) comps
+        vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
+        sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
+        putStrLn sUMain
+        assertVarUsage "base" "Data.Ord" "" [[2,8,2,16]] vMain
+        assertVarUsage "base" "Data.Maybe" "" [[3,8,3,18]] vMain
+        assertVarUsage "base" "Data.Complex" "" [[4,8,4,20]] vMain
+        assertTypeUsage "base" "Data.Maybe" "Maybe" [[3,20,3,29]] vMain
+        assertTypeUsage "base" "Data.Complex" "Complex" [[4,22,4,35]] vMain
+        assertVarUsage "base" "Data.Complex" ":+" [[4,22,4,35]] vMain
+        ))
+        
         
 getUsageFile :: FilePath -- ^ the source file
         -> FilePath

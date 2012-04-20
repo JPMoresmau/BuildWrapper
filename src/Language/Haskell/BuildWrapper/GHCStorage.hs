@@ -153,7 +153,7 @@ setUsageInfo fp v=do
 -- | convert a Data into a JSON value, with specific treatment for interesting GHC AST objects, and avoiding the holes
 dataToJSON :: Data a =>a -> Value
 dataToJSON  = 
-  generic `ext1Q` list `extQ` string `extQ` fastString `extQ` srcSpan 
+  generic `ext1Q` list `extQ` string `extQ` fastString `extQ` srcSpanToJSON 
           `extQ` name `extQ` occName `extQ` modName `extQ` var `extQ` exprVar `extQ` dataCon
           `extQ` bagName `extQ` bagRdrName `extQ` bagVar `extQ` nameSet
           `extQ` postTcType `extQ` fixity  `extQ` hsBind
@@ -177,20 +177,7 @@ dataToJSON  =
                 --object ["Name" .= string (OccName.occNameString o),"HType" .= string (if isValOcc o then "v" else "t")]
         modName  :: ModuleName -> Value
         modName m= object [ "Name" .= string (showSDoc $ ppr m),"GType" .= string "ModuleName","HType" .= string "m"]
-        srcSpan :: SrcSpan -> Value
-        srcSpan src 
-                | isGoodSrcSpan src   = object[ "SrcSpan" .= toJSON [srcLoc $ srcSpanStart src, srcLoc $ srcSpanEnd src]] 
-                | otherwise = Null
-#if __GLASGOW_HASKELL__ < 702   
-        srcLoc :: SrcLoc -> Value
-        srcLoc sl 
-                | isGoodSrcLoc  sl=object ["line" .= toJSON (srcLocLine sl),"column" .= toJSON (srcLocCol sl)]
-                | otherwise = Null
-#else
-        srcLoc :: SrcLoc -> Value
-        srcLoc (RealSrcLoc sl)=object ["line" .= toJSON (srcLocLine sl),"column" .= toJSON (srcLocCol sl)]
-        srcLoc _ = Null        
-#endif
+
         var :: Var -> Value
         var  v     = typedVar v (varType v)
         dataCon ::  DataCon -> Value
@@ -246,6 +233,22 @@ dataToJSON  =
                 pkg=maybe "" (showSDoc . ppr . modulePackageId) mm
                 na=showSDocUnqual $ ppr n
                 in ["Module" .= string mn,"Package" .= string pkg, "Name" .= string na]
+
+srcSpanToJSON :: SrcSpan -> Value
+srcSpanToJSON src 
+        | isGoodSrcSpan src   = object[ "SrcSpan" .= toJSON [srcLocToJSON $ srcSpanStart src, srcLocToJSON $ srcSpanEnd src]] 
+        | otherwise = Null
+#if __GLASGOW_HASKELL__ < 702   
+srcLocToJSON :: SrcLoc -> Value
+srcLocToJSON sl 
+        | isGoodSrcLoc  sl=object ["line" .= toJSON (srcLocLine sl),"column" .= toJSON (srcLocCol sl)]
+        | otherwise = Null
+#else
+srcLocToJSON :: SrcLoc -> Value
+srcLocToJSON (RealSrcLoc sl)=object ["line" .= toJSON (srcLocLine sl),"column" .= toJSON (srcLocCol sl)]
+srcLocToJSON _ = Null        
+#endif
+
 
 typesInsideType :: Type -> [Type]
 typesInsideType t=let

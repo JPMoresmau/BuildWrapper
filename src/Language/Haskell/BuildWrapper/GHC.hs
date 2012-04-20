@@ -12,7 +12,7 @@
 -- 
 -- Load relevant module in the GHC AST and get GHC messages and thing at point info. Also use the GHC lexer for syntax highlighting.
 module Language.Haskell.BuildWrapper.GHC where
-import Language.Haskell.BuildWrapper.Base hiding (Target)
+import Language.Haskell.BuildWrapper.Base hiding (Target,ImportExportType(..))
 import Language.Haskell.BuildWrapper.GHCStorage
 
 import Data.Char
@@ -784,7 +784,28 @@ start (UnhelpfulSpan _)=error "UnhelpfulSpan in cmpOverlap start"
 end (RealSrcSpan ss)= (srcSpanEndLine ss, srcSpanEndCol ss)   
 end (UnhelpfulSpan _)=error "UnhelpfulSpan in cmpOverlap start"   
 #endif
+       
+
+ghcImportToUsage :: T.Text -> LImportDecl Name -> Ghc [Usage]
+ghcImportToUsage myPkg (L _ imp)=do
+        let L src modu=ideclName imp
+        pkg<-lookupModule modu (ideclPkgQual imp)
+        let tmod=T.pack $ showSDoc $ ppr modu
+        let tpkg=T.pack $ showSDoc $ ppr $ modulePackageId pkg
+        let nomain=if tpkg=="main" then myPkg else tpkg
+        let subs=concatMap (ghcLIEToUsage (Just nomain) tmod) $ maybe [] snd $ ideclHiding imp
+        return $ (Usage (Just nomain) tmod "" False (toJSON $ ghcSpanToLocation src)):subs
+         
+ghcLIEToUsage :: Maybe T.Text -> T.Text -> LIE Name -> [Usage]
+ghcLIEToUsage tpkg tmod (L src (IEVar nm))=[ghcNameToUsage tpkg tmod nm src False]
+ghcLIEToUsage tpkg tmod (L src (IEThingAbs nm))=[ghcNameToUsage tpkg tmod nm src True ] 
+ghcLIEToUsage tpkg tmod (L src (IEThingAll nm))=[ghcNameToUsage tpkg tmod nm src True] 
+ghcLIEToUsage tpkg tmod (L src (IEThingWith nm cons))=(ghcNameToUsage tpkg tmod nm src True):
+                (map (\x->(ghcNameToUsage tpkg tmod x src False)) cons) 
+ghcLIEToUsage _ _ _=[]
         
+ghcNameToUsage ::  Maybe T.Text -> T.Text -> Name -> SrcSpan -> Bool -> Usage 
+ghcNameToUsage tpkg tmod nm src typ=Usage tpkg tmod  (T.pack $ showSDocUnqual $ ppr nm) typ (toJSON $ ghcSpanToLocation src)     
         
 --getGHCOutline :: ParsedSource
 --        -> [OutlineDef]

@@ -559,3 +559,13 @@ formatJSON s=snd $ foldl f (0,"") s
                 f (i,s) '['=((i+4),s ++ "\n" ++(map (const ' ') [0 .. i]) ++ "[")
                 f (i,s) ']'  =((i-4),s ++ "\n" ++(map (const ' ') [0 .. i]) ++ "]")
                 f (i,s) c =(i,s++[c])
+                
+data Usage = Usage {
+        usPackage::Maybe T.Text,
+        usModule::T.Text,
+        usName::T.Text,
+        usType::Bool,
+        usLoc::Value
+        } 
+        deriving (Show,Eq)
+                
