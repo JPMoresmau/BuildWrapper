@@ -246,7 +246,7 @@ instance FromJSON TokenDef where
 -- | Type of import/export directive    
 data ImportExportType = IEVar -- ^ Var
         | IEAbs  -- ^ Abs
-        | IEThingAll -- ^ import/export everythin
+        | IEThingAll -- ^ import/export everything
         | IEThingWith -- ^ specific import/export list
         | IEModule -- ^ reexport module
       deriving (Show,Read,Eq,Ord,Enum)
@@ -299,6 +299,7 @@ instance FromJSON ImportSpecDef where
 -- | definition of an import statement     
 data ImportDef = ImportDef {
         i_module :: T.Text -- ^ module name
+        ,i_package :: Maybe T.Text -- ^ package name
         ,i_loc  :: InFileSpan -- ^ location in source file
         ,i_qualified :: Bool -- ^ is the import qualified
         ,i_hiding :: Bool -- ^ is the import element list for hiding or exposing 
@@ -307,11 +308,12 @@ data ImportDef = ImportDef {
         }  deriving (Show,Eq)    
     
 instance ToJSON ImportDef where
-        toJSON (ImportDef m l q h a c)=  object ["m" .= m , "l" .= l, "q" .= q, "h" .= h, "a" .= a, "c" .=  c]
+        toJSON (ImportDef m p l q h a c)=  object ["m" .= m , "p" .= p, "l" .= l, "q" .= q, "h" .= h, "a" .= a, "c" .=  c]
      
 instance FromJSON ImportDef where
     parseJSON (Object v) =ImportDef <$>
                          v .: "m" <*>
+                         v .: "p" <*>
                          v .: "l" <*>
                          v .: "q" <*>
                          v .: "h" <*>

@@ -1,0 +1,3 @@
+Buildwrapper 0.5.0: release notes
+
+- take additional cabal flags

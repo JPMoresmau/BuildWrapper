@@ -28,8 +28,9 @@ getHSEAST :: String -- ^ input text
         -> IO (ParseResult (Module SrcSpanInfo, [Comment]))
 getHSEAST input options=do
         -- we add MultiParamTypeClasses because we may need it if the module we're parsing uses a type class with multiple parameters, which doesn't require the PRAGMA (only in the module DEFINING the type class)
+        -- we add PatternGuards since GHC only gives a warning if not explicit
         -- we cannot add all the extensions because some conflict (NewQualifiedOperators breaks code with old operator syntax I think)
-        let exts=MultiParamTypeClasses : map classifyExtension options
+        let exts=MultiParamTypeClasses : PatternGuards : map classifyExtension options
         let extsFull=if "-fglasgow-exts" `elem` options
                 then exts ++ glasgowExts
                 else exts
@@ -183,7 +184,7 @@ getHSEImportExport (Module _ mhead _ imps _,_)=(headExp mhead,impDefs imps)
                 impDefs :: [ImportDecl SrcSpanInfo] -> [ImportDef]
                 impDefs=map impDef
                 impDef :: ImportDecl SrcSpanInfo -> ImportDef
-                impDef (ImportDecl l m qual _ _ al specs)=ImportDef (mnnameDecl m) (makeSpan l) qual (hide specs) (alias al) (children specs)
+                impDef (ImportDecl l m qual _ pkg al specs)=ImportDef (mnnameDecl m) (fmap T.pack pkg) (makeSpan l) qual (hide specs) (alias al) (children specs)
                 hide :: Maybe (ImportSpecList a)-> Bool
                 hide  (Just (ImportSpecList _ b _))=b
                 hide _=False

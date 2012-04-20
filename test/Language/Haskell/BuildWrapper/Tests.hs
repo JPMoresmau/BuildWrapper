@@ -46,6 +46,7 @@ tests=  [
         testOutlineComments,
         testOutlineMultiParam,
         testOutlineOperator,
+        testOutlinePatternGuards,
         testPreviewTokenTypes,
         testThingAtPoint,
         testThingAtPointNotInCabal,
@@ -446,7 +447,7 @@ testOutline api= TestLabel "testOutline" (TestCase ( do
         assertEqual "length" (length expected) (length defs)
         mapM_ (uncurry (assertEqual "outline")) (zip expected defs)
         assertEqual "exports" [] es
-        assertEqual "imports" [ImportDef "Data.Char" (InFileSpan (InFileLoc 5 1)(InFileLoc 5 17)) False False "" Nothing] is
+        assertEqual "imports" [ImportDef "Data.Char" Nothing (InFileSpan (InFileLoc 5 1)(InFileLoc 5 17)) False False "" Nothing] is
       ))   
         
 testOutlineComments :: (APIFacade a)=> a -> Test
@@ -515,7 +516,7 @@ testOutlineComments api= TestLabel "testOutlineComments" (TestCase ( do
         assertEqual ("length:" ++ show defs) (length expected) (length defs)
         mapM_ (uncurry (assertEqual "outline")) (zip expected defs)
         assertEqual "exports" [] es
-        assertEqual "imports" [ImportDef "Data.Char" (InFileSpan (InFileLoc 5 1)(InFileLoc 5 17)) False False "" Nothing] is
+        assertEqual "imports" [ImportDef "Data.Char" Nothing (InFileSpan (InFileLoc 5 1)(InFileLoc 5 17)) False False "" Nothing] is
       ))           
         
 testOutlinePreproc :: (APIFacade a)=> a -> Test
@@ -655,10 +656,10 @@ testOutlineImportExport api= TestLabel "testOutlineImportExport" (TestCase ( do
                 ]
         mapM_ (uncurry (assertEqual "exports")) (zip exps es)
         let imps=[
-                ImportDef "Data.Char" (InFileSpan (InFileLoc 3 1)(InFileLoc 3 17)) False False "" Nothing,
-                ImportDef "Data.Map" (InFileSpan (InFileLoc 4 1)(InFileLoc 4 30)) False False "DM" (Just [ImportSpecDef "empty" IEVar (InFileSpan (InFileLoc 4 24)(InFileLoc 4 29)) []]),
-                ImportDef "Data.List" (InFileSpan (InFileLoc 5 1)(InFileLoc 5 42)) False True "" (Just [ImportSpecDef "orderBy" IEVar (InFileSpan (InFileLoc 5 26)(InFileLoc 5 33)) [],ImportSpecDef "groupBy" IEVar (InFileSpan (InFileLoc 5 34)(InFileLoc 5 41)) []]),
-                ImportDef "Data.Maybe" (InFileSpan (InFileLoc 6 1)(InFileLoc 6 42)) True False "" (Just [ImportSpecDef "Maybe" IEThingWith (InFileSpan (InFileLoc 6 30)(InFileLoc 6 41)) ["Just"]])
+                ImportDef "Data.Char" Nothing (InFileSpan (InFileLoc 3 1)(InFileLoc 3 17)) False False "" Nothing,
+                ImportDef "Data.Map" Nothing (InFileSpan (InFileLoc 4 1)(InFileLoc 4 30)) False False "DM" (Just [ImportSpecDef "empty" IEVar (InFileSpan (InFileLoc 4 24)(InFileLoc 4 29)) []]),
+                ImportDef "Data.List" Nothing (InFileSpan (InFileLoc 5 1)(InFileLoc 5 42)) False True "" (Just [ImportSpecDef "orderBy" IEVar (InFileSpan (InFileLoc 5 26)(InFileLoc 5 33)) [],ImportSpecDef "groupBy" IEVar (InFileSpan (InFileLoc 5 34)(InFileLoc 5 41)) []]),
+                ImportDef "Data.Maybe" Nothing (InFileSpan (InFileLoc 6 1)(InFileLoc 6 42)) True False "" (Just [ImportSpecDef "Maybe" IEThingWith (InFileSpan (InFileLoc 6 30)(InFileLoc 6 41)) ["Just"]])
                 ] 
         mapM_ (uncurry (assertEqual "imports")) (zip imps is)
         
@@ -716,6 +717,28 @@ testOutlineOperator api= TestLabel "testOutlineMultiParam" (TestCase ( do
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
         assertBool "no outline" (not $ null or)
         ))    
+
+
+testOutlinePatternGuards  :: (APIFacade a)=> a -> Test
+testOutlinePatternGuards api= TestLabel "testOutlinePatternGuards" (TestCase ( do
+        root<-createTestProject
+        synchronize api root False
+        let rel="src"</>"A.hs"      
+        write api root rel $ unlines [
+                "module A",
+                "  where",
+                "toto o | Just s<-o=s",
+                "toto _=\"\"   "
+                ]
+        (_,nsErrors3f)<-getBuildFlags api root rel
+        assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
+        (bool3,nsErrors3)<-build1 api root rel
+        assertBool "returned false on bool3" bool3
+        assertBool ("errors on nsErrors3"++ (show nsErrors3)) (null $ filter (\x->BWError == bwn_status x) nsErrors3)
+        (OutlineResult or _ _,nsErrors1)<-getOutline api root rel
+        assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
+        assertBool "no outline" (not $ null or)
+        )) 
                 
 testPreviewTokenTypes :: (APIFacade a)=> a -> Test
 testPreviewTokenTypes api= TestLabel "testPreviewTokenTypes" (TestCase ( do

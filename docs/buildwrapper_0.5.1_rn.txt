@@ -1,0 +1,3 @@
+Buildwrapper 0.5.1: release notes
+
+- retrieve all modules from components so we can open indirectly imported modules

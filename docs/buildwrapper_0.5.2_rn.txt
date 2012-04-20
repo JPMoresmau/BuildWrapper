@@ -1,0 +1,3 @@
+Buildwrapper 0.5.2: release notes
+
+- always add MultiParamTypeClasses for outline since haskell-src-exts requires it on modules using the type class while GHC only requires it in the defining module

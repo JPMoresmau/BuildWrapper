@@ -1,0 +1,3 @@
+Buildwrapper 0.4.0: release notes
+
+- set PatternGuards by default on outline since GHC only gives a warning if not explicitely enabled
