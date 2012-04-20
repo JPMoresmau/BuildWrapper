@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, ScopedTypeVariables, OverloadedStrings #-}
+{-# LANGUAGE CPP, ScopedTypeVariables, OverloadedStrings, PatternGuards #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.API
 -- Author      : JP Moresmau
@@ -140,44 +140,75 @@ generateAST cc= do
                         --                return ()
                         return ()
                 reconcile :: T.Text ->GHC.Module->  [Value] -> [OutlineDef] -> [ExportDef] -> [ImportDef] -> Value
-                reconcile pkg mod vals ods es is=foldr usageToJSON (object []) (concatMap (ghcValToUsage pkg) vals)
+                reconcile pkg mod vals ods es is=foldr usageToJSON (object []) 
+                        ((concatMap importToUsage is) ++ (concatMap (ghcValToUsage pkg) vals))
                 usageToJSON :: Usage -> Value -> Value
-                usageToJSON u o=
-                        let r=Data.Aeson.Types.parse (\(Object pkgs)-> do
-                                (Object mods) <- pkgs .:? (usPackage u) .!= object []
-                                (Object types)<- mods .:? (usModule u) .!= object []
-                                let typeKey=if usType u
+                usageToJSON u v@(Object pkgs) | Just pkg<-usagePackage u v=
+                        let 
+                                
+                                (Object mods) = HM.lookupDefault (object []) pkg pkgs
+                                (Object types)= HM.lookupDefault (object []) (usModule u) mods
+                                typeKey=if usType u
                                         then "types"
                                         else "vars"
-                                (Object names)<- types .:? typeKey .!= object []        
-                                let nameKey=usName u
+                                (Object names)= HM.lookupDefault (object []) typeKey  types     
+                                nameKey=usName u
                                 --  , ",", (usType u)
-                                (Array lines)<- names .:?  nameKey .!= (Array V.empty)
-                                let lineV= usLoc u  -- Number $ I $ usLine u
-                                let lines2=if V.elem lineV lines
+                                (Array lines)= HM.lookupDefault (Array V.empty) nameKey names
+                                lineV= usLoc u  -- Number $ I $ usLine u
+                                lines2=if V.elem lineV lines
                                         then lines
                                         else V.cons lineV lines
-                                let names2=HM.insert nameKey (Array lines2) names
-                                let types2=HM.insert typeKey (Object names2) types
-                                let mods2=HM.insert (usModule u) (Object types2) mods
-                                return $ Object $ HM.insert (usPackage u) (Object mods2) pkgs
-                                ) o
-                        in case r of
-                                Error st->object ["error" .= st]
-                                Success a->a
+                                names2=HM.insert nameKey (Array lines2) names
+                                types2=HM.insert typeKey (Object names2) types
+                                mods2=HM.insert (usModule u) (Object types2) mods
+                       in Object $ HM.insert pkg (Object mods2) pkgs
+                        
+--                        let r=Data.Aeson.Types.parse (\(Object pkgs)-> do
+--                                (Object mods) <- pkgs .:? (usPackage u) .!= object []
+--                                (Object types)<- mods .:? (usModule u) .!= object []
+--                                let typeKey=if usType u
+--                                        then "types"
+--                                        else "vars"
+--                                (Object names)<- types .:? typeKey .!= object []        
+--                                let nameKey=usName u
+--                                --  , ",", (usType u)
+--                                (Array lines)<- names .:?  nameKey .!= (Array V.empty)
+--                                let lineV= usLoc u  -- Number $ I $ usLine u
+--                                let lines2=if V.elem lineV lines
+--                                        then lines
+--                                        else V.cons lineV lines
+--                                let names2=HM.insert nameKey (Array lines2) names
+--                                let types2=HM.insert typeKey (Object names2) types
+--                                let mods2=HM.insert (usModule u) (Object types2) mods
+--                                return $ Object $ HM.insert (usPackage u) (Object mods2) pkgs
+--                                ) o
+--                        in case r of
+--                                Error st->object ["error" .= st]
+--                                Success a->a
                 usageToJSON _ a=a
+                usagePackage ::  Usage -> Value -> Maybe T.Text
+                usagePackage u (Object pkgs)=case usPackage u of
+                        Just p->Just p
+                        Nothing->let
+                                modu=usModule u
+                                matchingpkgs=HM.foldrWithKey (\k (Object mods) l->if (HM.member modu mods) then k : l else l) [] pkgs
+                                in listToMaybe matchingpkgs
+                usagePackage _ _=Nothing
                 ghcValToUsage ::  T.Text -> Value -> [Usage]
                 ghcValToUsage pkg (Object m) |
                         Just (String s)<-HM.lookup "Name" m,
                         Just (String mo)<-HM.lookup "Module" m,
                         Just (String p)<-HM.lookup "Package" m,
                         Just (String ht)<-HM.lookup "HType" m,
-                        Just arr<-HM.lookup "Pos" m= [Usage (if p=="main" then pkg else p) mo s (ht=="t") arr]
+                        Just arr<-HM.lookup "Pos" m= [Usage (Just (if p=="main" then pkg else p)) mo s (ht=="t") arr]
                 ghcValToUsage _ _=[]
+                importToUsage :: ImportDef -> [Usage]
+                importToUsage imd=[Usage (i_package imd) (i_module imd) "" False (toJSON $ i_loc imd)]
                 
 
 data Usage = Usage {
-        usPackage::T.Text,
+        usPackage::Maybe T.Text,
         usModule::T.Text,
         usName::T.Text,
         usType::Bool,

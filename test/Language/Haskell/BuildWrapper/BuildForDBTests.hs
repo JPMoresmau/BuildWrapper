@@ -118,7 +118,7 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         --sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
         --putStrLn sUMain
         
-        assertVarUsage "BWTest-0.1" "A" "" [[2,8,2,9]] vMain
+        assertVarUsage "BWTest-0.1" "A" "" [[2,1,2,9]] vMain
         assertVarUsage "BWTest-0.1" "A" "Cons2" [[3,22,3,27]] vMain
         assertVarUsage "BWTest-0.1" "A" "reset" [[3,14,3,19]] vMain
         assertVarUsage "BWTest-0.1" "Main" "main" [[3,1,3,29]] vMain
