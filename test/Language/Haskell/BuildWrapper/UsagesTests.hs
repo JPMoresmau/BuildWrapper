@@ -1,5 +1,5 @@
 {-# LANGUAGE CPP,OverloadedStrings,PatternGuards #-}
-module Language.Haskell.BuildWrapper.BuildForDBTests where
+module Language.Haskell.BuildWrapper.UsagesTests where
 
 import Language.Haskell.BuildWrapper.Base
 
@@ -22,15 +22,15 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.HashMap.Lazy as HM
 import qualified Data.Vector as V
-import Data.Attoparsec.Number (Number(I))
 
-buildForDBTests::[Test]
-buildForDBTests= map (\f->f CMDAPI) bfdbtests
+usageTests::[Test]
+usageTests= map (\f->f CMDAPI) utests
 
-bfdbtests :: (APIFacade a)=> [a -> Test]
-bfdbtests= [ testGenerateASTCreatesBWUsage,
+utests :: (APIFacade a)=> [a -> Test]
+utests= [ testGenerateASTCreatesBWUsage,
         testGenerateReferencesSimple,
-        testGenerateReferencesImports]
+        testGenerateReferencesImports,
+        testGenerateReferencesExports]
 
 testGenerateASTCreatesBWUsage :: (APIFacade a)=> a -> Test
 testGenerateASTCreatesBWUsage api= TestLabel "testGenerateASTCreatesBWUsage" (TestCase ( do
@@ -114,10 +114,11 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         assertTypeUsage "base" "Data.Maybe" "Maybe" [[15,24,15,29]] v
         assertTypeUsage "base" "GHC.Base" "String" [[7,15,7,21]] v
         assertTypeUsage "base" "GHC.Show" "Show" [[5,15,5,19]] v
+        assertTypeUsage "ghc-prim" "GHC.Types" "Int" [[4,15,4,18]] v
         
         vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
-        sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
-        putStrLn sUMain
+        --sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
+        --putStrLn sUMain
         
         assertVarUsage "BWTest-0.1" "A" "" [[2,8,2,9]] vMain
         assertVarUsage "BWTest-0.1" "A" "Cons2" [[3,22,3,27]] vMain
@@ -147,8 +148,8 @@ testGenerateReferencesImports api= TestLabel "testGenerateReferencesImports" (Te
         (comps,_)<-getCabalComponents api root    
         mapM_ (generateAST api root) comps
         vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
-        sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
-        putStrLn sUMain
+        -- sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
+        -- putStrLn sUMain
         assertVarUsage "base" "Data.Ord" "" [[2,8,2,16]] vMain
         assertVarUsage "base" "Data.Maybe" "" [[3,8,3,18]] vMain
         assertVarUsage "base" "Data.Complex" "" [[4,8,4,20]] vMain
@@ -156,7 +157,72 @@ testGenerateReferencesImports api= TestLabel "testGenerateReferencesImports" (Te
         assertTypeUsage "base" "Data.Complex" "Complex" [[4,22,4,35]] vMain
         assertVarUsage "base" "Data.Complex" ":+" [[4,22,4,35]] vMain
         ))
+
+testGenerateReferencesExports :: (APIFacade a)=> a -> Test
+testGenerateReferencesExports api= TestLabel "testGenerateReferencesExports" (TestCase ( do
+        root<-createTestProject
+        let rel="src" </> "A.hs"
+        writeFile (root</> rel) $ unlines [  
+                  "module A (",
+                  "    MyData,",
+                  "    MyData2(..),",
+                  "    MyData3(Cons31),",
+                  "    reset,",
+                  "    MyString,",
+                  "    module Data.Ord) where",
+                  "import Data.Ord",
+                  "data MyData=Cons1", 
+                  "      { mdS::MyString}", 
+                  "      | Cons2 Int",
+                  "     deriving Show",
+                  "",
+                  "type MyString=String",
+                  "",
+                  "reset :: MyData -> MyData",
+                  "reset (Cons1 _)=Cons1 \"\"",
+                  "reset (Cons2 _)=Cons2 0",
+                  "",
+                  "data MyData2=Cons21", 
+                  "      { mdS2::MyString}", 
+                  "      | Cons22 Int",
+                  "     deriving Show",
+                  "data MyData3=Cons31", 
+                  "      { mdS3::MyString}", 
+                  "      | Cons32 Int",
+                  "     deriving Show"
+                  ]  
+        _<-synchronize api root True          
+        (BuildResult bool1 _,nsErrors1)<-build api root False Source
+        assertBool ("returned false on bool1:" ++ show nsErrors1)  bool1
+        assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
+        (comps,_)<-getCabalComponents api root    
+        mapM_ (generateAST api root) comps
+        v<-readStoredUsage (root </> ".dist-buildwrapper" </>  rel)
+        --sU<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  rel))
+        --putStrLn sU
         
+        assertVarUsage "BWTest-0.1" "A" "Cons1" [[9,13,9,18],[17,8,17,13],[17,17,17,22]] v
+        assertVarUsage "BWTest-0.1" "A" "Cons2" [[11,9,11,14],[18,8,18,13],[18,17,18,22]] v
+        assertVarUsage "BWTest-0.1" "A" "Cons21" [[20,14,20,20]] v
+        assertVarUsage "BWTest-0.1" "A" "Cons22" [[22,9,22,15]] v
+        assertVarUsage "BWTest-0.1" "A" "Cons31" [[4,5,4,20],[24,14,24,20]] v
+        assertVarUsage "BWTest-0.1" "A" "Cons32" [[26,9,26,15]] v
+        assertVarUsage "BWTest-0.1" "A" "mdS" [[10,9,10,12]] v
+        assertVarUsage "BWTest-0.1" "A" "mdS2" [[21,9,21,13]] v
+        assertVarUsage "BWTest-0.1" "A" "mdS3" [[25,9,25,13]] v
+        assertVarUsage "BWTest-0.1" "A" "reset" [[5,5,5,10],[16,1,16,6],[17,1,17,25],[18,1,18,24]] v
+        assertVarUsage "base" "GHC.Num" "fromInteger" [[18,23,18,24]] v
+        
+        assertVarUsage "base" "Data.Ord" "" [[7,5,7,20],[8,8,8,16]] v
+        
+        assertTypeUsage "BWTest-0.1" "A" "MyData" [[2,5,2,11],[9,6,9,12],[16,10,16,16],[16,20,16,26]] v
+        assertTypeUsage "BWTest-0.1" "A" "MyString" [[6,5,6,13],[10,14,10,22],[14,6,14,14],[21,15,21,23],[25,15,25,23]] v
+        assertTypeUsage "base" "GHC.Base" "String" [[14,15,14,21]] v
+        assertTypeUsage "base" "GHC.Show" "Show" [[12,15,12,19],[23,15,23,19],[27,15,27,19]] v
+        assertTypeUsage "BWTest-0.1" "A" "MyData2" [[3,5,3,16],[20,6,20,13]] v
+        assertTypeUsage "BWTest-0.1" "A" "MyData3" [[4,5,4,20],[24,6,24,13]] v
+        assertTypeUsage "ghc-prim" "GHC.Types" "Int" [[11,15,11,18],[22,16,22,19],[26,16,26,19]] v
+        ))        
         
 getUsageFile :: FilePath -- ^ the source file
         -> FilePath

@@ -40,10 +40,11 @@ import Language.Preprocessor.Cpphs
 import Data.Maybe
 import System.Directory
 import System.FilePath
-import GHC (RenamedSource, TypecheckedSource, TypecheckedModule(..), Ghc, ms_mod, pm_mod_summary)
+import GHC (RenamedSource, TypecheckedSource, TypecheckedModule(..), Ghc, ms_mod, pm_mod_summary, moduleName)
 import qualified GHC  as GHC (Module)
 import Data.Tuple (swap)
 import Data.Aeson
+import Outputable (showSDoc,ppr)
 
 -- | copy all files from the project to the temporary folder
 synchronize ::  Bool -- ^ if true copy all files, if false only copy files newer than their corresponding temp files
@@ -114,10 +115,12 @@ generateAST cc= do
         where
                 getModule :: T.Text ->  FilePath -> TypecheckedModule -> Ghc(FilePath,RenamedSource,[Usage])
                 getModule pkg f tm=do
-                        let rs@(_,imps,_,_)=fromJust $ tm_renamed_source tm
+                        let rs@(_,imps,mexps,_)=fromJust $ tm_renamed_source tm
                         ius<-mapM (BwGHC.ghcImportToUsage pkg) imps
+                        let modu=T.pack $ showSDoc $ ppr $ moduleName $ ms_mod $ pm_mod_summary $ tm_parsed_module tm
+                        eus<-mapM (BwGHC.ghcExportToUsage pkg modu) (fromMaybe [] mexps)
                         --ms_mod $ pm_mod_summary $ tm_parsed_module tm
-                        return (f,rs,concat ius)
+                        return (f,rs,concat $ ius ++ eus)
                 generate :: T.Text -> (FilePath,RenamedSource,[Usage]) -> BuildWrapper()
                 generate pkg (fp,(hsg,_,_,_),ius)=do
                         tgt<-getTargetPath fp

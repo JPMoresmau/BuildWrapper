@@ -110,9 +110,11 @@ test-suite buildwrapper-test
   ghc-options:     -Wall -fno-warn-unused-do-bind
   x-uses-tf:       true
   other-modules:   
-                   Language.Haskell.BuildWrapper.APITest, Language.Haskell.BuildWrapper.Tests, Language.Haskell.BuildWrapper.CMDTests,
+                   Language.Haskell.BuildWrapper.APITest,
+                   Language.Haskell.BuildWrapper.Tests,
+                   Language.Haskell.BuildWrapper.CMDTests,
                    Language.Haskell.BuildWrapper.GHCTests,
-                   Language.Haskell.BuildWrapper.BuildForDBTests
+                   Language.Haskell.BuildWrapper.UsagesTests
 
 source-repository head
   type:     git
