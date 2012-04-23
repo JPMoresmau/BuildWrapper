@@ -12,11 +12,41 @@
 -- Direct tests on the API code
 module Language.Haskell.BuildWrapper.APITest where
 
+import qualified Language.Haskell.BuildWrapper.API as API
 import Language.Haskell.BuildWrapper.Base
+import Language.Haskell.BuildWrapper.Tests
 import qualified Language.Haskell.BuildWrapper.Cabal as Cabal
 
+import Control.Monad.State
 import Test.HUnit
 
+data DirectAPI=DirectAPI
+
+instance APIFacade DirectAPI where
+        synchronize _ r ff= runAPI r $ API.synchronize ff
+        synchronize1 _ r ff fp= runAPI r $ API.synchronize1 ff fp
+        write _ r fp s= runAPI r $ API.write fp s
+        configure _ r t= runAPI r $ API.configure t
+        configureWithFlags _ r t fgs= runAPIFlags r (API.configure t) fgs
+        build _ r b wc= runAPI r $ API.build b wc
+        build1 _ r fp= runAPI r $ API.build1 fp
+        getBuildFlags _ r fp= runAPI r $ API.getBuildFlags fp
+        getOutline _ r fp= runAPI r $ API.getOutline fp
+        getTokenTypes _ r fp= runAPI r $ API.getTokenTypes fp
+        getOccurrences _ r fp s= runAPI r $ API.getOccurrences fp s
+        getThingAtPoint _ r fp l c= runAPI r $ API.getThingAtPoint fp l c
+        getNamesInScope _ r fp= runAPI r $ API.getNamesInScope fp
+        getCabalDependencies _ r= runAPI r API.getCabalDependencies
+        getCabalComponents _ r= runAPI r API.getCabalComponents
+        generateAST _ r cc=runAPI r $ API.generateAST cc
+        
+
+runAPI:: FilePath -> StateT BuildWrapperState IO a  -> IO a
+runAPI root f =runAPIFlags root f "" 
+
+runAPIFlags:: FilePath -> StateT BuildWrapperState IO a  -> String -> IO a
+runAPIFlags root f flags =
+        evalStateT f (BuildWrapperState ".dist-buildwrapper" "cabal" (testCabalFile root) Normal flags [])
 
 unitTests :: [Test]
 unitTests=[testGetBuiltPath,testParseBuildMessages,testParseBuildMessagesLinker,testParseBuildMessagesCabal

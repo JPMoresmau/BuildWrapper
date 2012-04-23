@@ -48,16 +48,17 @@ import Outputable (showSDoc,ppr)
 
 -- | copy all files from the project to the temporary folder
 synchronize ::  Bool -- ^ if true copy all files, if false only copy files newer than their corresponding temp files
-        -> BuildWrapper(OpResult [FilePath]) -- ^ return the list of files copied
+        -> BuildWrapper(OpResult ([FilePath],[FilePath])) -- ^ return the list of files copied, the list of files deleted
 synchronize force =do
         cf<-gets cabalFile
-        m<-copyFromMain force $ takeFileName cf
         (fileList,ns)<-getFilesToCopy
-        m1<-mapM (copyFromMain force)(
+        let fullFileList=takeFileName cf :
                 "Setup.hs":
                 "Setup.lhs":
-                fileList)
-        return (catMaybes (m : m1), ns)
+                fileList
+        m1<-mapM (copyFromMain force) fullFileList
+        del<-deleteGhosts fullFileList
+        return ((catMaybes m1,del), ns)
 
 -- | synchronize one file only
 synchronize1 ::  Bool -- ^ always copy the file, if false only copy the file if it is newer than its corresponding temp file
@@ -110,24 +111,24 @@ generateAST cc= do
                         mapM_ (generate pkg) modules
                         ) $ filter (\cbi->cbiComponent cbi==cc) cbis
                 )
-        liftIO $ Prelude.print ns        
+        -- liftIO $ Prelude.print ns        
         return ()
         where
-                getModule :: T.Text ->  FilePath -> TypecheckedModule -> Ghc(FilePath,RenamedSource,[Usage])
+                getModule :: T.Text ->  FilePath -> TypecheckedModule -> Ghc(FilePath,T.Text,RenamedSource,[Usage])
                 getModule pkg f tm=do
                         let rs@(_,imps,mexps,_)=fromJust $ tm_renamed_source tm
                         ius<-mapM (BwGHC.ghcImportToUsage pkg) imps
                         let modu=T.pack $ showSDoc $ ppr $ moduleName $ ms_mod $ pm_mod_summary $ tm_parsed_module tm
                         eus<-mapM (BwGHC.ghcExportToUsage pkg modu) (fromMaybe [] mexps)
                         --ms_mod $ pm_mod_summary $ tm_parsed_module tm
-                        return (f,rs,concat $ ius ++ eus)
-                generate :: T.Text -> (FilePath,RenamedSource,[Usage]) -> BuildWrapper()
-                generate pkg (fp,(hsg,_,_,_),ius)=do
+                        return (f,modu,rs,concat $ ius ++ eus)
+                generate :: T.Text -> (FilePath,T.Text,RenamedSource,[Usage]) -> BuildWrapper()
+                generate pkg (fp,modu,(hsg,_,_,_),ius)=do
                         tgt<-getTargetPath fp
                         --mv<-liftIO $ readGHCInfo tgt
                         let v = dataToJSON hsg
-                        --liftIO $ Prelude.putStrLn tgt
-                        --liftIO $ Prelude.putStrLn $ formatJSON $ BSC.unpack $ encode v
+                        -- liftIO $ Prelude.putStrLn tgt
+                        -- liftIO $ Prelude.putStrLn $ formatJSON $ BSC.unpack $ encode v
                         --case mv of
                         --        Just v->do
                         let vals=catMaybes $ extractUsages v
@@ -138,7 +139,8 @@ generateAST cc= do
                                         let ods=getHSEOutline ast
                                         let (es,_)=getHSEImportExport ast
                                         let val=reconcile pkg vals ods es ius
-                                        liftIO $ setUsageInfo tgt val
+                                        let valWithModule=Array $ V.fromList [toJSON pkg,toJSON modu,val]
+                                        liftIO $ setUsageInfo tgt valWithModule
                                         return ()
                                 _ -> return ()
                         return ()

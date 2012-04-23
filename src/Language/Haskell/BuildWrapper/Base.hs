@@ -25,7 +25,8 @@ import qualified Data.Set as S
 
 import System.Directory
 import System.FilePath
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, isInfixOf)
+import Data.Maybe (catMaybes)
 
 -- | State type
 type BuildWrapper=StateT BuildWrapperState IO
@@ -530,6 +531,30 @@ getRecursiveContents topdir = do
       then getRecursiveContents path
       else return [path]
   return (concat paths)         
+
+  
+deleteGhosts :: [FilePath] -> BuildWrapper [FilePath]
+deleteGhosts copied=do
+        root<-getFullSrc ""
+        temp<-getFullTempDir
+        fs<-liftIO $ getRecursiveContents temp
+        let copiedS=S.fromList copied
+        del<-liftIO $ mapM (deleteIfGhost root temp copiedS) fs
+        return $ catMaybes del
+        where
+                deleteIfGhost :: FilePath -> FilePath -> S.Set FilePath -> FilePath -> IO (Maybe FilePath)
+                deleteIfGhost rt tmp cs f=do
+                        let rel=makeRelative tmp f
+                        if "dist" `isPrefixOf` rel || S.member rel cs
+                                then return Nothing
+                                else do
+                                        let fullSrc=rt </> rel
+                                        ex<-doesFileExist fullSrc
+                                        if ex 
+                                                then return Nothing
+                                                else do
+                                                        removeFile (tmp </> f)
+                                                        return $ Just rel
   
 -- | debug method: fromJust with a message to display when we get Nothing 
 fromJustDebug :: String -> Maybe a -> a

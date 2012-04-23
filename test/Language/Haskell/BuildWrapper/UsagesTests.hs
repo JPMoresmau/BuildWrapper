@@ -27,16 +27,18 @@ usageTests::[Test]
 usageTests= map (\f->f CMDAPI) utests
 
 utests :: (APIFacade a)=> [a -> Test]
-utests= [ testGenerateASTCreatesBWUsage,
-        testGenerateReferencesSimple,
-        testGenerateReferencesImports,
-        testGenerateReferencesExports]
+utests= [-- testGenerateASTCreatesBWUsage,
+        testGenerateReferencesSimple --,
+       -- testGenerateReferencesImports,
+        --testGenerateReferencesExports
+        ]
 
 testGenerateASTCreatesBWUsage :: (APIFacade a)=> a -> Test
 testGenerateASTCreatesBWUsage api= TestLabel "testGenerateASTCreatesBWUsage" (TestCase ( do
         root<-createTestProject
-        (fps,_)<-synchronize api root False
-        assertBool "no file path on creation" (not $ null fps) 
+        ((fps,dels),_)<-synchronize api root False
+        assertBool "no file path on creation" (not $ null fps)
+        assertBool "deletions" (null dels)  
         assertEqual "no cabal file" (testProjectName <.> ".cabal") (head fps)
         let rel="src" </> "A.hs"
         assertBool "no A" (rel `elem` fps)
@@ -95,8 +97,10 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         --sI<-fmap formatJSON (readFile  $ getInfoFile(root </> ".dist-buildwrapper" </>  rel))
         --putStrLn sI
         v<-readStoredUsage (root </> ".dist-buildwrapper" </>  rel)
-        --sU<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  rel))
-        --putStrLn sU
+        sU<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  rel))
+        putStrLn sU
+      
+        assertPackageModule "BWTest-0.1" "A" v
       
         assertVarUsage "BWTest-0.1" "A" "Cons1" [[2,13,2,18],[10,8,10,13],[10,17,10,22],[16,12,16,17]] v
         assertVarUsage "BWTest-0.1" "A" "Cons2" [[4,9,4,14],[11,8,11,13],[11,17,11,22]] v
@@ -119,6 +123,7 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
         --sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
         --putStrLn sUMain
+        assertPackageModule "BWTest-0.1" "Main" vMain
         
         assertVarUsage "BWTest-0.1" "A" "" [[2,8,2,9]] vMain
         assertVarUsage "BWTest-0.1" "A" "Cons2" [[3,22,3,27]] vMain
@@ -268,7 +273,9 @@ assertTypeUsage = assertUsage "types"
 
 
 assertUsage :: T.Text -> T.Text -> T.Text -> T.Text -> [[Int]] -> Value -> IO()
-assertUsage tp pkg modu name lins (Object m) |
+assertUsage tp pkg modu name lins (Array v) |
+        V.length v==3,
+        (Object m) <-v V.! 2,
         Just (Object m2)<-HM.lookup pkg m,
         Just (Object m3)<-HM.lookup modu m2,
         Just (Object m4)<-HM.lookup tp m3,
@@ -279,3 +286,11 @@ assertUsage tp pkg modu name lins (Object m) |
         --V.elem (Number (I line)) arr=return ()
 assertUsage _ _ modu name line _=assertBool (T.unpack modu ++ "." ++ T.unpack name ++ ": " ++ show line) False
 
+assertPackageModule :: T.Text -> T.Text -> Value -> IO()
+assertPackageModule pkg modu (Array v) |
+         V.length v==3,
+        (String s0) <-v V.! 0,
+        (String s1) <-v V.! 1= do
+                assertEqual (T.unpack pkg) pkg s0
+                assertEqual (T.unpack modu) modu s1    
+assertPackageModule pkg modu _=  assertBool (T.unpack pkg ++ "." ++ T.unpack modu) False

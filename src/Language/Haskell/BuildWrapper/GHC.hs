@@ -168,7 +168,7 @@ withASTNotes f ff base_dir contents options=do
         where
             workOnResult :: GHCApplyFunction a -> FilePath -> ModSummary -> Ghc a
             workOnResult f2 fp modSum= do
-                GMU.liftIO $ putStrLn ("parsing " ++ fp)
+                -- GMU.liftIO $ putStrLn ("parsing " ++ fp)
                 p <- parseModule modSum
                 --return $ showSDocDump $ ppr $ pm_mod_summary p 
                 t <- typecheckModule p
@@ -181,7 +181,7 @@ withASTNotes f ff base_dir contents options=do
                 setContext [IIModule $ ms_mod modSum]
 #endif                         
                 let fullfp=ff fp
-                GMU.liftIO $ putStrLn ("writing " ++ fullfp)
+                -- GMU.liftIO $ putStrLn ("writing " ++ fullfp)
                 GMU.liftIO $ storeGHCInfo fullfp (typecheckedSource $ dm_typechecked_module l)
                 --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
                 f2 fp $ dm_typechecked_module l                
@@ -834,7 +834,8 @@ ghcNameToUsage tpkg tmod nm src typ=Usage tpkg tmod  (T.pack $ showSDocUnqual $ 
 --                lconOutline :: LConDecl RdrName -> [OutlineDef]
 --                lconOutline (L src ConDecl{con_name,con_doc,con_details})=[(mkOutlineDef (nameDecl $ unLoc con_name) [Constructor] (ghcSpanToLocation $ getLoc con_name)){od_comment=commentDecl con_doc}]
 --                        ++ detailOutline con_details
---                detailOutline (HsConDetails _ fields)=concatMap lfieldOutline fields
+--                detailOutline (RecCon fields)=concatMap lfieldOutline fields
+--                detailOutline _=[]
 --                lfieldOutline (ConDeclField{cd_fld_name,cd_fld_doc})=[(mkOutlineDef (nameDecl $ unLoc cd_fld_name) [Function] (ghcSpanToLocation $ getLoc cd_fld_name)){od_comment=commentDecl cd_fld_doc}]
 --                nameDecl:: RdrName -> T.Text
 --                nameDecl (Unqual occ)=T.pack $ showSDoc $ ppr occ
@@ -842,6 +843,6 @@ ghcNameToUsage tpkg tmod nm src typ=Usage tpkg tmod  (T.pack $ showSDocUnqual $ 
 --                commentDecl :: Maybe LHsDocString -> Maybe T.Text
 --                commentDecl (Just st)=Just $ T.pack $ showSDoc $ ppr st
 --                commentDecl _=Nothing
---                -- ghcSpanToLocation
+                -- ghcSpanToLocation
                  
                 

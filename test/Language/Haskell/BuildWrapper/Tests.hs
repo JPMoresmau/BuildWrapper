@@ -33,7 +33,8 @@ import Control.Monad
 tests :: (APIFacade a)=> [a -> Test]
 tests=  [
         testSynchronizeAll,
-        testConfigureWarnings , 
+        testSynchronizeDelete,
+        testConfigureWarnings, 
         testConfigureErrors,
         testBuildErrors,
         testBuildWarnings,
@@ -61,7 +62,7 @@ tests=  [
         ]
 
 class APIFacade a where
-        synchronize :: a -> FilePath -> Bool -> IO (OpResult [FilePath])
+        synchronize :: a -> FilePath -> Bool -> IO (OpResult ([FilePath],[FilePath]))
         synchronize1 :: a  -> FilePath -> Bool -> FilePath -> IO (Maybe FilePath)
         write :: a -> FilePath -> FilePath -> String -> IO ()
         configure :: a -> FilePath -> WhichCabal -> IO (OpResult Bool)
@@ -81,8 +82,9 @@ class APIFacade a where
 testSynchronizeAll :: (APIFacade a)=> a -> Test
 testSynchronizeAll api= TestLabel "testSynchronizeAll" (TestCase ( do
         root<-createTestProject
-        (fps,_)<-synchronize api root False
+        ((fps,dels),_)<-synchronize api root False
         assertBool "no file path on creation" (not $ null fps) 
+        assertBool "deletions!" (null dels) 
         assertEqual "no cabal file" (testProjectName <.> ".cabal") (head fps)
         assertBool "no A" (("src" </> "A.hs") `elem` fps)
         assertBool "no C" (("src" </> "B" </> "C.hs") `elem` fps)
@@ -90,6 +92,23 @@ testSynchronizeAll api= TestLabel "testSynchronizeAll" (TestCase ( do
         assertBool "no D" (("src" </> "B" </> "D.hs") `elem` fps)
         assertBool "no Main test" (("test" </> "Main.hs") `elem` fps)
         assertBool "no TestA" (("test" </> "TestA.hs") `elem` fps)
+        ))
+
+testSynchronizeDelete :: (APIFacade a)=> a -> Test
+testSynchronizeDelete api= TestLabel "testSynchronizeDelete" (TestCase ( do
+        root<-createTestProject
+        ((fps0,dels0),_)<-synchronize api root False
+        assertBool "no file path on creation" (not $ null fps0) 
+        assertBool "deletions!" (null dels0) 
+        let new=root </> ".dist-buildwrapper" </> "New.hs"
+        writeFile new "module New where"
+        ex1<-doesFileExist new
+        assertBool "new does not exist" ex1
+        ((fps,dels),_)<-synchronize api root False
+        assertBool "no deletions" (not $ null dels) 
+        assertBool "no New.hs" ("New.hs" `elem` dels)
+        ex2<-doesFileExist new
+        assertBool "new does still exist" (not ex2)
         ))
 
 testConfigureErrors :: (APIFacade a)=> a -> Test
