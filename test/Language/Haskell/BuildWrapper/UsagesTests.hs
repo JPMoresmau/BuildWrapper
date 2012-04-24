@@ -27,14 +27,14 @@ usageTests::[Test]
 usageTests= map (\f->f CMDAPI) utests
 
 utests :: (APIFacade a)=> [a -> Test]
-utests= [-- testGenerateASTCreatesBWUsage,
-        testGenerateReferencesSimple --,
-       -- testGenerateReferencesImports,
-        --testGenerateReferencesExports
+utests= [ testGenerateBWUsage,
+        testGenerateReferencesSimple,
+        testGenerateReferencesImports,
+        testGenerateReferencesExports
         ]
 
-testGenerateASTCreatesBWUsage :: (APIFacade a)=> a -> Test
-testGenerateASTCreatesBWUsage api= TestLabel "testGenerateASTCreatesBWUsage" (TestCase ( do
+testGenerateBWUsage :: (APIFacade a)=> a -> Test
+testGenerateBWUsage api= TestLabel "testGenerateBWUsage" (TestCase ( do
         root<-createTestProject
         ((fps,dels),_)<-synchronize api root False
         assertBool "no file path on creation" (not $ null fps)
@@ -52,11 +52,16 @@ testGenerateASTCreatesBWUsage api= TestLabel "testGenerateASTCreatesBWUsage" (Te
         assertBool (bwI1 ++ "  file exists after build") (not ef1)
         (comps,_)<-getCabalComponents api root
         c1<-getClockTime
-        mapM_ (generateAST api root) comps
+        gar<-mapM (generateUsage api root) comps
+        let fs=concat $ mapMaybe fst gar
+        assertBool "fs doesn't contain rel" (rel `elem` fs)
         c2<-getClockTime
-        putStrLn ("generateAST: " ++ timeDiffToString (diffClockTimes c2 c1))
+        putStrLn ("generateUsage: " ++ timeDiffToString (diffClockTimes c2 c1))
         ef2<-doesFileExist bwI1
         assertBool (bwI1 ++ " file doesn't exist after generateAST") ef2
+        gar2<-mapM (generateUsage api root) comps
+        let fs2=concat $ mapMaybe fst gar2
+        assertBool "fs2  contains rel" (not $ rel `elem` fs2)
         ))
 
 testGenerateReferencesSimple :: (APIFacade a)=> a -> Test
@@ -93,7 +98,7 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         assertBool ("returned false on bool1:" ++ show nsErrors1)  bool1
         assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
         (comps,_)<-getCabalComponents api root    
-        mapM_ (generateAST api root) comps
+        mapM_ (generateUsage api root) comps
         --sI<-fmap formatJSON (readFile  $ getInfoFile(root </> ".dist-buildwrapper" </>  rel))
         --putStrLn sI
         v<-readStoredUsage (root </> ".dist-buildwrapper" </>  rel)
@@ -151,7 +156,7 @@ testGenerateReferencesImports api= TestLabel "testGenerateReferencesImports" (Te
         assertBool ("returned false on bool1:" ++ show nsErrors1)  bool1
         assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
         (comps,_)<-getCabalComponents api root    
-        mapM_ (generateAST api root) comps
+        mapM_ (generateUsage api root) comps
         vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
         -- sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
         -- putStrLn sUMain
@@ -201,7 +206,7 @@ testGenerateReferencesExports api= TestLabel "testGenerateReferencesExports" (Te
         assertBool ("returned false on bool1:" ++ show nsErrors1)  bool1
         assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
         (comps,_)<-getCabalComponents api root    
-        mapM_ (generateAST api root) comps
+        mapM_ (generateUsage api root) comps
         v<-readStoredUsage (root </> ".dist-buildwrapper" </>  rel)
         --sU<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  rel))
         --putStrLn sU

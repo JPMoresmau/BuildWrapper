@@ -45,7 +45,7 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String]}
         | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String]}
         | GetBuildFlags {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath}
-        | GenerateAST {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], cabalComponent::String}
+        | GenerateUsage {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], cabalComponent::String}
     deriving (Show,Read,Data,Typeable)    
   
 
@@ -102,8 +102,8 @@ mdependencies :: BWCmd
 mdependencies=Dependencies tf cp cf uf co
 mcomponents :: BWCmd
 mcomponents=Components tf cp cf uf co
-mgenerateAST :: BWCmd
-mgenerateAST=GenerateAST tf cp cf uf co cc
+mgenerateUsage :: BWCmd
+mgenerateUsage=GenerateUsage tf cp cf uf co cc
 
 -- | main method for command handling
 cmdMain :: IO ()
@@ -111,7 +111,7 @@ cmdMain = cmdArgs
   (modes
      [msynchronize, msynchronize1, mconfigure, mwrite, mbuild, mbuild1,
       mgetbf, moutline, mtokenTypes, moccurrences, mthingAtPoint,
-      mnamesInScope, mdependencies, mcomponents, mgenerateAST]
+      mnamesInScope, mdependencies, mcomponents, mgenerateUsage]
      &= helpArg [explicit, name "help", name "h"]
      &= help "buildwrapper executable"
      &= program "buildwrapper"
@@ -135,7 +135,7 @@ cmdMain = cmdArgs
                 handle c@NamesInScope{file=fi}=runCmd c (getNamesInScope fi)
                 handle c@Dependencies{}=runCmd c getCabalDependencies
                 handle c@Components{}=runCmd c getCabalComponents
-                handle c@GenerateAST{cabalComponent=comp}=runCmd c (generateAST (fromJust $ decode $ BSC.pack comp))
+                handle c@GenerateUsage{cabalComponent=comp}=runCmd c (generateUsage (fromJust $ decode $ BSC.pack comp))
                 runCmd :: (ToJSON a) => BWCmd -> StateT BuildWrapperState IO a -> IO ()
                 runCmd=runCmdV Normal
                 runCmdV:: (ToJSON a) => Verbosity -> BWCmd -> StateT BuildWrapperState IO a -> IO ()

@@ -90,17 +90,24 @@ build :: Bool -- ^ do we want output (True) or just compilation without linking?
         -> BuildWrapper (OpResult BuildResult)
 build = cabalBuild
 
-generateAST :: CabalComponent -> BuildWrapper()
-generateAST cc= do
-        (_,ns)<-withCabal Source (\lbi -> do 
+generateUsage :: CabalComponent -> BuildWrapper(OpResult (Maybe [FilePath]))
+generateUsage cc= do
+        r<-withCabal Source (\lbi -> do 
                 cbis<-getAllFiles lbi
                 cf<-gets cabalFile
                 temp<-getFullTempDir
                 let dir=takeDirectory cf
                 let pkg=T.pack $ display $ packageId $ localPkgDescr lbi
-                mapM_ (\cbi->do
+                allMps<-mapM (\cbi->do
                         let 
-                                mps=map (\(m,f)->(f,moduleToString m)) $ cbiModulePaths cbi
+                                mps1=map (\(m,f)->(f,moduleToString m)) $ cbiModulePaths cbi
+                        mps<-filterM (\(f,_)->do
+                                fullSrc<-getFullSrc f
+                                fullTgt<-getTargetPath f
+                                let fullUsage=getUsageFile fullTgt
+                                liftIO $ Prelude.print fullUsage
+                                liftIO $ isSourceMoreRecent fullSrc fullUsage 
+                                        ) mps1
                         opts<-fmap snd $ fileGhcOptions (lbi,cbi)        
                         modules<-liftIO $ do
                                 cd<-getCurrentDirectory
@@ -109,10 +116,12 @@ generateAST cc= do
                                 setCurrentDirectory cd 
                                 return mods
                         mapM_ (generate pkg) modules
+                        return mps
                         ) $ filter (\cbi->cbiComponent cbi==cc) cbis
+                return $ map fst $ concat allMps
                 )
         -- liftIO $ Prelude.print ns        
-        return ()
+        return r
         where
                 getModule :: T.Text ->  FilePath -> TypecheckedModule -> Ghc(FilePath,T.Text,RenamedSource,[Usage])
                 getModule pkg f tm=do

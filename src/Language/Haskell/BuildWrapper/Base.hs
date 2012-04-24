@@ -428,23 +428,27 @@ copyFromMain :: Bool -- ^ copy even if temp file is newer
         -> BuildWrapper(Maybe FilePath) -- ^ return Just the file if copied, Nothing if no copy was done 
 copyFromMain force src=do
         fullSrc<-getFullSrc src
+        fullTgt<-getTargetPath src
         exSrc<-liftIO $ doesFileExist fullSrc
         if exSrc 
                 then do
-                        fullTgt<-getTargetPath src
-                        ex<-liftIO $ doesFileExist fullTgt
-                        shouldCopy<- if force || not ex
-                                then return True 
-                                else
-                                  do modSrc <- liftIO $ getModificationTime fullSrc
-                                     modTgt <- liftIO $ getModificationTime fullTgt
-                                     return (modSrc >= modTgt) -- if same date, we may thing precision is not good enough to be 100% sure tgt is newer, so we copy
-                        if shouldCopy
+                        moreRecent<-liftIO $ isSourceMoreRecent fullSrc fullTgt
+                        if force || moreRecent
                                 then do
                                         liftIO $ copyFile fullSrc fullTgt
                                         return $ Just src
                                 else return Nothing
-                 else return Nothing
+                else return Nothing
+
+isSourceMoreRecent :: FilePath -> FilePath -> IO Bool
+isSourceMoreRecent fullSrc fullTgt=do
+        ex<-doesFileExist fullTgt
+        if not ex 
+                then return True
+                else 
+                  do modSrc <- getModificationTime fullSrc
+                     modTgt <- getModificationTime fullTgt
+                     return (modSrc >= modTgt)
 
 -- | replace relative file path by module name      
 fileToModule :: FilePath -> String
