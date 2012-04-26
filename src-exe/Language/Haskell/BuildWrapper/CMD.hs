@@ -135,7 +135,7 @@ cmdMain = cmdArgs
                 handle c@NamesInScope{file=fi}=runCmd c (getNamesInScope fi)
                 handle c@Dependencies{}=runCmd c getCabalDependencies
                 handle c@Components{}=runCmd c getCabalComponents
-                handle c@GenerateUsage{cabalComponent=comp}=runCmd c (generateUsage (fromJust $ decode $ BSC.pack comp))
+                handle c@GenerateUsage{cabalComponent=comp}=runCmd c (generateUsage comp)
                 runCmd :: (ToJSON a) => BWCmd -> StateT BuildWrapperState IO a -> IO ()
                 runCmd=runCmdV Normal
                 runCmdV:: (ToJSON a) => Verbosity -> BWCmd -> StateT BuildWrapperState IO a -> IO ()

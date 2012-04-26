@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable,OverloadedStrings,PatternGuards #-}
+{-# LANGUAGE DeriveDataTypeable,OverloadedStrings,PatternGuards, NamedFieldPuns #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.GHC
 -- Author      : JP Moresmau
@@ -488,6 +488,11 @@ instance FromJSON CabalComponent where
         | Just b <- M.lookup "TestSuite" v =CCTestSuite <$> v .: "t" <*> parseJSON b
         | otherwise = mzero
     parseJSON _= mzero
+
+cabalComponentName :: CabalComponent -> String
+cabalComponentName CCLibrary{}=""
+cabalComponentName CCExecutable{cc_exe_name}=cc_exe_name
+cabalComponentName CCTestSuite{cc_test_name}=cc_test_name
 
 -- | a cabal package
 data CabalPackage=CabalPackage {

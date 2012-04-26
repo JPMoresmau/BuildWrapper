@@ -38,7 +38,7 @@ instance APIFacade DirectAPI where
         getNamesInScope _ r fp= runAPI r $ API.getNamesInScope fp
         getCabalDependencies _ r= runAPI r API.getCabalDependencies
         getCabalComponents _ r= runAPI r API.getCabalComponents
-        generateUsage _ r cc=runAPI r $ API.generateUsage cc
+        generateUsage _ r cc=runAPI r $ API.generateUsage $ cabalComponentName cc
         
 
 runAPI:: FilePath -> StateT BuildWrapperState IO a  -> IO a

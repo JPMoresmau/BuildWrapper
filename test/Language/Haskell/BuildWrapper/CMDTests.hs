@@ -12,6 +12,7 @@
 -- Testing via the executable interface
 module Language.Haskell.BuildWrapper.CMDTests where
 
+import Language.Haskell.BuildWrapper.Base
 import Language.Haskell.BuildWrapper.Tests
 import Test.HUnit
 
@@ -27,6 +28,7 @@ import System.Exit
 import System.Process
 import System.FilePath
 import System.Directory
+import Distribution.Simple.Utils (cabalVersion)
 
 cmdTests::[Test]
 cmdTests= map (\f->f CMDAPI) tests
@@ -49,7 +51,7 @@ instance APIFacade CMDAPI where
         getNamesInScope _ r fp= runAPI r "namesinscope" ["--file="++fp]
         getCabalDependencies _ r= runAPI r "dependencies" []
         getCabalComponents _ r= runAPI r "components" []
-        generateUsage _ r cc=runAPI r "generateusage" ["--cabalcomponent="++(BSC.unpack $ encode cc)]
+        generateUsage _ r cc=runAPI r "generateusage" ["--cabalcomponent="++(cabalComponentName cc)]
         
 exeExtension :: String
 #ifdef mingw32_HOST_OS
