@@ -45,7 +45,7 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String]}
         | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String]}
         | GetBuildFlags {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath}
-        | GenerateUsage {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], cabalComponent::String}
+        | GenerateUsage {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], returnAll:: Bool, cabalComponent::String}
     deriving (Show,Read,Data,Typeable)    
   
 
@@ -71,6 +71,9 @@ wc=Target &= help "which cabal file to use: original or temporary"
 
 cc :: String
 cc=def &= help "cabal component"
+
+ra :: Bool
+ra=def &= help "return all source paths"
 
 msynchronize :: BWCmd
 msynchronize = Synchronize tf cp cf uf co ff
@@ -103,7 +106,7 @@ mdependencies=Dependencies tf cp cf uf co
 mcomponents :: BWCmd
 mcomponents=Components tf cp cf uf co
 mgenerateUsage :: BWCmd
-mgenerateUsage=GenerateUsage tf cp cf uf co cc
+mgenerateUsage=GenerateUsage tf cp cf uf co ra cc
 
 -- | main method for command handling
 cmdMain :: IO ()
@@ -135,7 +138,7 @@ cmdMain = cmdArgs
                 handle c@NamesInScope{file=fi}=runCmd c (getNamesInScope fi)
                 handle c@Dependencies{}=runCmd c getCabalDependencies
                 handle c@Components{}=runCmd c getCabalComponents
-                handle c@GenerateUsage{cabalComponent=comp}=runCmd c (generateUsage comp)
+                handle c@GenerateUsage{returnAll=reta,cabalComponent=comp}=runCmd c (generateUsage reta comp)
                 runCmd :: (ToJSON a) => BWCmd -> StateT BuildWrapperState IO a -> IO ()
                 runCmd=runCmdV Normal
                 runCmdV:: (ToJSON a) => Verbosity -> BWCmd -> StateT BuildWrapperState IO a -> IO ()

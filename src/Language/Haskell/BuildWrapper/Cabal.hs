@@ -35,7 +35,7 @@ import qualified Distribution.PackageDescription as PD
 import Distribution.Package
 import Distribution.InstalledPackageInfo as IPI
 import Distribution.Version
-import Distribution.Text (display)
+import Distribution.Text (display,simpleParse)
 
                     
 import qualified Distribution.Simple.Configure as DSC
@@ -446,9 +446,12 @@ getAllFiles lbi= do
                 let libs=maybe [] extractFromLib $ library pd
                 let exes=map extractFromExe $ executables pd
                 let tests=map extractFromTest $ testSuites pd
-                mapM (\(a,b,c,isLib,d,cc)->do
+                cbis<-mapM (\(a,b,c,isLib,d,cc)->do
                         mf<-copyAll d
                         return (CabalBuildInfo a b c isLib mf cc)) (libs ++ exes ++ tests)
+                cbis2<-getReferencedFiles lbi
+                return $ zipWith (\c1@CabalBuildInfo{cbiModulePaths=cb1} CabalBuildInfo{cbiModulePaths=cb2}->c1{cbiModulePaths=nubOrd $ cb1++cb2}) cbis cbis2
+                -- return cbis
         where 
         extractFromLib :: Library -> [(BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath],CabalComponent)]
         extractFromLib l=let
@@ -482,7 +485,7 @@ getAllFiles lbi= do
                 -- exclude every file containing the temp folder name (".buildwrapper" by default)
                 -- which may happen if . is a source path
                 let notMyself=filter (not . isInfixOf tf) allF
-                return $ map (\f->(fromString $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) notMyself
+                return $ map (\(x,y)->(fromJust x,y)) $ filter (isJust . fst) $ map (\f->(simpleParse $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) notMyself
  
 -- | get all components, referencing only the files explicitely indicated in the cabal file
 getReferencedFiles :: LocalBuildInfo -> BuildWrapper [CabalBuildInfo]
@@ -491,7 +494,12 @@ getReferencedFiles lbi= do
                 let libs=maybe [] extractFromLib $ library pd
                 let exes=map extractFromExe $ executables pd
                 let tests=map extractFromTest $ testSuites pd
-                return (libs ++ exes ++ tests)
+                let cbis=(libs ++ exes ++ tests)
+                mapM (\c1@CabalBuildInfo{cbiModulePaths=cb1}->do
+                        cb2<-filterM (\(_,f)->do
+                                fs<-getFullSrc f
+                                liftIO $ doesFileExist fs) cb1
+                        return c1{cbiModulePaths=cb2}) cbis
         where 
         extractFromLib :: Library -> [CabalBuildInfo]
         extractFromLib l=let
@@ -522,9 +530,15 @@ getReferencedFiles lbi= do
         copyModules :: [ModuleName] -> [FilePath] -> [(ModuleName,FilePath)]
         copyModules mods=copyFiles (concatMap (\m->[toFilePath m <.> "hs", toFilePath m <.> "lhs"]) mods)
         copyFiles :: [FilePath] -> [FilePath] -> [(ModuleName,FilePath)]
-        copyFiles mods dirs=[(fromString $ fileToModule m,d </> m)  | m<-mods, d<-dirs]    
+        copyFiles mods dirs=let
+                rmods=filter (isJust . snd ) $ map (\x->(x,simpleParse $ fileToModule x)) mods
+                in [(modu,d </> m)  | (m,Just modu)<-rmods, d<-dirs]    
         copyMain :: FilePath  ->[FilePath] ->  [(ModuleName,FilePath)]
         copyMain fs = map (\ d -> (fromString "Main", d </> fs)) 
+       
+       
+stringToModuleName :: String -> Maybe ModuleName
+stringToModuleName=simpleParse       
         
 -- | convert a ModuleName to a String        
 moduleToString :: ModuleName -> String

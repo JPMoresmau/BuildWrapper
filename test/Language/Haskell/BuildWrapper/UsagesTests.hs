@@ -30,7 +30,8 @@ utests :: (APIFacade a)=> [a -> Test]
 utests= [ testGenerateBWUsage,
         testGenerateReferencesSimple,
         testGenerateReferencesImports,
-        testGenerateReferencesExports
+        testGenerateReferencesExports,
+        testIncorrectModuleFileName
         ]
 
 testGenerateBWUsage :: (APIFacade a)=> a -> Test
@@ -52,16 +53,19 @@ testGenerateBWUsage api= TestLabel "testGenerateBWUsage" (TestCase ( do
         assertBool (bwI1 ++ "  file exists after build") (not ef1)
         (comps,_)<-getCabalComponents api root
         c1<-getClockTime
-        gar<-mapM (generateUsage api root) comps
+        gar<-mapM (generateUsage api root False) comps
         let fs=concat $ mapMaybe fst gar
         assertBool "fs doesn't contain rel" (rel `elem` fs)
         c2<-getClockTime
         putStrLn ("generateUsage: " ++ timeDiffToString (diffClockTimes c2 c1))
         ef2<-doesFileExist bwI1
         assertBool (bwI1 ++ " file doesn't exist after generateAST") ef2
-        gar2<-mapM (generateUsage api root) comps
+        gar2<-mapM (generateUsage api root  False) comps
         let fs2=concat $ mapMaybe fst gar2
         assertBool "fs2  contains rel" (not $ rel `elem` fs2)
+        gar3<-mapM (generateUsage api root  True) comps
+        let fs3=concat $ mapMaybe fst gar3
+        assertBool "fs3 doesn't  contain rel" (rel `elem` fs3)
         ))
 
 testGenerateReferencesSimple :: (APIFacade a)=> a -> Test
@@ -98,7 +102,7 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         assertBool ("returned false on bool1:" ++ show nsErrors1)  bool1
         assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
         (comps,_)<-getCabalComponents api root    
-        mapM_ (generateUsage api root) comps
+        mapM_ (generateUsage api root False) comps
         --sI<-fmap formatJSON (readFile  $ getInfoFile(root </> ".dist-buildwrapper" </>  rel))
         --putStrLn sI
         v<-readStoredUsage (root </> ".dist-buildwrapper" </>  rel)
@@ -156,7 +160,7 @@ testGenerateReferencesImports api= TestLabel "testGenerateReferencesImports" (Te
         assertBool ("returned false on bool1:" ++ show nsErrors1)  bool1
         assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
         (comps,_)<-getCabalComponents api root    
-        mapM_ (generateUsage api root) comps
+        mapM_ (generateUsage api root False) comps
         vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
         -- sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
         -- putStrLn sUMain
@@ -206,7 +210,7 @@ testGenerateReferencesExports api= TestLabel "testGenerateReferencesExports" (Te
         assertBool ("returned false on bool1:" ++ show nsErrors1)  bool1
         assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
         (comps,_)<-getCabalComponents api root    
-        mapM_ (generateUsage api root) comps
+        mapM_ (generateUsage api root False) comps
         v<-readStoredUsage (root </> ".dist-buildwrapper" </>  rel)
         --sU<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  rel))
         --putStrLn sU
@@ -233,6 +237,46 @@ testGenerateReferencesExports api= TestLabel "testGenerateReferencesExports" (Te
         assertTypeUsage "BWTest-0.1" "A" "MyData3" [[4,5,4,20],[24,6,24,13]] v
         assertTypeUsage "ghc-prim" "GHC.Types" "Int" [[11,15,11,18],[22,16,22,19],[26,16,26,19]] v
         ))        
+    
+testIncorrectModuleFileName :: (APIFacade a)=> a -> Test
+testIncorrectModuleFileName api= TestLabel "testIncorrectModuleFileName" (TestCase ( do
+        root<-createTestProject
+        let relMain="src"</>"Main.hs"
+        let relMain2="src"</>"Main-exe.hs"
+        renameFile (root </> relMain) (root </> relMain2)
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:  base",
+                "",
+                "executable BWTest",
+                "  hs-source-dirs:  src",
+                "  main-is:         Main-exe.hs",
+                "  other-modules:  B.D",
+                "  build-depends:  base",
+                "",
+                "test-suite BWTest-test",
+                "  type:            exitcode-stdio-1.0",
+                "  hs-source-dirs:  test",
+                "  main-is:         Main.hs",
+                "  other-modules:  TestA",
+                "  build-depends:  base",
+                ""
+                ]        
+        synchronize api root False  
+        configure api root Target  
+        (comps,_)<-getCabalComponents api root    
+        gar<-mapM (generateUsage api root False) comps       
+        let fs=concat $ mapMaybe fst gar
+        assertBool "fs doesn't contain relMain2" (relMain2 `elem` fs)
+        ))
         
 getUsageFile :: FilePath -- ^ the source file
         -> FilePath

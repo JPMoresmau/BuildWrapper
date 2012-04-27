@@ -787,14 +787,15 @@ end (UnhelpfulSpan _)=error "UnhelpfulSpan in cmpOverlap start"
        
 
 ghcImportToUsage :: T.Text -> LImportDecl Name -> Ghc [Usage]
-ghcImportToUsage myPkg (L _ imp)=do
+ghcImportToUsage myPkg (L _ imp)=(do
         let L src modu=ideclName imp
         pkg<-lookupModule modu (ideclPkgQual imp)
         let tmod=T.pack $ showSDoc $ ppr modu
         let tpkg=T.pack $ showSDoc $ ppr $ modulePackageId pkg
         let nomain=if tpkg=="main" then myPkg else tpkg
         let subs=concatMap (ghcLIEToUsage (Just nomain) tmod) $ maybe [] snd $ ideclHiding imp
-        return $ (Usage (Just nomain) tmod "" False (toJSON $ ghcSpanToLocation src)):subs
+        return $ (Usage (Just nomain) tmod "" False (toJSON $ ghcSpanToLocation src)):subs)
+        `gcatch` (\(_ :: SourceError) -> return [])
          
 ghcLIEToUsage :: Maybe T.Text -> T.Text -> LIE Name -> [Usage]
 ghcLIEToUsage tpkg tmod (L src (IEVar nm))=[ghcNameToUsage tpkg tmod nm src False]
@@ -806,7 +807,7 @@ ghcLIEToUsage tpkg tmod (L src (IEModuleContents _))= [Usage tpkg tmod "" False 
 ghcLIEToUsage _ _ _=[]
         
 ghcExportToUsage :: T.Text -> T.Text -> LIE Name -> Ghc [Usage]        
-ghcExportToUsage myPkg myMod lie@(L _ name)=do
+ghcExportToUsage myPkg myMod lie@(L _ name)=(do
         (tpkg,tmod)<-do
                 case name of
                         (IEModuleContents modu)-> do
@@ -815,7 +816,8 @@ ghcExportToUsage myPkg myMod lie@(L _ name)=do
                                 let tmod=T.pack $ showSDoc $ ppr $ modu
                                 return (tpkg,tmod)
                         _ -> return (myPkg,myMod)
-        return $ ghcLIEToUsage (Just tpkg) tmod lie
+        return $ ghcLIEToUsage (Just tpkg) tmod lie)
+        `gcatch` (\(_ :: SourceError) -> return [])
         
 ghcNameToUsage ::  Maybe T.Text -> T.Text -> Name -> SrcSpan -> Bool -> Usage 
 ghcNameToUsage tpkg tmod nm src typ=Usage tpkg tmod  (T.pack $ showSDocUnqual $ ppr nm) typ (toJSON $ ghcSpanToLocation src)     

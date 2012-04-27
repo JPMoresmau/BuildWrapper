@@ -90,8 +90,8 @@ build :: Bool -- ^ do we want output (True) or just compilation without linking?
         -> BuildWrapper (OpResult BuildResult)
 build = cabalBuild
 
-generateUsage :: String -> BuildWrapper(OpResult (Maybe [FilePath]))
-generateUsage ccn= do
+generateUsage :: Bool -> String -> BuildWrapper(OpResult (Maybe [FilePath]))
+generateUsage returnAll ccn= do
         r<-withCabal Source (\lbi -> do 
                 cbis<-getAllFiles lbi
                 cf<-gets cabalFile
@@ -116,7 +116,7 @@ generateUsage ccn= do
                                 setCurrentDirectory cd 
                                 return mods
                         mapM_ (generate pkg) modules
-                        return mps
+                        return $ if returnAll then mps1 else mps
                         ) $ filter (\cbi->(cabalComponentName $ cbiComponent cbi)==ccn) cbis
                 return $ map fst $ concat allMps
                 )

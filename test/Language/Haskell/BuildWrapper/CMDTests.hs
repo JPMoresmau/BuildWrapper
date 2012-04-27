@@ -51,7 +51,7 @@ instance APIFacade CMDAPI where
         getNamesInScope _ r fp= runAPI r "namesinscope" ["--file="++fp]
         getCabalDependencies _ r= runAPI r "dependencies" []
         getCabalComponents _ r= runAPI r "components" []
-        generateUsage _ r cc=runAPI r "generateusage" ["--cabalcomponent="++(cabalComponentName cc)]
+        generateUsage _ r retAll cc=runAPI r "generateusage" ["--returnall="++ show retAll,"--cabalcomponent="++(cabalComponentName cc)]
         
 exeExtension :: String
 #ifdef mingw32_HOST_OS
