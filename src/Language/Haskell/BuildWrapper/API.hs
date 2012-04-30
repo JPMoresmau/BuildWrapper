@@ -27,6 +27,8 @@ import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BSC
 import qualified Data.Text as T
 import qualified Data.HashMap.Lazy as HM
+import qualified Data.Map as DM
+
 import qualified MonadUtils as GMU
 import Prelude hiding (readFile, writeFile)
 import qualified Data.Vector as V
@@ -45,6 +47,8 @@ import qualified GHC  as GHC (Module)
 import Data.Tuple (swap)
 import Data.Aeson
 import Outputable (showSDoc,ppr)
+import Data.Foldable (foldrM)
+import qualified MonadUtils as GMU
 
 -- | copy all files from the project to the temporary folder
 synchronize ::  Bool -- ^ if true copy all files, if false only copy files newer than their corresponding temp files
@@ -105,7 +109,7 @@ generateUsage returnAll ccn= do
                                 fullSrc<-getFullSrc f
                                 fullTgt<-getTargetPath f
                                 let fullUsage=getUsageFile fullTgt
-                                liftIO $ Prelude.print fullUsage
+                                -- liftIO $ Prelude.print fullUsage
                                 liftIO $ isSourceMoreRecent fullSrc fullUsage 
                                         ) mps1
                         opts<-fmap snd $ fileGhcOptions (lbi,cbi)        
@@ -126,11 +130,12 @@ generateUsage returnAll ccn= do
                 getModule :: T.Text ->  FilePath -> TypecheckedModule -> Ghc(FilePath,T.Text,RenamedSource,[Usage])
                 getModule pkg f tm=do
                         let rs@(_,imps,mexps,_)=fromJust $ tm_renamed_source tm
-                        ius<-mapM (BwGHC.ghcImportToUsage pkg) imps
+                        (ius,aliasMap)<-foldrM (BwGHC.ghcImportToUsage pkg) ([],DM.empty) imps
+                        -- GMU.liftIO $ Prelude.print $ showSDoc $ ppr aliasMap
                         let modu=T.pack $ showSDoc $ ppr $ moduleName $ ms_mod $ pm_mod_summary $ tm_parsed_module tm
-                        eus<-mapM (BwGHC.ghcExportToUsage pkg modu) (fromMaybe [] mexps)
+                        eus<-mapM (BwGHC.ghcExportToUsage pkg modu aliasMap) (fromMaybe [] mexps)
                         --ms_mod $ pm_mod_summary $ tm_parsed_module tm
-                        return (f,modu,rs,concat $ ius ++ eus)
+                        return (f,modu,rs,ius ++ (concat eus))
                 generate :: T.Text -> (FilePath,T.Text,RenamedSource,[Usage]) -> BuildWrapper()
                 generate pkg (fp,modu,(hsg,_,_,_),ius)=do
                         tgt<-getTargetPath fp

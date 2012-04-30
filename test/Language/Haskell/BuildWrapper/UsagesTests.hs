@@ -31,6 +31,7 @@ utests= [ testGenerateBWUsage,
         testGenerateReferencesSimple,
         testGenerateReferencesImports,
         testGenerateReferencesExports,
+        testGenerateReferencesExportAlias,
         testIncorrectModuleFileName
         ]
 
@@ -237,6 +238,28 @@ testGenerateReferencesExports api= TestLabel "testGenerateReferencesExports" (Te
         assertTypeUsage "BWTest-0.1" "A" "MyData3" [[4,5,4,20],[24,6,24,13]] v
         assertTypeUsage "ghc-prim" "GHC.Types" "Int" [[11,15,11,18],[22,16,22,19],[26,16,26,19]] v
         ))        
+ 
+testGenerateReferencesExportAlias :: (APIFacade a)=> a -> Test
+testGenerateReferencesExportAlias api= TestLabel "testGenerateReferencesExportAlias" (TestCase ( do
+        root<-createTestProject
+        let relMain="src"</>"Main.hs"
+        writeFile (root</> relMain) $ unlines [
+                  "module Main (module X,main) where",
+                  "import Data.Ord as X",
+                  "",
+                  "main=undefined"
+                  ] 
+        _<-synchronize api root True          
+        (BuildResult bool1 _,nsErrors1)<-build api root False Source
+        assertBool ("returned false on bool1:" ++ show nsErrors1)  bool1
+        assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
+        (comps,_)<-getCabalComponents api root    
+        mapM_ (generateUsage api root False) comps
+        vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
+        -- sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
+        -- putStrLn sUMain
+        assertVarUsage "base" "Data.Ord" "" [[1,14,1,22],[2,8,2,16]] vMain
+        )) 
     
 testIncorrectModuleFileName :: (APIFacade a)=> a -> Test
 testIncorrectModuleFileName api= TestLabel "testIncorrectModuleFileName" (TestCase ( do

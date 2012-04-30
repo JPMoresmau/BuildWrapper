@@ -25,13 +25,13 @@ import Data.IORef
 import qualified Data.List as List
 import Data.Ord (comparing)
 import qualified Data.Text as T
+import qualified Data.Map as DM
 
 import DynFlags
 import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,WarningMessages, Message )
 import GHC
 import GHC.Paths ( libdir )
 import HscTypes ( srcErrorMessages, SourceError, GhcApiError)
-import HsDoc
 import Outputable
 import FastString (FastString,unpackFS,concatFS,fsLit,mkFastString)
 import Lexer hiding (loc)
@@ -48,9 +48,6 @@ import StringBuffer
 import System.FilePath
 
 import qualified MonadUtils as GMU
-import SrcLoc (Located)
-import HsDecls (HsConDeclDetails(..))
--- import Control.Monad.IO.Class (liftIO)
 
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
@@ -129,7 +126,7 @@ withASTNotes f ff base_dir contents options=do
                 notes <- GMU.liftIO $ readIORef ref
                 --c2<-GMU.liftIO getClockTime
                 --GMU.liftIO $ putStrLn ("load all targets: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
-                GMU.liftIO $ print fps
+                -- GMU.liftIO $ print fps
                 a<-fmap catMaybes $ mapM (\(fp,m)->(do
                                 --mg<-getModuleGraph
                                 modSum <- getModSummary $ mkModuleName m
@@ -785,39 +782,55 @@ end (RealSrcSpan ss)= (srcSpanEndLine ss, srcSpanEndCol ss)
 end (UnhelpfulSpan _)=error "UnhelpfulSpan in cmpOverlap start"   
 #endif
        
+type AliasMap=DM.Map ModuleName [ModuleName]
 
-ghcImportToUsage :: T.Text -> LImportDecl Name -> Ghc [Usage]
-ghcImportToUsage myPkg (L _ imp)=(do
+ghcImportToUsage :: T.Text -> LImportDecl Name ->  ([Usage],AliasMap) -> Ghc ([Usage],AliasMap)
+ghcImportToUsage myPkg (L _ imp) (ls,moduMap)=(do
         let L src modu=ideclName imp
         pkg<-lookupModule modu (ideclPkgQual imp)
         let tmod=T.pack $ showSDoc $ ppr modu
-        let tpkg=T.pack $ showSDoc $ ppr $ modulePackageId pkg
-        let nomain=if tpkg=="main" then myPkg else tpkg
-        let subs=concatMap (ghcLIEToUsage (Just nomain) tmod) $ maybe [] snd $ ideclHiding imp
-        return $ (Usage (Just nomain) tmod "" False (toJSON $ ghcSpanToLocation src)):subs)
-        `gcatch` (\(_ :: SourceError) -> return [])
+            tpkg=T.pack $ showSDoc $ ppr $ modulePackageId pkg
+            nomain=if tpkg=="main" then myPkg else tpkg
+            subs=concatMap (ghcLIEToUsage (Just nomain) tmod) $ maybe [] snd $ ideclHiding imp
+            moduMap2=maybe moduMap (\alias->let
+                mlmods=DM.lookup alias moduMap
+                newlmods=case mlmods of
+                        Just lmods->modu:lmods
+                        Nothing->[modu]
+                in DM.insert alias newlmods moduMap) $ ideclAs imp
+            usg =Usage (Just nomain) tmod "" False (toJSON $ ghcSpanToLocation src)    
+        return (usg:subs++ls,moduMap2)
+        )
+        `gcatch` (\(se :: SourceError) -> do
+                GMU.liftIO $ print se
+                return ([],moduMap))
          
 ghcLIEToUsage :: Maybe T.Text -> T.Text -> LIE Name -> [Usage]
 ghcLIEToUsage tpkg tmod (L src (IEVar nm))=[ghcNameToUsage tpkg tmod nm src False]
 ghcLIEToUsage tpkg tmod (L src (IEThingAbs nm))=[ghcNameToUsage tpkg tmod nm src True ] 
 ghcLIEToUsage tpkg tmod (L src (IEThingAll nm))=[ghcNameToUsage tpkg tmod nm src True] 
-ghcLIEToUsage tpkg tmod (L src (IEThingWith nm cons))=(ghcNameToUsage tpkg tmod nm src True):
-                (map (\x->(ghcNameToUsage tpkg tmod x src False)) cons) 
+ghcLIEToUsage tpkg tmod (L src (IEThingWith nm cons))=ghcNameToUsage tpkg tmod nm src True:
+                (map (\x->ghcNameToUsage tpkg tmod x src False) cons) 
 ghcLIEToUsage tpkg tmod (L src (IEModuleContents _))= [Usage tpkg tmod "" False (toJSON $ ghcSpanToLocation src) ]              
 ghcLIEToUsage _ _ _=[]
         
-ghcExportToUsage :: T.Text -> T.Text -> LIE Name -> Ghc [Usage]        
-ghcExportToUsage myPkg myMod lie@(L _ name)=(do
-        (tpkg,tmod)<-do
-                case name of
-                        (IEModuleContents modu)-> do
-                                pkg<-lookupModule modu Nothing
+ghcExportToUsage :: T.Text -> T.Text ->AliasMap -> LIE Name -> Ghc [Usage]        
+ghcExportToUsage myPkg myMod moduMap lie@(L _ name)=(do
+        ls<-case name of
+                (IEModuleContents modu)-> do
+                        let realModus=fromMaybe [modu] (DM.lookup modu moduMap)
+                        mapM (\modu2->do
+                                pkg<-lookupModule modu2 Nothing
                                 let tpkg=T.pack $ showSDoc $ ppr $ modulePackageId pkg
-                                let tmod=T.pack $ showSDoc $ ppr $ modu
+                                let tmod=T.pack $ showSDoc $ ppr modu2
                                 return (tpkg,tmod)
-                        _ -> return (myPkg,myMod)
-        return $ ghcLIEToUsage (Just tpkg) tmod lie)
-        `gcatch` (\(_ :: SourceError) -> return [])
+                                ) realModus
+                _ -> return [(myPkg,myMod)]
+        return $ concatMap (\(tpkg,tmod)->ghcLIEToUsage (Just tpkg) tmod lie) ls
+        )
+        `gcatch` (\(se :: SourceError) -> do
+                GMU.liftIO $ print se
+                return [])
         
 ghcNameToUsage ::  Maybe T.Text -> T.Text -> Name -> SrcSpan -> Bool -> Usage 
 ghcNameToUsage tpkg tmod nm src typ=Usage tpkg tmod  (T.pack $ showSDocUnqual $ ppr nm) typ (toJSON $ ghcSpanToLocation src)     
