@@ -264,15 +264,21 @@ getBuildFlags fp=do
                         ret<-case mcbi of
                                 Just cbi->do
                                         (_,opts2)<-fileGhcOptions cbi
+                                        -- liftIO $ Prelude.print opts2
                                         let 
                                                 (modName,opts)=cabalExtensions $ snd cbi
-                                                lit=".lhs" == takeExtension fp
-                                                cppo=fileCppOptions (snd cbi) ++ ["-D__GLASGOW_HASKELL__=" ++ show (__GLASGOW_HASKELL__ :: Int)] ++ ["--unlit" | lit]
+                                                cppo=fileCppOptions (snd cbi) ++ unlitF
                                                 modS=moduleToString modName
-                                        return (BuildFlags  (opts ++ opts2) cppo  (Just modS),bwns)
-                                Nothing -> return (BuildFlags knownExtensionNames  []  Nothing,[])
+                                        liftIO $ Prelude.print opts
+                                        -- ghcOptions is sufficient, contains extensions and such
+                                        -- opts ++
+                                        return (BuildFlags opts2 cppo  (Just modS),bwns)
+                                Nothing -> return (BuildFlags []  unlitF Nothing,[])
                         liftIO $ storeBuildFlagsInfo tgt ret
                         return ret
+        where unlitF=let
+                lit=".lhs" == takeExtension fp
+                in ["-D__GLASGOW_HASKELL__=" ++ show (__GLASGOW_HASKELL__ :: Int)] ++ ["--unlit" | lit]
 
 -- | get haskell-src-exts commented AST for source file
 getAST :: FilePath -- ^  the source file

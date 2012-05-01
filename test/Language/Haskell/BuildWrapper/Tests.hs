@@ -58,7 +58,8 @@ tests=  [
         testCabalComponents,
         testCabalDependencies,
         testNoSourceDir,
-        testFlags
+        testFlags,
+        testBuildFlags
         ]
 
 class APIFacade a where
@@ -1158,6 +1159,35 @@ testFlags api=TestLabel "testFlags" (TestCase (do
         assertBool "exe doesn't exists!" ex2
         
         ))    
+
+testBuildFlags :: (APIFacade a)=> a -> Test
+testBuildFlags api=TestLabel "testFlags" (TestCase (do
+        root<-createTestProject
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:  base",
+                "  extensions: OverlappingInstances"
+                ]
+        configure api root Source 
+        let rel="src"</>"A.hs"  
+        (flgs,nsErrors3f)<-getBuildFlags api root rel
+        print flgs
+        assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
+        let ast=bf_ast flgs   
+        assertBool "no package-name" ("-package-name" `elem` ast)
+        assertBool "no package name" ("BWTest-0.1" `elem` ast)
+        assertBool "no -XOverlappingInstances" ("-XOverlappingInstances" `elem` ast)
+        assertBool "OverlappingInstances" (not $ "OverlappingInstances" `elem` ast)
+        ))
+        
 
 testProjectName :: String
 testProjectName="BWTest"         
