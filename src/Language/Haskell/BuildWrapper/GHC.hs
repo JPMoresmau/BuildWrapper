@@ -791,28 +791,28 @@ ghcImportToUsage myPkg (L _ imp) (ls,moduMap)=(do
         let tmod=T.pack $ showSDoc $ ppr modu
             tpkg=T.pack $ showSDoc $ ppr $ modulePackageId pkg
             nomain=if tpkg=="main" then myPkg else tpkg
-            subs=concatMap (ghcLIEToUsage (Just nomain) tmod) $ maybe [] snd $ ideclHiding imp
+            subs=concatMap (ghcLIEToUsage (Just nomain) tmod "import") $ maybe [] snd $ ideclHiding imp
             moduMap2=maybe moduMap (\alias->let
                 mlmods=DM.lookup alias moduMap
                 newlmods=case mlmods of
                         Just lmods->modu:lmods
                         Nothing->[modu]
                 in DM.insert alias newlmods moduMap) $ ideclAs imp
-            usg =Usage (Just nomain) tmod "" False (toJSON $ ghcSpanToLocation src)    
+            usg =Usage (Just nomain) tmod "" "import" False (toJSON $ ghcSpanToLocation src) False
         return (usg:subs++ls,moduMap2)
         )
         `gcatch` (\(se :: SourceError) -> do
                 GMU.liftIO $ print se
                 return ([],moduMap))
          
-ghcLIEToUsage :: Maybe T.Text -> T.Text -> LIE Name -> [Usage]
-ghcLIEToUsage tpkg tmod (L src (IEVar nm))=[ghcNameToUsage tpkg tmod nm src False]
-ghcLIEToUsage tpkg tmod (L src (IEThingAbs nm))=[ghcNameToUsage tpkg tmod nm src True ] 
-ghcLIEToUsage tpkg tmod (L src (IEThingAll nm))=[ghcNameToUsage tpkg tmod nm src True] 
-ghcLIEToUsage tpkg tmod (L src (IEThingWith nm cons))=ghcNameToUsage tpkg tmod nm src True:
-                (map (\x->ghcNameToUsage tpkg tmod x src False) cons) 
-ghcLIEToUsage tpkg tmod (L src (IEModuleContents _))= [Usage tpkg tmod "" False (toJSON $ ghcSpanToLocation src) ]              
-ghcLIEToUsage _ _ _=[]
+ghcLIEToUsage :: Maybe T.Text -> T.Text -> T.Text -> LIE Name -> [Usage]
+ghcLIEToUsage tpkg tmod tsection (L src (IEVar nm))=[ghcNameToUsage tpkg tmod tsection nm src False]
+ghcLIEToUsage tpkg tmod tsection (L src (IEThingAbs nm))=[ghcNameToUsage tpkg tmod tsection nm src True ] 
+ghcLIEToUsage tpkg tmod tsection (L src (IEThingAll nm))=[ghcNameToUsage tpkg tmod tsection nm src True] 
+ghcLIEToUsage tpkg tmod tsection (L src (IEThingWith nm cons))=ghcNameToUsage tpkg tmod tsection nm src True:
+                (map (\x->ghcNameToUsage tpkg tmod tsection x src False) cons) 
+ghcLIEToUsage tpkg tmod tsection (L src (IEModuleContents _))= [Usage tpkg tmod "" tsection False (toJSON $ ghcSpanToLocation src) False]              
+ghcLIEToUsage _ _ _ _=[]
         
 ghcExportToUsage :: T.Text -> T.Text ->AliasMap -> LIE Name -> Ghc [Usage]        
 ghcExportToUsage myPkg myMod moduMap lie@(L _ name)=(do
@@ -826,14 +826,14 @@ ghcExportToUsage myPkg myMod moduMap lie@(L _ name)=(do
                                 return (tpkg,tmod)
                                 ) realModus
                 _ -> return [(myPkg,myMod)]
-        return $ concatMap (\(tpkg,tmod)->ghcLIEToUsage (Just tpkg) tmod lie) ls
+        return $ concatMap (\(tpkg,tmod)->ghcLIEToUsage (Just tpkg) tmod "export" lie) ls
         )
         `gcatch` (\(se :: SourceError) -> do
                 GMU.liftIO $ print se
                 return [])
         
-ghcNameToUsage ::  Maybe T.Text -> T.Text -> Name -> SrcSpan -> Bool -> Usage 
-ghcNameToUsage tpkg tmod nm src typ=Usage tpkg tmod  (T.pack $ showSDocUnqual $ ppr nm) typ (toJSON $ ghcSpanToLocation src)     
+ghcNameToUsage ::  Maybe T.Text -> T.Text -> T.Text -> Name -> SrcSpan -> Bool -> Usage 
+ghcNameToUsage tpkg tmod tsection nm src typ=Usage tpkg tmod (T.pack $ showSDocUnqual $ ppr nm) tsection typ (toJSON $ ghcSpanToLocation src) False
         
 --getGHCOutline :: ParsedSource
 --        -> [OutlineDef]

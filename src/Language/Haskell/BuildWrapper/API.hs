@@ -28,6 +28,7 @@ import qualified Data.ByteString.Lazy.Char8 as BSC
 import qualified Data.Text as T
 import qualified Data.HashMap.Lazy as HM
 import qualified Data.Map as DM
+import Data.List (sortBy)
 
 import qualified MonadUtils as GMU
 import Prelude hiding (readFile, writeFile)
@@ -49,6 +50,7 @@ import Data.Aeson
 import Outputable (showSDoc,ppr)
 import Data.Foldable (foldrM)
 import qualified MonadUtils as GMU
+
 
 -- | copy all files from the project to the temporary folder
 synchronize ::  Bool -- ^ if true copy all files, if false only copy files newer than their corresponding temp files
@@ -151,8 +153,8 @@ generateUsage returnAll ccn= do
                         case mast of
                                 Just (ParseOk ast)->do
                                         let ods=getHSEOutline ast
-                                        let (es,_)=getHSEImportExport ast
-                                        let val=reconcile pkg vals ods es ius
+                                        liftIO $ Prelude.print ods
+                                        let val=reconcile pkg vals ods ius
                                         let valWithModule=Array $ V.fromList [toJSON pkg,toJSON modu,val]
                                         liftIO $ setUsageInfo tgt valWithModule
                                         return ()
@@ -162,9 +164,24 @@ generateUsage returnAll ccn= do
                         --               liftIO $ Prelude.putStrLn "no ghc info"
                         --                return ()
                         return ()
-                reconcile :: T.Text ->  [Value] -> [OutlineDef] -> [ExportDef] -> [Usage] -> Value
-                reconcile pkg vals ods es ius=foldr usageToJSON (object []) 
-                        (ius ++ (concatMap (ghcValToUsage pkg) vals))
+                reconcile :: T.Text ->  [Value] -> [OutlineDef] ->  [Usage] -> Value
+                reconcile pkg vals ods ius=let
+                        mapOds=foldr mapOutline DM.empty ods
+                        in foldr usageToJSON (object []) 
+                                (ius ++ (concatMap (ghcValToUsage pkg mapOds) vals))
+                mapOutline :: OutlineDef -> DM.Map Int [OutlineDef] -> DM.Map Int [OutlineDef]
+                mapOutline od m=let
+                        ifs=od_loc od
+                        lines=[(ifl_line $ ifs_start ifs) .. (ifl_line $ ifs_end ifs)]
+                        m2=foldr (addOutline od) m lines
+                        in foldr mapOutline m2 (od_children od)
+                addOutline :: OutlineDef -> Int -> DM.Map Int [OutlineDef] -> DM.Map Int [OutlineDef]
+                addOutline od l m=let
+                        mods=DM.lookup l m
+                        newOds=case mods of
+                                Just ods->od:ods
+                                Nothing->[od]
+                        in DM.insert l newOds m   
                 usageToJSON :: Usage -> Value -> Value
                 usageToJSON u v@(Object pkgs) | Just pkg<-usagePackage u v=
                         let 
@@ -179,9 +196,10 @@ generateUsage returnAll ccn= do
                                 --  , ",", (usType u)
                                 (Array lines)= HM.lookupDefault (Array V.empty) nameKey names
                                 lineV= usLoc u  -- Number $ I $ usLine u
-                                lines2=if V.elem lineV lines
+                                objectV=object ["s" .= usSection u, "d" .= usDef u, "l" .= lineV]
+                                lines2=if V.elem objectV lines
                                         then lines
-                                        else V.cons lineV lines
+                                        else V.cons objectV lines
                                 names2=HM.insert nameKey (Array lines2) names
                                 types2=HM.insert typeKey (Object names2) types
                                 mods2=HM.insert (usModule u) (Object types2) mods
@@ -218,16 +236,47 @@ generateUsage returnAll ccn= do
                                 matchingpkgs=HM.foldrWithKey (\k (Object mods) l->if (HM.member modu mods) then k : l else l) [] pkgs
                                 in listToMaybe matchingpkgs
                 usagePackage _ _=Nothing
-                ghcValToUsage ::  T.Text -> Value -> [Usage]
-                ghcValToUsage pkg (Object m) |
+                ghcValToUsage ::  T.Text -> DM.Map Int [OutlineDef] -> Value -> [Usage]
+                ghcValToUsage pkg mapOds (Object m) |
                         Just (String s)<-HM.lookup "Name" m,
                         Just (String mo)<-HM.lookup "Module" m,
                         Just (String p)<-HM.lookup "Package" m,
                         Just (String ht)<-HM.lookup "HType" m,
-                        Just arr<-HM.lookup "Pos" m= [Usage (Just (if p=="main" then pkg else p)) mo s (ht=="t") arr]
-                ghcValToUsage _ _=[]
-                importToUsage :: ImportDef -> [Usage]
-                importToUsage imd=[Usage (i_package imd) (i_module imd) "" False (toJSON $ i_loc imd)]
+                        Just arr<-HM.lookup "Pos" m,
+                        Success ifs <- fromJSON arr= let
+                                mods=DM.lookup (ifl_line $ ifs_start ifs) mapOds
+                                (section,def)=getSection mods s ifs
+                                in [Usage (Just (if p=="main" then pkg else p)) mo s section (ht=="t") arr def]
+                ghcValToUsage _ _ _=[]
+                getSection :: Maybe [OutlineDef]  -> T.Text -> InFileSpan -> (T.Text,Bool)
+                getSection (Just ods) name loc =let
+                        matchods=filter (\od-> ifsOverlap (od_loc od) loc) ods
+                        bestods=sortBy (\od1 od2->let
+                                l1=ifl_line $ ifs_start $ od_loc od1
+                                l2=ifl_line $ ifs_start $ od_loc od2
+                                in case compare l2 l1 of
+                                   EQ -> let
+                                        c1=ifl_column $ ifs_start $ od_loc od1
+                                        c2=ifl_column $ ifs_start $ od_loc od2
+                                        in compare c2 c1
+                                   a-> a
+                                ) matchods
+                        in case bestods of
+                                (x:_)->let def=(od_name x) == name && 
+                                                (((ifl_column $ ifs_start $ od_loc x)==(ifl_column $ ifs_start loc))
+                                                || (
+                                                        (Data `elem` (od_type x))
+                                                    && ((ifl_column $ ifs_start $ od_loc x)+5==(ifl_column $ ifs_start loc))    
+                                                    )
+                                                || (
+                                                        (Type `elem` (od_type x))
+                                                    && ((ifl_column $ ifs_start $ od_loc x)+5==(ifl_column $ ifs_start loc))    
+                                                    ))    
+                                       in (od_name x,def)
+                                _->("",False)
+                getSection _ _ _=("",False)
+--                importToUsage :: ImportDef -> [Usage]
+--                importToUsage imd=[Usage (i_package imd) (i_module imd) "" False (toJSON $ i_loc imd)]
                 
 
 
@@ -269,7 +318,7 @@ getBuildFlags fp=do
                                                 (modName,opts)=cabalExtensions $ snd cbi
                                                 cppo=fileCppOptions (snd cbi) ++ unlitF
                                                 modS=moduleToString modName
-                                        liftIO $ Prelude.print opts
+                                        -- liftIO $ Prelude.print opts
                                         -- ghcOptions is sufficient, contains extensions and such
                                         -- opts ++
                                         return (BuildFlags opts2 cppo  (Just modS),bwns)

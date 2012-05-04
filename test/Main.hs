@@ -24,9 +24,9 @@ main = defaultMain tests
 
 tests :: [Test]
 tests = [
-        testGroup "Unit Tests" (concatMap hUnitTestToTests unitTests),
-        testGroup "GHC Tests" (concatMap hUnitTestToTests ghcTests),
-        testGroup "Command Tests" (concatMap hUnitTestToTests cmdTests),
+        --testGroup "Unit Tests" (concatMap hUnitTestToTests unitTests),
+        --testGroup "GHC Tests" (concatMap hUnitTestToTests ghcTests),
+        --testGroup "Command Tests" (concatMap hUnitTestToTests cmdTests),
         testGroup "Usages Tests" (concatMap hUnitTestToTests usageTests)
         ]
 

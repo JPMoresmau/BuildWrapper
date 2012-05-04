@@ -22,6 +22,7 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.HashMap.Lazy as HM
 import qualified Data.Vector as V
+import qualified Data.Aeson.Types as Data.Aeson.Types (parse)
 
 usageTests::[Test]
 usageTests= map (\f->f CMDAPI) utests
@@ -108,39 +109,39 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         --putStrLn sI
         v<-readStoredUsage (root </> ".dist-buildwrapper" </>  rel)
         sU<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  rel))
-        putStrLn sU
+        -- putStrLn sU
       
         assertPackageModule "BWTest-0.1" "A" v
       
-        assertVarUsage "BWTest-0.1" "A" "Cons1" [[2,13,2,18],[10,8,10,13],[10,17,10,22],[16,12,16,17]] v
-        assertVarUsage "BWTest-0.1" "A" "Cons2" [[4,9,4,14],[11,8,11,13],[11,17,11,22]] v
-        assertVarUsage "BWTest-0.1" "A" "mdS" [[3,9,3,12]] v
-        assertVarUsage "BWTest-0.1" "A" "reset" [[9,1,9,6],[10,1,10,25],[11,1,11,24],[13,14,13,19]] v
-        assertVarUsage "BWTest-0.1" "A" "resetAll" [[13,1,13,19]] v
-        assertVarUsage "BWTest-0.1" "A" "getString" [[15,1,15,10],[16,1,16,27],[17,1,17,21]] v
-        assertVarUsage "base" "Data.Maybe" "Nothing" [[17,14,17,21]] v
-        assertVarUsage "base" "Data.Maybe" "Just" [[16,21,16,25]] v
-        assertVarUsage "base" "GHC.Base" "map" [[13,10,13,13]] v
-        assertVarUsage "base" "GHC.Num" "fromInteger" [[11,23,11,24]] v
+        assertVarUsage "BWTest-0.1" "A" "Cons1" [("Cons1",True,[2,13,2,18]),("reset",False,[10,8,10,13]),("reset",False,[10,17,10,22]),("getString",False,[16,12,16,17])] v
+        assertVarUsage "BWTest-0.1" "A" "Cons2" [("Cons2",True,[4,9,4,14]),("reset",False,[11,8,11,13]),("reset",False,[11,17,11,22])] v
+        assertVarUsage "BWTest-0.1" "A" "mdS" [("mdS",True,[3,9,3,12])] v
+        assertVarUsage "BWTest-0.1" "A" "reset" [("reset",True,[9,1,9,6]),("reset",True,[10,1,10,25]),("reset",True,[11,1,11,24]),("resetAll",False,[13,14,13,19])] v
+        assertVarUsage "BWTest-0.1" "A" "resetAll" [("resetAll",True,[13,1,13,19])] v
+        assertVarUsage "BWTest-0.1" "A" "getString" [("getString",True,[15,1,15,10]),("getString",True,[16,1,16,27]),("getString",True,[17,1,17,21])] v
+        assertVarUsage "base" "Data.Maybe" "Nothing" [("getString",False,[17,14,17,21])] v
+        assertVarUsage "base" "Data.Maybe" "Just" [("getString",False,[16,21,16,25])] v
+        assertVarUsage "base" "GHC.Base" "map" [("resetAll",False,[13,10,13,13])] v
+        assertVarUsage "base" "GHC.Num" "fromInteger" [("reset",False,[11,23,11,24])] v
         
-        assertTypeUsage "BWTest-0.1" "A" "MyData" [[2,6,2,12],[9,10,9,16],[9,20,9,26],[15,14,15,20]] v
-        assertTypeUsage "BWTest-0.1" "A" "MyString" [[3,14,3,22],[7,6,7,14],[15,30,15,38]] v
-        assertTypeUsage "base" "Data.Maybe" "Maybe" [[15,24,15,29]] v
-        assertTypeUsage "base" "GHC.Base" "String" [[7,15,7,21]] v
-        assertTypeUsage "base" "GHC.Show" "Show" [[5,15,5,19]] v
-        assertTypeUsage "ghc-prim" "GHC.Types" "Int" [[4,15,4,18]] v
+        assertTypeUsage "BWTest-0.1" "A" "MyData" [("MyData",True,[2,6,2,12]),("reset",False,[9,10,9,16]),("reset",False,[9,20,9,26]),("getString",False,[15,14,15,20])] v
+        assertTypeUsage "BWTest-0.1" "A" "MyString" [("mdS",False,[3,14,3,22]),("MyString",True,[7,6,7,14]),("getString",False,[15,30,15,38])] v
+        assertTypeUsage "base" "Data.Maybe" "Maybe" [("getString",False,[15,24,15,29])] v
+        assertTypeUsage "base" "GHC.Base" "String" [("MyString",False,[7,15,7,21])] v
+        assertTypeUsage "base" "GHC.Show" "Show" [("MyData",False,[5,15,5,19])] v
+        assertTypeUsage "ghc-prim" "GHC.Types" "Int" [("Cons2",False,[4,15,4,18])] v
         
         vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
         --sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
         --putStrLn sUMain
         assertPackageModule "BWTest-0.1" "Main" vMain
         
-        assertVarUsage "BWTest-0.1" "A" "" [[2,8,2,9]] vMain
-        assertVarUsage "BWTest-0.1" "A" "Cons2" [[3,22,3,27]] vMain
-        assertVarUsage "BWTest-0.1" "A" "reset" [[3,14,3,19]] vMain
-        assertVarUsage "BWTest-0.1" "Main" "main" [[3,1,3,29]] vMain
-        assertVarUsage "base" "System.IO" "print" [[3,6,3,11]] vMain
-        assertVarUsage "base" "GHC.Base" "$" [[3,12,3,13],[3,20,3,21]] vMain
+        assertVarUsage "BWTest-0.1" "A" "" [("import",False,[2,8,2,9])] vMain
+        assertVarUsage "BWTest-0.1" "A" "Cons2" [("main",False,[3,22,3,27])] vMain
+        assertVarUsage "BWTest-0.1" "A" "reset" [("main",False,[3,14,3,19])] vMain
+        assertVarUsage "BWTest-0.1" "Main" "main" [("main",True,[3,1,3,29])] vMain
+        assertVarUsage "base" "System.IO" "print" [("main",False,[3,6,3,11])] vMain
+        assertVarUsage "base" "GHC.Base" "$" [("main",False,[3,12,3,13]),("main",False,[3,20,3,21])] vMain
         return ()
         ))
 
@@ -165,12 +166,12 @@ testGenerateReferencesImports api= TestLabel "testGenerateReferencesImports" (Te
         vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
         -- sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
         -- putStrLn sUMain
-        assertVarUsage "base" "Data.Ord" "" [[2,8,2,16]] vMain
-        assertVarUsage "base" "Data.Maybe" "" [[3,8,3,18]] vMain
-        assertVarUsage "base" "Data.Complex" "" [[4,8,4,20]] vMain
-        assertTypeUsage "base" "Data.Maybe" "Maybe" [[3,20,3,29]] vMain
-        assertTypeUsage "base" "Data.Complex" "Complex" [[4,22,4,35]] vMain
-        assertVarUsage "base" "Data.Complex" ":+" [[4,22,4,35]] vMain
+        assertVarUsage "base" "Data.Ord" "" [("import",False,[2,8,2,16])] vMain
+        assertVarUsage "base" "Data.Maybe" "" [("import",False,[3,8,3,18])] vMain
+        assertVarUsage "base" "Data.Complex" "" [("import",False,[4,8,4,20])] vMain
+        assertTypeUsage "base" "Data.Maybe" "Maybe" [("import",False,[3,20,3,29])] vMain
+        assertTypeUsage "base" "Data.Complex" "Complex" [("import",False,[4,22,4,35])] vMain
+        assertVarUsage "base" "Data.Complex" ":+" [("import",False,[4,22,4,35])] vMain
         ))
 
 testGenerateReferencesExports :: (APIFacade a)=> a -> Test
@@ -216,27 +217,27 @@ testGenerateReferencesExports api= TestLabel "testGenerateReferencesExports" (Te
         --sU<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  rel))
         --putStrLn sU
         
-        assertVarUsage "BWTest-0.1" "A" "Cons1" [[9,13,9,18],[17,8,17,13],[17,17,17,22]] v
-        assertVarUsage "BWTest-0.1" "A" "Cons2" [[11,9,11,14],[18,8,18,13],[18,17,18,22]] v
-        assertVarUsage "BWTest-0.1" "A" "Cons21" [[20,14,20,20]] v
-        assertVarUsage "BWTest-0.1" "A" "Cons22" [[22,9,22,15]] v
-        assertVarUsage "BWTest-0.1" "A" "Cons31" [[4,5,4,20],[24,14,24,20]] v
-        assertVarUsage "BWTest-0.1" "A" "Cons32" [[26,9,26,15]] v
-        assertVarUsage "BWTest-0.1" "A" "mdS" [[10,9,10,12]] v
-        assertVarUsage "BWTest-0.1" "A" "mdS2" [[21,9,21,13]] v
-        assertVarUsage "BWTest-0.1" "A" "mdS3" [[25,9,25,13]] v
-        assertVarUsage "BWTest-0.1" "A" "reset" [[5,5,5,10],[16,1,16,6],[17,1,17,25],[18,1,18,24]] v
-        assertVarUsage "base" "GHC.Num" "fromInteger" [[18,23,18,24]] v
+        assertVarUsage "BWTest-0.1" "A" "Cons1" [("Cons1",True,[9,13,9,18]),("reset",False,[17,8,17,13]),("reset",False,[17,17,17,22])] v
+        assertVarUsage "BWTest-0.1" "A" "Cons2" [("Cons2",True,[11,9,11,14]),("reset",False,[18,8,18,13]),("reset",False,[18,17,18,22])] v
+        assertVarUsage "BWTest-0.1" "A" "Cons21" [("Cons21",True,[20,14,20,20])] v
+        assertVarUsage "BWTest-0.1" "A" "Cons22" [("Cons22",True,[22,9,22,15])] v
+        assertVarUsage "BWTest-0.1" "A" "Cons31" [("export",False,[4,5,4,20]),("Cons31",True,[24,14,24,20])] v
+        assertVarUsage "BWTest-0.1" "A" "Cons32" [("Cons32",True,[26,9,26,15])] v
+        assertVarUsage "BWTest-0.1" "A" "mdS" [("mdS",True,[10,9,10,12])] v
+        assertVarUsage "BWTest-0.1" "A" "mdS2" [("mdS2",True,[21,9,21,13])] v
+        assertVarUsage "BWTest-0.1" "A" "mdS3" [("mdS3",True,[25,9,25,13])] v
+        assertVarUsage "BWTest-0.1" "A" "reset" [("export",False,[5,5,5,10]),("reset",True,[16,1,16,6]),("reset",True,[17,1,17,25]),("reset",True,[18,1,18,24])] v
+        assertVarUsage "base" "GHC.Num" "fromInteger" [("reset",False,[18,23,18,24])] v
         
-        assertVarUsage "base" "Data.Ord" "" [[7,5,7,20],[8,8,8,16]] v
+        assertVarUsage "base" "Data.Ord" "" [("export",False,[7,5,7,20]),("import",False,[8,8,8,16])] v
         
-        assertTypeUsage "BWTest-0.1" "A" "MyData" [[2,5,2,11],[9,6,9,12],[16,10,16,16],[16,20,16,26]] v
-        assertTypeUsage "BWTest-0.1" "A" "MyString" [[6,5,6,13],[10,14,10,22],[14,6,14,14],[21,15,21,23],[25,15,25,23]] v
-        assertTypeUsage "base" "GHC.Base" "String" [[14,15,14,21]] v
-        assertTypeUsage "base" "GHC.Show" "Show" [[12,15,12,19],[23,15,23,19],[27,15,27,19]] v
-        assertTypeUsage "BWTest-0.1" "A" "MyData2" [[3,5,3,16],[20,6,20,13]] v
-        assertTypeUsage "BWTest-0.1" "A" "MyData3" [[4,5,4,20],[24,6,24,13]] v
-        assertTypeUsage "ghc-prim" "GHC.Types" "Int" [[11,15,11,18],[22,16,22,19],[26,16,26,19]] v
+        assertTypeUsage "BWTest-0.1" "A" "MyData" [("export",False,[2,5,2,11]),("MyData",True,[9,6,9,12]),("reset",False,[16,10,16,16]),("reset",False,[16,20,16,26])] v
+        assertTypeUsage "BWTest-0.1" "A" "MyString" [("export",False,[6,5,6,13]),("mdS",False,[10,14,10,22]),("MyString",True,[14,6,14,14]),("mdS2",False,[21,15,21,23]),("mdS3",False,[25,15,25,23])] v
+        assertTypeUsage "base" "GHC.Base" "String" [("MyString",False,[14,15,14,21])] v
+        assertTypeUsage "base" "GHC.Show" "Show" [("MyData",False,[12,15,12,19]),("MyData2",False,[23,15,23,19]),("MyData3",False,[27,15,27,19])] v
+        assertTypeUsage "BWTest-0.1" "A" "MyData2" [("export",False,[3,5,3,16]),("MyData2",True,[20,6,20,13])] v
+        assertTypeUsage "BWTest-0.1" "A" "MyData3" [("export",False,[4,5,4,20]),("MyData3",True,[24,6,24,13])] v
+        assertTypeUsage "ghc-prim" "GHC.Types" "Int" [("Cons2",False,[11,15,11,18]),("Cons22",False,[22,16,22,19]),("Cons32",False,[26,16,26,19])] v
         ))        
  
 testGenerateReferencesExportAlias :: (APIFacade a)=> a -> Test
@@ -258,7 +259,7 @@ testGenerateReferencesExportAlias api= TestLabel "testGenerateReferencesExportAl
         vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
         -- sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
         -- putStrLn sUMain
-        assertVarUsage "base" "Data.Ord" "" [[1,14,1,22],[2,8,2,16]] vMain
+        assertVarUsage "base" "Data.Ord" "" [("export",False,[1,14,1,22]),("import",False,[2,8,2,16])] vMain
         )) 
     
 testIncorrectModuleFileName :: (APIFacade a)=> a -> Test
@@ -337,14 +338,14 @@ extractNameValue :: Value -> T.Text
 extractNameValue (Object m) |Just (String s)<-HM.lookup "Name" m=s
 extractNameValue _ = error "no name in value"
 
-assertVarUsage :: T.Text -> T.Text -> T.Text -> [[Int]] -> Value -> IO() 
+assertVarUsage :: T.Text -> T.Text -> T.Text -> [(T.Text,Bool,[Int])] -> Value -> IO() 
 assertVarUsage = assertUsage "vars"
 
-assertTypeUsage :: T.Text -> T.Text -> T.Text -> [[Int]] -> Value -> IO() 
+assertTypeUsage :: T.Text -> T.Text -> T.Text -> [(T.Text,Bool,[Int])] -> Value -> IO() 
 assertTypeUsage = assertUsage "types"
 
 
-assertUsage :: T.Text -> T.Text -> T.Text -> T.Text -> [[Int]] -> Value -> IO()
+assertUsage :: T.Text -> T.Text -> T.Text -> T.Text -> [(T.Text,Bool,[Int])] -> Value -> IO()
 assertUsage tp pkg modu name lins (Array v) |
         V.length v==3,
         (Object m) <-v V.! 2,
@@ -352,8 +353,16 @@ assertUsage tp pkg modu name lins (Array v) |
         Just (Object m3)<-HM.lookup modu m2,
         Just (Object m4)<-HM.lookup tp m3,
         Just (Array arr)<-HM.lookup name m4=   do
-                let expected=S.fromList $ map (\[sl,sc,el,ec]->InFileSpan (InFileLoc sl sc) (InFileLoc el ec)) lins
-                let actual=S.fromList $ map (\v->let (Success ifl)=fromJSON v in ifl) $ V.toList arr
+                let expected=S.fromList $ map (\(section,def,[sl,sc,el,ec])->(section,def,InFileSpan (InFileLoc sl sc) (InFileLoc el ec))) lins
+                let actual=S.fromList $ map (\v->
+                        let (Success r)=Data.Aeson.Types.parse (\(Object o) ->do 
+                                --Success (Object o)<-fromJSON v 
+                                (String section)<-o .: "s"
+                                (Bool def)<-o .: "d"
+                                arr<-o .: "l"
+                                let (Success ifl)=fromJSON arr
+                                return (section,def,ifl::InFileSpan)) v
+                        in r) $ V.toList arr
                 assertEqual (T.unpack modu ++ "." ++ T.unpack name ++ ": " ++ show lins) expected actual  
         --V.elem (Number (I line)) arr=return ()
 assertUsage _ _ modu name line _=assertBool (T.unpack modu ++ "." ++ T.unpack name ++ ": " ++ show line) False
