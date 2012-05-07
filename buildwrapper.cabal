@@ -80,7 +80,7 @@ executable buildwrapper
                    aeson >=0.4,
                    bytestring,
                    transformers
-  ghc-options:     -Wall -fno-warn-unused-do-bind
+  ghc-options:     -Wall -fno-warn-unused-do-bind -optl -s
   other-modules:   Language.Haskell.BuildWrapper.CMD
   
 test-suite buildwrapper-test
@@ -107,7 +107,7 @@ test-suite buildwrapper-test
                    unordered-containers,
                    containers
   main-is:         Main.hs
-  ghc-options:     -Wall -fno-warn-unused-do-bind
+  ghc-options:     -Wall -fno-warn-unused-do-bind -optl -s
   x-uses-tf:       true
   other-modules:   
                    Language.Haskell.BuildWrapper.APITest,

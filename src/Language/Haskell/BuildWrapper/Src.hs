@@ -148,6 +148,14 @@ getHSEOutline (Module _ _ _ _ decls,comments)=map addComment $ concatMap declOut
                         in od2{od_children=map addComment $ od_children od2}
 getHSEOutline _ = []
 
+-- | get the ouline from the AST        
+getModuleLocation :: (Module SrcSpanInfo, [Comment]) -- ^ the commented AST
+        -> Maybe InFileSpan
+getModuleLocation (Module _ (Just (ModuleHead _ (ModuleName l _) _ _)) _ _ _,_)=Just $ makeSpan l
+getModuleLocation (Module l _ _ _ _,_)=Just $ makeSpan l
+getModuleLocation _=Nothing
+
+
 -- | build the comment map
 buildCommentMap ::  DM.Map Int (Int,T.Text) -- ^ the map: key is line, value is start column and comment text
         -> Comment -- ^  the comment

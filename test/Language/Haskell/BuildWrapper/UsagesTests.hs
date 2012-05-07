@@ -111,7 +111,7 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         sU<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  rel))
         -- putStrLn sU
       
-        assertPackageModule "BWTest-0.1" "A" v
+        assertPackageModule "BWTest-0.1" "A" [1,8,1,9] v
       
         assertVarUsage "BWTest-0.1" "A" "Cons1" [("Cons1",True,[2,13,2,18]),("reset",False,[10,8,10,13]),("reset",False,[10,17,10,22]),("getString",False,[16,12,16,17])] v
         assertVarUsage "BWTest-0.1" "A" "Cons2" [("Cons2",True,[4,9,4,14]),("reset",False,[11,8,11,13]),("reset",False,[11,17,11,22])] v
@@ -134,7 +134,7 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
         --sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
         --putStrLn sUMain
-        assertPackageModule "BWTest-0.1" "Main" vMain
+        assertPackageModule "BWTest-0.1" "Main" [1,8,1,12] vMain
         
         assertVarUsage "BWTest-0.1" "A" "" [("import",False,[2,8,2,9])] vMain
         assertVarUsage "BWTest-0.1" "A" "Cons2" [("main",False,[3,22,3,27])] vMain
@@ -347,8 +347,8 @@ assertTypeUsage = assertUsage "types"
 
 assertUsage :: T.Text -> T.Text -> T.Text -> T.Text -> [(T.Text,Bool,[Int])] -> Value -> IO()
 assertUsage tp pkg modu name lins (Array v) |
-        V.length v==3,
-        (Object m) <-v V.! 2,
+        V.length v==4,
+        (Object m) <-v V.! 3,
         Just (Object m2)<-HM.lookup pkg m,
         Just (Object m3)<-HM.lookup modu m2,
         Just (Object m4)<-HM.lookup tp m3,
@@ -367,11 +367,14 @@ assertUsage tp pkg modu name lins (Array v) |
         --V.elem (Number (I line)) arr=return ()
 assertUsage _ _ modu name line _=assertBool (T.unpack modu ++ "." ++ T.unpack name ++ ": " ++ show line) False
 
-assertPackageModule :: T.Text -> T.Text -> Value -> IO()
-assertPackageModule pkg modu (Array v) |
-         V.length v==3,
+assertPackageModule :: T.Text -> T.Text -> [Int] -> Value -> IO()
+assertPackageModule pkg modu [sl,sc,el,ec] (Array v) |
+         V.length v==4,
         (String s0) <-v V.! 0,
-        (String s1) <-v V.! 1= do
+        (String s1) <-v V.! 1,
+        arr<- v V.! 2= do
                 assertEqual (T.unpack pkg) pkg s0
-                assertEqual (T.unpack modu) modu s1    
-assertPackageModule pkg modu _=  assertBool (T.unpack pkg ++ "." ++ T.unpack modu) False
+                assertEqual (T.unpack modu) modu s1  
+                let (Success ifs)=fromJSON arr
+                assertEqual (show ifs) (InFileSpan (InFileLoc sl sc) (InFileLoc el ec)) ifs  
+assertPackageModule pkg modu _ _=  assertBool (T.unpack pkg ++ "." ++ T.unpack modu) False

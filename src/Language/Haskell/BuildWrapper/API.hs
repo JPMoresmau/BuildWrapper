@@ -153,9 +153,10 @@ generateUsage returnAll ccn= do
                         case mast of
                                 Just (ParseOk ast)->do
                                         let ods=getHSEOutline ast
-                                        liftIO $ Prelude.print ods
+                                        --liftIO $ Prelude.print ods
                                         let val=reconcile pkg vals ods ius
-                                        let valWithModule=Array $ V.fromList [toJSON pkg,toJSON modu,val]
+                                        let modLoc=maybe Null toJSON (getModuleLocation ast) 
+                                        let valWithModule=Array $ V.fromList [toJSON pkg,toJSON modu,modLoc,val]
                                         liftIO $ setUsageInfo tgt valWithModule
                                         return ()
                                 _ -> return ()
