@@ -150,13 +150,16 @@ data InFileSpan=InFileSpan {ifs_start::InFileLoc -- ^ start location
         deriving (Show,Read,Eq,Ord)
 
 ifsOverlap :: InFileSpan -> InFileSpan -> Bool
-ifsOverlap ifs1 ifs2 =let
+ifsOverlap ifs1 ifs2 = iflOverlap ifs1 $ ifs_start ifs2
+
+iflOverlap :: InFileSpan -> InFileLoc -> Bool
+iflOverlap ifs1 ifs2 =let
         l11=ifl_line $ ifs_start ifs1
         l12=ifl_line $ ifs_end ifs1
         c11=ifl_column $ ifs_start ifs1
         c12=ifl_column $ ifs_end ifs1
-        l21=ifl_line $ ifs_start ifs2
-        c21=ifl_column $ ifs_start ifs2
+        l21=ifl_line ifs2
+        c21=ifl_column ifs2
         in (l11<l21 || (l11==l21 && c11<=c21)) && (l12>l21 || (l12==l21 && c12>=c21))
 
 instance ToJSON InFileSpan  where

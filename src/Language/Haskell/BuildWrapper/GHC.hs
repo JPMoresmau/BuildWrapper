@@ -48,6 +48,7 @@ import StringBuffer
 import System.FilePath
 
 import qualified MonadUtils as GMU
+import qualified Data.ByteString.Lazy.Char8 as BSC (unpack)
 
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
@@ -84,9 +85,9 @@ withJSONAST f fp base_dir modul options=do
         case mv of 
                 Just v-> fmap Just (f v) 
                 Nothing->do
-                        (mTc,_)<-getAST fp base_dir modul options
+                        mTc<-withAST (return) fp base_dir modul options
                         case mTc of
-                                Just tc->fmap Just (f (dataToJSON tc)) 
+                                Just tc->fmap Just (f (generateGHCInfo tc)) 
                                 Nothing -> return Nothing
 
 -- | the main method loading the source contents into GHC
@@ -179,7 +180,9 @@ withASTNotes f ff base_dir contents options=do
 #endif                         
                 let fullfp=ff fp
                 -- GMU.liftIO $ putStrLn ("writing " ++ fullfp)
-                GMU.liftIO $ storeGHCInfo fullfp (typecheckedSource $ dm_typechecked_module l)
+                --let Just rs=tm_renamed_source $ dm_typechecked_module l
+                GMU.liftIO $ storeGHCInfo fullfp (dm_typechecked_module l)
+                --GMU.liftIO $ storeGHCInfo fullfp rs
                 --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
                 f2 fp $ dm_typechecked_module l                
         
@@ -257,7 +260,12 @@ getThingAtPointJSON :: Int -- ^ line
 getThingAtPointJSON line col fp base_dir modul options= do
         mmf<-withJSONAST (\v->do
                 let f=overlap line (scionColToGhcCol col)
+                let mvs=extractUsages v
+                -- print ("getThingAtPointJSON1: "++(show $ length mvs))
+                -- print ("getThingAtPointJSON2: "++(show $ length $ catMaybes mvs))
+                -- print $ formatJSON $ BSC.unpack $ encode v
                 let mf=findInJSON f v
+                -- print ("getThingAtPointJSON3: "++(show mf))
                 --return $ findInJSONFormatted qual typed mf
                 return $ findInJSONData mf  
             ) fp base_dir modul options

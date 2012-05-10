@@ -2,3 +2,5 @@
 /.dist-buildwrapper
 /dist
 /.project
+/run.txt
+/SourceGraph

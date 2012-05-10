@@ -51,12 +51,14 @@ import Data.Aeson
 import Data.Maybe
 import qualified Data.Text as T
 import qualified Data.HashMap.Lazy as HM
+import qualified Data.Map as DM
 import qualified Data.Vector as V
 import Data.Attoparsec.Number (Number(I))
 import System.Time (ClockTime)
 -- import GHC.SYB.Utils (showData, Stage(..))
 import Type (splitFunTys, splitAppTys)
 import Unique (getUnique)
+import Data.List (sortBy)
 
 
 -- | get the file storing the information for the given source file
@@ -86,14 +88,57 @@ storeBuildFlagsInfo :: FilePath -- ^ the source file
         -> IO()
 storeBuildFlagsInfo fp bf=setStoredInfo fp "BuildFlags"  (toJSON bf)
 
+
+generateGHCInfo :: TypecheckedModule -> Value
+generateGHCInfo tcm=let
+        tcvals=catMaybes $ extractUsages $ dataToJSON $ typecheckedSource tcm
+        tcByNameLoc=foldr buildMap DM.empty tcvals
+        rnvals=catMaybes $ extractUsages $ dataToJSON $ tm_renamed_source tcm
+        typedVals=map (addType tcByNameLoc) rnvals
+        in (Array $ V.fromList typedVals)
+        where 
+                buildMap v@(Object m) dm | 
+                        Just pos<-HM.lookup "Pos" m,
+                        Success ifs <- fromJSON pos,
+                        Just (String s)<-HM.lookup "Name" m,
+                        Just (String mo)<-HM.lookup "Module" m,
+                        Just _<-HM.lookup "QType" m,
+                        Just _<-HM.lookup "Type" m,
+                        Just "v"<-HM.lookup "HType" m,
+                        Just _<-HM.lookup "GType" m=
+                                DM.insert (mo,s,ifl_line $ ifs_start ifs,0) v $
+                                DM.insert (mo,s,ifl_line $ ifs_start ifs,ifl_column $ ifs_start ifs) v dm
+                buildMap _ dm=dm
+                addType dm v@(Object m1) |
+                        Just pos<-HM.lookup "Pos" m1,
+                        Success ifs <- fromJSON pos,
+                        Just (String s)<-HM.lookup "Name" m1,
+                        Just (String mo)<-HM.lookup "Module" m1,
+                        Just "v"<-HM.lookup "HType" m1=let
+                                mv=DM.lookup (mo,s,ifl_line $ ifs_start ifs,ifl_column $ ifs_start ifs) dm
+                                mv2=case mv of
+                                        Nothing -> DM.lookup (mo,s,ifl_line $ ifs_start ifs,0) dm
+                                        a->a
+                                in case mv2 of
+                                        Just (Object m2) |
+                                                 Just qt<-HM.lookup "QType" m2,
+                                                 Just t<-HM.lookup "Type" m2,
+                                                 Just gt<-HM.lookup "GType" m2 -> Object (HM.insert "QType" qt $
+                                                        HM.insert "Type" t $
+                                                        HM.insert "GType" gt
+                                                        m1) 
+                                        _ -> v
+                addType _ v=v
+
 -- | store the GHC generated AST
 storeGHCInfo :: FilePath -- ^ the source file
-        -> TypecheckedSource -- ^ the GHC AST
+        -> TypecheckedModule -- ^ the GHC AST
         -> IO()
-storeGHCInfo fp tcs= -- do
+storeGHCInfo fp tcm=  -- do
         -- putStrLn $ showData TypeChecker 4 tcs
-        setStoredInfo fp "AST"  (dataToJSON tcs)
-
+        setStoredInfo fp "AST" $ generateGHCInfo tcm
+        
+                
 -- | read the GHC AST as a JSON value
 readGHCInfo :: FilePath -- ^ the source file
         -> IO(Maybe Value)
@@ -307,37 +352,64 @@ findInJSONData (Just o@(Object m)) | Just (String _)<-HM.lookup "Name" m=case fr
         Error _ -> Nothing 
 findInJSONData _=Nothing
 
--- | find in JSON AST
+---- | find in JSON AST
+--findInJSON :: FindFunc -- ^ the evaluation function  
+--        -> Value -- ^ the root object containing the AST 
+--        -> Maybe Value
+--findInJSON f (Array arr) | not $ V.null arr=let
+--        v1=arr V.! 0
+--        in if f v1 && V.length arr==2 -- we have an array of two elements, the first one being a matching SrcSpan we go down the second element
+--           then 
+--                let
+--                        mv=findInJSON f $ arr V.! 1
+--                in case mv of
+--                        Just rv-> Just rv -- found something underneath
+--                        Nothing -> Just $ arr V.! 1 -- found nothing underneath, return second element of the array
+--           else
+--                let rvs=catMaybes $ V.toList $ fmap (findInJSON f) arr -- other case of arrays: check on each element
+--                in case rvs of
+--                        (x:_)->Just x -- return first match
+--                        []->Nothing
+--findInJSON f (Object obj)=let rvs=mapMaybe (findInJSON f) $ HM.elems obj -- in a complex object: check on contained elements
+--                in case rvs of
+--                        (x:_)->Just x
+--                        []->Nothing
+--findInJSON _ _= Nothing
+--
+---- | overlap function: find whatever is at the given line and column
+--overlap :: Int  -- ^ line
+--        -> Int -- ^ column
+--        -> FindFunc
+--overlap l c (Object m) | 
+--        Just pos<-HM.lookup "SrcSpan" m,
+--        Just (l1,c1,l2,c2)<-extractSourceSpan pos=l1<=l && c1<=c && l2>=l && c2>=c
+--overlap _ _ _=False
+
 findInJSON :: FindFunc -- ^ the evaluation function  
         -> Value -- ^ the root object containing the AST 
         -> Maybe Value
-findInJSON f (Array arr) | not $ V.null arr=let
-        v1=arr V.! 0
-        in if f v1 && V.length arr==2 -- we have an array of two elements, the first one being a matching SrcSpan we go down the second element
-           then 
-                let
-                        mv=findInJSON f $ arr V.! 1
-                in case mv of
-                        Just rv-> Just rv -- found something underneath
-                        Nothing -> Just $ arr V.! 1 -- found nothing underneath, return second element of the array
-           else
-                let rvs=catMaybes $ V.toList $ fmap (findInJSON f) arr -- other case of arrays: check on each element
-                in case rvs of
-                        (x:_)->Just x -- return first match
-                        []->Nothing
-findInJSON f (Object obj)=let rvs=mapMaybe (findInJSON f) $ HM.elems obj -- in a complex object: check on contained elements
-                in case rvs of
-                        (x:_)->Just x
-                        []->Nothing
-findInJSON _ _= Nothing
+findInJSON f (Array vals)=listToMaybe $ sortBy lastPos $ filter f $ V.toList vals
+findInJSON _ _=Nothing
+        
+lastPos :: Value -> Value -> Ordering
+lastPos (Object m1) (Object m2) |
+       Just pos1<-HM.lookup "Pos" m1,
+       Success ifs1 <- fromJSON pos1,
+       Just pos2<-HM.lookup "Pos" m2,
+       Success ifs2 <- fromJSON pos2 =let
+                c1=compare (ifl_line $ ifs_start ifs2) (ifl_line $ ifs_start ifs1)
+                in case c1 of
+                        EQ -> compare (ifl_column $ ifs_start ifs2) (ifl_column $ ifs_start ifs1)
+                        a -> a
+lastPos _ _=EQ      
 
 -- | overlap function: find whatever is at the given line and column
 overlap :: Int  -- ^ line
         -> Int -- ^ column
         -> FindFunc
 overlap l c (Object m) | 
-        Just pos<-HM.lookup "SrcSpan" m,
-        Just (l1,c1,l2,c2)<-extractSourceSpan pos=l1<=l && c1<=c && l2>=l && c2>=c
+        Just pos<-HM.lookup "Pos" m,
+        Success ifs <- fromJSON pos=iflOverlap ifs (InFileLoc l c)
 overlap _ _ _=False
 
 extractUsages :: Value -- ^ the root object containing the AST 
@@ -360,10 +432,12 @@ extractName src (Object m) |
         Just (String mo)<-HM.lookup "Module" m,
         not $ T.null mo,
         Just (String p)<-HM.lookup "Package" m,
-        --Just (String qt)<-HM.lookup "QType" m, ,"QType" .= qt
+        mqt<-HM.lookup "QType" m,
+        mst<-HM.lookup "Type" m,
+        mgt<-HM.lookup "GType" m,    
         Just (String t)<-HM.lookup "HType" m,
         at<-fromMaybe (Array V.empty) $ HM.lookup "AllTypes" m
-                =[Just $ object ["Name" .= s,"Module" .= mo,"Package" .= p,"HType" .= t,"AllTypes" .= at, "Pos" .= toJSON ifl]]
+                =[Just $ object ["Name" .= s,"Module" .= mo,"Package" .= p,"HType" .= t,"AllTypes" .= at, "Pos" .= toJSON ifl, "QType" .= mqt, "Type" .= mst,"GType" .= mgt]]
 --extractName src (Array arr) | not $ V.null arr && isNothing (extractSource $ arr V.! 0)=concatMap (extractName src) $ V.toList arr
 extractName _ _=[]
 

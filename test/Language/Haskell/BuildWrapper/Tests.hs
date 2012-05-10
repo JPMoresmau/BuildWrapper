@@ -52,7 +52,7 @@ tests=  [
         testThingAtPoint,
         testThingAtPointNotInCabal,
         testThingAtPointMain,
-        testThingAtPointMainSubFolder ,
+        testThingAtPointMainSubFolder,
         testNamesInScope,
         testInPlaceReference,
         testCabalComponents,
@@ -795,7 +795,11 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         let rel="src"</>"Main.hs"
         write api root rel $ unlines [  
                   "module Main where",
-                  "main=return $ map id \"toto\""
+                  "main=return $ map id \"toto\"",
+                  "",
+                  "data DataT=MkData {name :: String}",
+                  "",
+                  "data Toot=Toot {toot :: String}"
                   ] 
         (_,nsErrors3f)<-getBuildFlags api root rel
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)          
@@ -810,13 +814,61 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         assertEqual "not gtype"  (Just "Var") (tapGType $ fromJust tap1)
         
         
-        (tap5,nsErrors5)<-getThingAtPoint api root rel 2 20
-        assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors5) (null nsErrors5)
-        assertBool "not just tap5" (isJust tap5)
-        assertEqual "not id" "id" (tapName $ fromJust tap5)
-        assertEqual "not GHC.Base" (Just "GHC.Base") (tapModule $ fromJust tap5)
-        assertEqual "not qtype" (Just "GHC.Types.Char -> GHC.Types.Char") (tapQType $ fromJust tap5)
+        (tap2,nsErrors2)<-getThingAtPoint api root rel 2 20
+        assertBool ("errors or warnings on getThingAtPoint2:"++show nsErrors2) (null nsErrors2)
+        assertBool "not just tap2" (isJust tap2)
+        assertEqual "not id" "id" (tapName $ fromJust tap2)
+        assertEqual "not GHC.Base" (Just "GHC.Base") (tapModule $ fromJust tap2)
+        assertEqual "not htype2"  (Just "v") (tapHType $ fromJust tap2)
+        assertEqual "not qtype" (Just "GHC.Types.Char -> GHC.Types.Char") (tapQType $ fromJust tap2)
        
+        (tap3,nsErrors3)<-getThingAtPoint api root rel 4 7
+        assertBool ("errors or warnings on getThingAtPoint3:"++show nsErrors3) (null nsErrors3)
+        assertBool "not just tap3" (isJust tap3)
+        assertEqual "not DataT" "DataT" (tapName $ fromJust tap3)
+        assertEqual "not Main" (Just "Main") (tapModule $ fromJust tap3)
+        assertEqual "not htype3"  (Just "t") (tapHType $ fromJust tap3)
+        assertEqual "qtype DataT" Nothing (tapQType $ fromJust tap3)
+        
+        (tap4,nsErrors4)<-getThingAtPoint api root rel 4 14
+        assertBool ("errors or warnings on getThingAtPoint4:"++show nsErrors4) (null nsErrors4)
+        assertBool "not just tap4" (isJust tap4)
+        assertEqual "not MkData" "MkData" (tapName $ fromJust tap4)
+        assertEqual "not Main" (Just "Main") (tapModule $ fromJust tap4)
+        assertEqual "not htype4"  (Just "v") (tapHType $ fromJust tap4)
+        assertEqual "qtype MkData" (Just "GHC.Base.String -> Main.DataT") (tapQType $ fromJust tap4)
+        
+        (tap5,nsErrors5)<-getThingAtPoint api root rel 4 22
+        assertBool ("errors or warnings on getThingAtPoint5:"++show nsErrors5) (null nsErrors5)
+        assertBool "not just tap5" (isJust tap5)
+        assertEqual "not name" "name" (tapName $ fromJust tap5)
+        assertEqual "not Main" (Just "Main") (tapModule $ fromJust tap5)
+        assertEqual "not htype5"  (Just "v") (tapHType $ fromJust tap5)
+        assertEqual "qtype name" (Just "Main.DataT -> GHC.Base.String") (tapQType $ fromJust tap5)
+        
+        (tap6,nsErrors6)<-getThingAtPoint api root rel 6 7
+        assertBool ("errors or warnings on getThingAtPoint6:"++show nsErrors6) (null nsErrors6)
+        assertBool "not just tap6" (isJust tap6)
+        assertEqual "not Toot" "Toot" (tapName $ fromJust tap6)
+        assertEqual "not Main" (Just "Main") (tapModule $ fromJust tap6)
+        assertEqual "not htype6"  (Just "t") (tapHType $ fromJust tap6)
+        assertEqual "qtype Toot" Nothing (tapQType $ fromJust tap6)
+        
+        (tap7,nsErrors7)<-getThingAtPoint api root rel 6 14
+        assertBool ("errors or warnings on getThingAtPoint7:"++show nsErrors7) (null nsErrors7)
+        assertBool "not just tap7" (isJust tap7)
+        assertEqual "not Toot" "Toot" (tapName $ fromJust tap7)
+        assertEqual "not Main" (Just "Main") (tapModule $ fromJust tap7)
+        assertEqual "not htype7"  (Just "v") (tapHType $ fromJust tap7)
+        assertEqual "qtype Toot" (Just "GHC.Base.String -> Main.Toot") (tapQType $ fromJust tap7)
+        
+        (tap8,nsErrors8)<-getThingAtPoint api root rel 6 19
+        assertBool ("errors or warnings on getThingAtPoint5:"++show nsErrors8) (null nsErrors8)
+        assertBool "not just tap8" (isJust tap8)
+        assertEqual "not toot" "toot" (tapName $ fromJust tap8)
+        assertEqual "not Main" (Just "Main") (tapModule $ fromJust tap8)
+        assertEqual "not htype8"  (Just "v") (tapHType $ fromJust tap8)
+        assertEqual "qtype toot" (Just "Main.Toot -> GHC.Base.String") (tapQType $ fromJust tap8)
         )) 
 
 testThingAtPointNotInCabal :: (APIFacade a)=> a -> Test
