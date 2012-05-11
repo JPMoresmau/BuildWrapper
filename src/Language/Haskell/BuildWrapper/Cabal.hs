@@ -147,7 +147,7 @@ cabalConfigure srcOrTgt= do
                         setCurrentDirectory (takeDirectory cf)
                         (ex,_,err)<-readProcessWithExitCode cp args ""
                         putStrLn err
-                        let msgs=(parseCabalMessages (takeFileName cf) (takeFileName cp) err) -- ++ (parseCabalMessages (takeFileName cf) out)
+                        let msgs=parseCabalMessages (takeFileName cf) (takeFileName cp) err -- ++ (parseCabalMessages (takeFileName cf) out)
                         ret<-case ex of
                                 ExitSuccess  -> if any isBWNoteError msgs 
                                         then return (Nothing,msgs)
@@ -494,7 +494,7 @@ getReferencedFiles lbi= do
                 let libs=maybe [] extractFromLib $ library pd
                 let exes=map extractFromExe $ executables pd
                 let tests=map extractFromTest $ testSuites pd
-                let cbis=(libs ++ exes ++ tests)
+                let cbis=libs ++ exes ++ tests
                 mapM (\c1@CabalBuildInfo{cbiModulePaths=cb1}->do
                         cb2<-filterM (\(_,f)->do
                                 fs<-getFullSrc f
@@ -600,8 +600,8 @@ cabalComponentsFromDescription :: PD.PackageDescription -- ^ the package descrip
         -> [CabalComponent]
 cabalComponentsFromDescription pd= [cabalComponentFromLibrary $ fromJust (PD.library pd)
          | isJust (PD.library pd)] ++
-              (map cabalComponentFromExecutable $ PD.executables pd)
-               ++ (map cabalComponentFromTestSuite $ PD.testSuites pd)
+              map cabalComponentFromExecutable (PD.executables pd) ++
+                map cabalComponentFromTestSuite (PD.testSuites pd)
              
 
 cabalComponentFromLibrary :: Library -> CabalComponent

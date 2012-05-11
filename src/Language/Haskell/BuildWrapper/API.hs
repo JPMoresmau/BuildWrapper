@@ -15,25 +15,20 @@ module Language.Haskell.BuildWrapper.API where
 import Distribution.Simple.LocalBuildInfo (localPkgDescr)
 import Distribution.Package (packageId)
 import Distribution.Text (display)
-import qualified Data.Aeson.Types as Data.Aeson.Types (parse)
-import Data.Aeson.Types (Parser)
 import Language.Haskell.BuildWrapper.Base
 import Language.Haskell.BuildWrapper.Cabal
 import qualified Language.Haskell.BuildWrapper.GHC as BwGHC
 import Language.Haskell.BuildWrapper.GHCStorage
 import Language.Haskell.BuildWrapper.Src
 
-import qualified Data.ByteString.Lazy as BS
-import qualified Data.ByteString.Lazy.Char8 as BSC
+
 import qualified Data.Text as T
 import qualified Data.HashMap.Lazy as HM
 import qualified Data.Map as DM
 import Data.List (sortBy)
 
-import qualified MonadUtils as GMU
 import Prelude hiding (readFile, writeFile)
 import qualified Data.Vector as V
-import Data.Attoparsec.Number (Number(I))
 
 import System.IO.UTF8
 
@@ -44,12 +39,10 @@ import Data.Maybe
 import System.Directory
 import System.FilePath
 import GHC (RenamedSource, TypecheckedSource, TypecheckedModule(..), Ghc, ms_mod, pm_mod_summary, moduleName)
-import qualified GHC  as GHC (Module)
-import Data.Tuple (swap)
 import Data.Aeson
 import Outputable (showSDoc,ppr)
 import Data.Foldable (foldrM)
-import qualified MonadUtils as GMU
+
 
 
 -- | copy all files from the project to the temporary folder
@@ -96,9 +89,12 @@ build :: Bool -- ^ do we want output (True) or just compilation without linking?
         -> BuildWrapper (OpResult BuildResult)
 build = cabalBuild
 
-generateUsage :: Bool -> String -> BuildWrapper(OpResult (Maybe [FilePath]))
-generateUsage returnAll ccn= do
-        r<-withCabal Source (\lbi -> do 
+-- | generate usage information files
+generateUsage :: Bool -- ^ should we return all files or only the changed ones?
+        -> String -- ^ the cabal component name
+        -> BuildWrapper(OpResult (Maybe [FilePath]))
+generateUsage returnAll ccn= 
+        withCabal Source (\lbi -> do 
                 cbis<-getAllFiles lbi
                 cf<-gets cabalFile
                 temp<-getFullTempDir
@@ -118,18 +114,20 @@ generateUsage returnAll ccn= do
                         modules<-liftIO $ do
                                 cd<-getCurrentDirectory
                                 setCurrentDirectory dir
-                                (mods,ns)<-BwGHC.withASTNotes (getModule pkg) (temp </>) dir (MultipleFile mps) opts     
+                                (mods,_)<-BwGHC.withASTNotes (getModule pkg) (temp </>) dir (MultipleFile mps) opts     
                                 setCurrentDirectory cd 
                                 return mods
                         mapM_ (generate pkg) modules
                         return $ if returnAll then mps1 else mps
-                        ) $ filter (\cbi->(cabalComponentName $ cbiComponent cbi)==ccn) cbis
+                        ) $ filter (\cbi->cabalComponentName (cbiComponent cbi) == ccn) cbis
                 return $ map fst $ concat allMps
                 )
-        -- liftIO $ Prelude.print ns        
-        return r
         where
-                getModule :: T.Text ->  FilePath -> TypecheckedModule -> Ghc(FilePath,T.Text,RenamedSource,[Usage])
+                -- | get module name and import/export usage information
+                getModule :: T.Text -- ^ the current package name
+                        ->  FilePath -- ^ the file to process
+                        -> TypecheckedModule -- ^ the GHC typechecked module
+                        -> Ghc(FilePath,T.Text,RenamedSource,[Usage])
                 getModule pkg f tm=do
                         let rs@(_,imps,mexps,_)=fromJust $ tm_renamed_source tm
                         (ius,aliasMap)<-foldrM (BwGHC.ghcImportToUsage pkg) ([],DM.empty) imps
@@ -137,8 +135,10 @@ generateUsage returnAll ccn= do
                         let modu=T.pack $ showSDoc $ ppr $ moduleName $ ms_mod $ pm_mod_summary $ tm_parsed_module tm
                         eus<-mapM (BwGHC.ghcExportToUsage pkg modu aliasMap) (fromMaybe [] mexps)
                         --ms_mod $ pm_mod_summary $ tm_parsed_module tm
-                        return (f,modu,rs,ius ++ (concat eus))
-                generate :: T.Text -> (FilePath,T.Text,RenamedSource,[Usage]) -> BuildWrapper()
+                        return (f,modu,rs,ius ++ concat eus)
+                -- | generate all usage information and stores it to file
+                generate :: T.Text  -- ^ the current package name
+                        -> (FilePath,T.Text,RenamedSource,[Usage]) -> BuildWrapper()
                 generate pkg (fp,modu,(hsg,_,_,_),ius)=do
                         tgt<-getTargetPath fp
                         --mv<-liftIO $ readGHCInfo tgt
@@ -147,9 +147,9 @@ generateUsage returnAll ccn= do
                         -- liftIO $ Prelude.putStrLn $ formatJSON $ BSC.unpack $ encode v
                         --case mv of
                         --        Just v->do
-                        let vals=catMaybes $ extractUsages v
+                        let vals=extractUsages v
                         --liftIO $ mapM_ (Prelude.putStrLn . formatJSON . BSC.unpack . encode) vals
-                        (mast,ns)<-getAST fp
+                        (mast,_)<-getAST fp
                         case mast of
                                 Just (ParseOk ast)->do
                                         let ods=getHSEOutline ast
@@ -161,21 +161,21 @@ generateUsage returnAll ccn= do
                                         return ()
                                 _ -> return ()
                         return ()
-                        --        Nothing -> do
-                        --               liftIO $ Prelude.putStrLn "no ghc info"
-                        --                return ()
-                        return ()
-                reconcile :: T.Text ->  [Value] -> [OutlineDef] ->  [Usage] -> Value
+                -- | reconcile AST, usage information and outline into one final usage object        
+                reconcile :: T.Text  -- ^ the current package name
+                        ->  [Value] -> [OutlineDef] ->  [Usage] -> Value
                 reconcile pkg vals ods ius=let
                         mapOds=foldr mapOutline DM.empty ods
                         in foldr usageToJSON (object []) 
-                                (ius ++ (concatMap (ghcValToUsage pkg mapOds) vals))
+                                (ius ++ concatMap (ghcValToUsage pkg mapOds) vals)
+                -- | store outline def by line
                 mapOutline :: OutlineDef -> DM.Map Int [OutlineDef] -> DM.Map Int [OutlineDef]
                 mapOutline od m=let
                         ifs=od_loc od
-                        lines=[(ifl_line $ ifs_start ifs) .. (ifl_line $ ifs_end ifs)]
-                        m2=foldr (addOutline od) m lines
+                        lins=[(ifl_line $ ifs_start ifs) .. (ifl_line $ ifs_end ifs)]
+                        m2=foldr (addOutline od) m lins
                         in foldr mapOutline m2 (od_children od)
+                -- | add one outline def by line
                 addOutline :: OutlineDef -> Int -> DM.Map Int [OutlineDef] -> DM.Map Int [OutlineDef]
                 addOutline od l m=let
                         mods=DM.lookup l m
@@ -183,6 +183,7 @@ generateUsage returnAll ccn= do
                                 Just ods->od:ods
                                 Nothing->[od]
                         in DM.insert l newOds m   
+                -- | translate Usage structure to JSON        
                 usageToJSON :: Usage -> Value -> Value
                 usageToJSON u v@(Object pkgs) | Just pkg<-usagePackage u v=
                         let 
@@ -195,48 +196,31 @@ generateUsage returnAll ccn= do
                                 (Object names)= HM.lookupDefault (object []) typeKey  types     
                                 nameKey=usName u
                                 --  , ",", (usType u)
-                                (Array lines)= HM.lookupDefault (Array V.empty) nameKey names
+                                (Array lins)= HM.lookupDefault (Array V.empty) nameKey names
                                 lineV= usLoc u  -- Number $ I $ usLine u
                                 objectV=object ["s" .= usSection u, "d" .= usDef u, "l" .= lineV]
-                                lines2=if V.elem objectV lines
-                                        then lines
-                                        else V.cons objectV lines
-                                names2=HM.insert nameKey (Array lines2) names
+                                lins2=if objectV `V.elem` lins
+                                        then lins
+                                        else V.cons objectV lins
+                                names2=HM.insert nameKey (Array lins2) names
                                 types2=HM.insert typeKey (Object names2) types
                                 mods2=HM.insert (usModule u) (Object types2) mods
                        in Object $ HM.insert pkg (Object mods2) pkgs
-                        
---                        let r=Data.Aeson.Types.parse (\(Object pkgs)-> do
---                                (Object mods) <- pkgs .:? (usPackage u) .!= object []
---                                (Object types)<- mods .:? (usModule u) .!= object []
---                                let typeKey=if usType u
---                                        then "types"
---                                        else "vars"
---                                (Object names)<- types .:? typeKey .!= object []        
---                                let nameKey=usName u
---                                --  , ",", (usType u)
---                                (Array lines)<- names .:?  nameKey .!= (Array V.empty)
---                                let lineV= usLoc u  -- Number $ I $ usLine u
---                                let lines2=if V.elem lineV lines
---                                        then lines
---                                        else V.cons lineV lines
---                                let names2=HM.insert nameKey (Array lines2) names
---                                let types2=HM.insert typeKey (Object names2) types
---                                let mods2=HM.insert (usModule u) (Object types2) mods
---                                return $ Object $ HM.insert (usPackage u) (Object mods2) pkgs
---                                ) o
---                        in case r of
---                                Error st->object ["error" .= st]
---                                Success a->a
                 usageToJSON _ a=a
+                -- | get the package for a given usage module
                 usagePackage ::  Usage -> Value -> Maybe T.Text
                 usagePackage u (Object pkgs)=case usPackage u of
                         Just p->Just p
                         Nothing->let
                                 modu=usModule u
-                                matchingpkgs=HM.foldrWithKey (\k (Object mods) l->if (HM.member modu mods) then k : l else l) [] pkgs
+                                matchingpkgs=HM.foldrWithKey (listPkgs modu) [] pkgs
                                 in listToMaybe matchingpkgs
                 usagePackage _ _=Nothing
+                -- | list packages possible for module
+                listPkgs :: T.Text -> T.Text -> Value -> [T.Text] -> [T.Text] 
+                listPkgs modu k (Object mods) l=if HM.member modu mods then k : l else l        
+                listPkgs _ _ _ l=l      
+                -- | translate GHC AST to Usages
                 ghcValToUsage ::  T.Text -> DM.Map Int [OutlineDef] -> Value -> [Usage]
                 ghcValToUsage pkg mapOds (Object m) |
                         Just (String s)<-HM.lookup "Name" m,
@@ -249,9 +233,10 @@ generateUsage returnAll ccn= do
                                 (section,def)=getSection mods s ifs
                                 in [Usage (Just (if p=="main" then pkg else p)) mo s section (ht=="t") arr def]
                 ghcValToUsage _ _ _=[]
+                -- | retrieve section name for given location, and whether what we reference is actually a reference
                 getSection :: Maybe [OutlineDef]  -> T.Text -> InFileSpan -> (T.Text,Bool)
-                getSection (Just ods) name loc =let
-                        matchods=filter (\od-> ifsOverlap (od_loc od) loc) ods
+                getSection (Just ods) objName ifs =let
+                        matchods=filter (\od-> ifsOverlap (od_loc od) ifs) ods
                         bestods=sortBy (\od1 od2->let
                                 l1=ifl_line $ ifs_start $ od_loc od1
                                 l2=ifl_line $ ifs_start $ od_loc od2
@@ -263,15 +248,15 @@ generateUsage returnAll ccn= do
                                    a-> a
                                 ) matchods
                         in case bestods of
-                                (x:_)->let def=(od_name x) == name && 
-                                                (((ifl_column $ ifs_start $ od_loc x)==(ifl_column $ ifs_start loc))
+                                (x:_)->let def=od_name x == objName && 
+                                                ((ifl_column (ifs_start $ od_loc x) == ifl_column (ifs_start ifs))
                                                 || (
-                                                        (Data `elem` (od_type x))
-                                                    && ((ifl_column $ ifs_start $ od_loc x)+5==(ifl_column $ ifs_start loc))    
+                                                        (Data `elem` od_type x)
+                                                    && (ifl_column (ifs_start $ od_loc x) + 5==ifl_column (ifs_start ifs))    
                                                     )
                                                 || (
-                                                        (Type `elem` (od_type x))
-                                                    && ((ifl_column $ ifs_start $ od_loc x)+5==(ifl_column $ ifs_start loc))    
+                                                        (Type `elem` od_type x)
+                                                    && (ifl_column (ifs_start $ od_loc x) + 5 == ifl_column (ifs_start ifs))    
                                                     ))    
                                        in (od_name x,def)
                                 _->("",False)
@@ -316,7 +301,7 @@ getBuildFlags fp=do
                                         (_,opts2)<-fileGhcOptions cbi
                                         -- liftIO $ Prelude.print opts2
                                         let 
-                                                (modName,opts)=cabalExtensions $ snd cbi
+                                                (modName,_)=cabalExtensions $ snd cbi
                                                 cppo=fileCppOptions (snd cbi) ++ unlitF
                                                 modS=moduleToString modName
                                         -- liftIO $ Prelude.print opts
@@ -328,7 +313,7 @@ getBuildFlags fp=do
                         return ret
         where unlitF=let
                 lit=".lhs" == takeExtension fp
-                in ["-D__GLASGOW_HASKELL__=" ++ show (__GLASGOW_HASKELL__ :: Int)] ++ ["--unlit" | lit]
+                in ("-D__GLASGOW_HASKELL__=" ++ show (__GLASGOW_HASKELL__ :: Int)) : ["--unlit" | lit]
 
 -- | get haskell-src-exts commented AST for source file
 getAST :: FilePath -- ^  the source file

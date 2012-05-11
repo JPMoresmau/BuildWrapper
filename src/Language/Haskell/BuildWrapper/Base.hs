@@ -25,7 +25,7 @@ import qualified Data.Set as S
 
 import System.Directory
 import System.FilePath
-import Data.List (isPrefixOf, isInfixOf)
+import Data.List (isPrefixOf)
 import Data.Maybe (catMaybes)
 
 
@@ -81,7 +81,7 @@ data BWNote=BWNote {
         deriving (Show,Read,Eq)
       
 isBWNoteError :: BWNote -> Bool
-isBWNoteError bw=(bwn_status bw) == BWError
+isBWNoteError bw=bwn_status bw == BWError
         
 instance ToJSON BWNote  where
     toJSON (BWNote s t l)= object ["s" .= s, "t" .= t, "l" .= l]       
@@ -556,7 +556,7 @@ getRecursiveContents topdir = do
       else return [path]
   return (concat paths)         
 
-  
+-- | delete files in temp folder but not in real folder anymore
 deleteGhosts :: [FilePath] -> BuildWrapper [FilePath]
 deleteGhosts copied=do
         root<-getFullSrc ""
@@ -599,16 +599,19 @@ removeBaseDir base_dir = loop
     n = length base_dir_sep
     base_dir_sep=base_dir ++ [pathSeparator] 
     
+-- | nub for Ord objects: use a set    
 nubOrd :: Ord a => [a] -> [a]
 nubOrd=S.toList . S.fromList
 
+-- | debug method to vaguely format JSON result to dump them
 formatJSON :: String -> String
-formatJSON s=snd $ foldl f (0,"") s
+formatJSON s1=snd $ foldl f (0,"") s1
         where 
-                f (i,s) '['=((i+4),s ++ "\n" ++(map (const ' ') [0 .. i]) ++ "[")
-                f (i,s) ']'  =((i-4),s ++ "\n" ++(map (const ' ') [0 .. i]) ++ "]")
+                f (i,s) '['=(i + 4, s ++ "\n" ++ map (const ' ') [0 .. i] ++ "[")
+                f (i,s) ']'  =(i - 4, s ++ "\n" ++ map (const ' ') [0 .. i] ++ "]")
                 f (i,s) c =(i,s++[c])
-                
+   
+-- | Usage structure                
 data Usage = Usage {
         usPackage::Maybe T.Text,
         usModule::T.Text,

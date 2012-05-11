@@ -23,7 +23,6 @@ import Data.Aeson
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BSC
 import Data.Version (showVersion)
-import Data.Maybe (fromJust)
 
 
 type CabalFile = FilePath

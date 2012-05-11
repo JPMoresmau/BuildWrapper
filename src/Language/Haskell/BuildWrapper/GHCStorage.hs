@@ -55,8 +55,7 @@ import qualified Data.Map as DM
 import qualified Data.Vector as V
 import Data.Attoparsec.Number (Number(I))
 import System.Time (ClockTime)
--- import GHC.SYB.Utils (showData, Stage(..))
-import Type (splitFunTys, splitAppTys)
+import Type (splitFunTys)
 import Unique (getUnique)
 import Data.List (sortBy)
 
@@ -88,12 +87,17 @@ storeBuildFlagsInfo :: FilePath -- ^ the source file
         -> IO()
 storeBuildFlagsInfo fp bf=setStoredInfo fp "BuildFlags"  (toJSON bf)
 
-
+-- | generate the JSON from the typechecked module
+-- this incorporates info from the renamed source with types annotations from the typechecked source
 generateGHCInfo :: TypecheckedModule -> Value
 generateGHCInfo tcm=let
-        tcvals=catMaybes $ extractUsages $ dataToJSON $ typecheckedSource tcm
+        -- extract usages from typechecked source
+        tcvals=extractUsages $ dataToJSON $ typecheckedSource tcm
+        -- store objects with type annotations in a map keyed by module, name, line and column
         tcByNameLoc=foldr buildMap DM.empty tcvals
-        rnvals=catMaybes $ extractUsages $ dataToJSON $ tm_renamed_source tcm
+        -- extract usages from renamed source
+        rnvals=extractUsages $ dataToJSON $ tm_renamed_source tcm
+        -- add type information on objects
         typedVals=map (addType tcByNameLoc) rnvals
         in (Array $ V.fromList typedVals)
         where 
@@ -106,7 +110,7 @@ generateGHCInfo tcm=let
                         Just _<-HM.lookup "Type" m,
                         Just "v"<-HM.lookup "HType" m,
                         Just _<-HM.lookup "GType" m=
-                                DM.insert (mo,s,ifl_line $ ifs_start ifs,0) v $
+                                DM.insert (mo,s,ifl_line $ ifs_start ifs,0) v $ -- add column 0 for some cases where the spans are funny 
                                 DM.insert (mo,s,ifl_line $ ifs_start ifs,ifl_column $ ifs_start ifs) v dm
                 buildMap _ dm=dm
                 addType dm v@(Object m1) |
@@ -385,12 +389,14 @@ findInJSONData _=Nothing
 --        Just (l1,c1,l2,c2)<-extractSourceSpan pos=l1<=l && c1<=c && l2>=l && c2>=c
 --overlap _ _ _=False
 
+-- | find in JSON AST
 findInJSON :: FindFunc -- ^ the evaluation function  
         -> Value -- ^ the root object containing the AST 
         -> Maybe Value
 findInJSON f (Array vals)=listToMaybe $ sortBy lastPos $ filter f $ V.toList vals
 findInJSON _ _=Nothing
-        
+
+-- | sort Value by position, descending        
 lastPos :: Value -> Value -> Ordering
 lastPos (Object m1) (Object m2) |
        Just pos1<-HM.lookup "Pos" m1,
@@ -413,19 +419,18 @@ overlap l c (Object m) |
 overlap _ _ _=False
 
 extractUsages :: Value -- ^ the root object containing the AST 
-        -> [Maybe Value]
+        -> [Value]
 extractUsages (Array arr) | not $ V.null arr=let
         v1=arr V.! 0
         msrc=extractSource v1
         in if isJust msrc && V.length arr==2 -- we have an array of two elements, the first one being a matching SrcSpan we go down the second element
-           then (extractName v1 $ arr V.! 1)  ++
-                         (extractUsages $ arr V.! 1)
+           then extractName v1 (arr V.! 1) ++ extractUsages (arr V.! 1)
            else concat $ V.toList $ fmap extractUsages arr -- other case of arrays: check on each element
-extractUsages (Object obj)=(concatMap extractUsages $ HM.elems obj) -- in a complex object: check on contained elements
+extractUsages (Object obj)=concatMap extractUsages $ HM.elems obj -- in a complex object: check on contained elements
         -- (extractName o) : 
 extractUsages  _= []
 
-extractName :: Value -> Value -> [Maybe Value]
+extractName :: Value -> Value -> [Value]
 extractName src (Object m) |
         Just ifl<-extractSource src,
         Just (String s)<-HM.lookup "Name" m,
@@ -437,8 +442,7 @@ extractName src (Object m) |
         mgt<-HM.lookup "GType" m,    
         Just (String t)<-HM.lookup "HType" m,
         at<-fromMaybe (Array V.empty) $ HM.lookup "AllTypes" m
-                =[Just $ object ["Name" .= s,"Module" .= mo,"Package" .= p,"HType" .= t,"AllTypes" .= at, "Pos" .= toJSON ifl, "QType" .= mqt, "Type" .= mst,"GType" .= mgt]]
---extractName src (Array arr) | not $ V.null arr && isNothing (extractSource $ arr V.! 0)=concatMap (extractName src) $ V.toList arr
+                =[object ["Name" .= s,"Module" .= mo,"Package" .= p,"HType" .= t,"AllTypes" .= at, "Pos" .= toJSON ifl, "QType" .= mqt, "Type" .= mst,"GType" .= mgt]]
 extractName _ _=[]
 
 extractSource :: Value ->  Maybe InFileSpan
@@ -503,7 +507,7 @@ reduceType (AppTy (ForAllTy tv b) t) =
 reduceType t = t
 
 substType :: TyVar -> Type -> Type -> Type
-substType v t' t0 = go t0
+substType v t'  = go 
   where
     go t = case t of
       TyVarTy tv 

@@ -48,7 +48,6 @@ import StringBuffer
 import System.FilePath
 
 import qualified MonadUtils as GMU
-import qualified Data.ByteString.Lazy.Char8 as BSC (unpack)
 
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
@@ -85,7 +84,7 @@ withJSONAST f fp base_dir modul options=do
         case mv of 
                 Just v-> fmap Just (f v) 
                 Nothing->do
-                        mTc<-withAST (return) fp base_dir modul options
+                        mTc<-withAST return fp base_dir modul options
                         case mTc of
                                 Just tc->fmap Just (f (generateGHCInfo tc)) 
                                 Nothing -> return Nothing
@@ -120,7 +119,8 @@ withASTNotes f ff base_dir contents options=do
                         SingleFile{lmModule=m}->LoadUpTo $ mkModuleName m
                         MultipleFile{}->LoadAllTargets
                 -- loadWithLogger (logWarnErr ref)
-                res<- load howMuch
+                -- haskellEditor.getModuleName()
+                load howMuch
                            `gcatch` (\(e :: SourceError) -> handle_error ref e)
                 --(warns, errs) <- GMU.liftIO $ readIORef ref
                 --let notes = ghcMessagesToNotes base_dir (warns, errs)
@@ -134,28 +134,6 @@ withASTNotes f ff base_dir contents options=do
                                 fmap Just $ workOnResult f fp modSum)
                                 `gcatch` (\(_ :: GhcApiError) -> return Nothing)
                         ) fps
---                a<-case contents of
---                        SingleFile{lmFile=fp,lmModule=m}->                
---                                case res of 
---                                        Succeeded -> do
---                                                modSum <- getModSummary $ mkModuleName m
---                                                r<-workOnResult f fp modSum
---                                                return [r]
---                                        Failed -> return []
---                        MultipleFile{lmFiles=fs}->do
---                                --mg<-getModuleGraph
---                                fmap catMaybes $ mapM (\(fp,m)->(do
---                                                modSum <- getModSummary $ mkModuleName m
---                                                fmap Just $ workOnResult f fp modSum)
---                                                `gcatch` (\(_ :: GhcApiError) -> return Nothing)
---                                        ) fs
---                                mg<-getModuleGraph
---                                fmap catMaybes $ mapM (\ms->do
---                                        let mf=ml_hs_file $ ms_location ms
---                                        case mf of
---                                                Just ffp->fmap Just $ workOnResult f (makeRelative base_dir ffp) ms
---                                                Nothing->return Nothing
---                                        ) mg
 #if __GLASGOW_HASKELL__ < 702                           
                 warns <- getWarnings
                 return (a,List.nub $ notes ++ reverse (ghcMessagesToNotes base_dir (warns, emptyBag)))
@@ -166,9 +144,7 @@ withASTNotes f ff base_dir contents options=do
         where
             workOnResult :: GHCApplyFunction a -> FilePath -> ModSummary -> Ghc a
             workOnResult f2 fp modSum= do
-                -- GMU.liftIO $ putStrLn ("parsing " ++ fp)
                 p <- parseModule modSum
-                --return $ showSDocDump $ ppr $ pm_mod_summary p 
                 t <- typecheckModule p
                 d <- desugarModule t -- to get warnings
                 l <- loadModule d
@@ -180,9 +156,7 @@ withASTNotes f ff base_dir contents options=do
 #endif                         
                 let fullfp=ff fp
                 -- GMU.liftIO $ putStrLn ("writing " ++ fullfp)
-                --let Just rs=tm_renamed_source $ dm_typechecked_module l
                 GMU.liftIO $ storeGHCInfo fullfp (dm_typechecked_module l)
-                --GMU.liftIO $ storeGHCInfo fullfp rs
                 --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
                 f2 fp $ dm_typechecked_module l                
         
@@ -196,9 +170,6 @@ withASTNotes f ff base_dir contents options=do
             handle_error ref e = do
                let errs = srcErrorMessages e
                add_warn_err ref emptyBag errs
---               warns <- getWarnings
---               add_warn_err ref warns errs
---               clearWarnings
                return Failed
                
             logAction :: IORef [BWNote] -> Severity -> SrcSpan -> PprStyle -> Message -> IO ()
@@ -260,13 +231,7 @@ getThingAtPointJSON :: Int -- ^ line
 getThingAtPointJSON line col fp base_dir modul options= do
         mmf<-withJSONAST (\v->do
                 let f=overlap line (scionColToGhcCol col)
-                let mvs=extractUsages v
-                -- print ("getThingAtPointJSON1: "++(show $ length mvs))
-                -- print ("getThingAtPointJSON2: "++(show $ length $ catMaybes mvs))
-                -- print $ formatJSON $ BSC.unpack $ encode v
                 let mf=findInJSON f v
-                -- print ("getThingAtPointJSON3: "++(show mf))
-                --return $ findInJSONFormatted qual typed mf
                 return $ findInJSONData mf  
             ) fp base_dir modul options
         return $ fromMaybe Nothing mmf
@@ -818,8 +783,8 @@ ghcLIEToUsage :: Maybe T.Text -> T.Text -> T.Text -> LIE Name -> [Usage]
 ghcLIEToUsage tpkg tmod tsection (L src (IEVar nm))=[ghcNameToUsage tpkg tmod tsection nm src False]
 ghcLIEToUsage tpkg tmod tsection (L src (IEThingAbs nm))=[ghcNameToUsage tpkg tmod tsection nm src True ] 
 ghcLIEToUsage tpkg tmod tsection (L src (IEThingAll nm))=[ghcNameToUsage tpkg tmod tsection nm src True] 
-ghcLIEToUsage tpkg tmod tsection (L src (IEThingWith nm cons))=ghcNameToUsage tpkg tmod tsection nm src True:
-                (map (\x->ghcNameToUsage tpkg tmod tsection x src False) cons) 
+ghcLIEToUsage tpkg tmod tsection (L src (IEThingWith nm cons))=ghcNameToUsage tpkg tmod tsection nm src True :
+        map (\ x -> ghcNameToUsage tpkg tmod tsection x src False) cons 
 ghcLIEToUsage tpkg tmod tsection (L src (IEModuleContents _))= [Usage tpkg tmod "" tsection False (toJSON $ ghcSpanToLocation src) False]              
 ghcLIEToUsage _ _ _ _=[]
         

@@ -22,7 +22,7 @@ import qualified Data.Set as S
 import qualified Data.Text as T
 import qualified Data.HashMap.Lazy as HM
 import qualified Data.Vector as V
-import qualified Data.Aeson.Types as Data.Aeson.Types (parse)
+import qualified Data.Aeson.Types (parse)
 
 usageTests::[Test]
 usageTests= map (\f->f CMDAPI) utests
@@ -64,7 +64,7 @@ testGenerateBWUsage api= TestLabel "testGenerateBWUsage" (TestCase ( do
         assertBool (bwI1 ++ " file doesn't exist after generateAST") ef2
         gar2<-mapM (generateUsage api root  False) comps
         let fs2=concat $ mapMaybe fst gar2
-        assertBool "fs2  contains rel" (not $ rel `elem` fs2)
+        assertBool "fs2  contains rel" (rel `notElem` fs2)
         gar3<-mapM (generateUsage api root  True) comps
         let fs3=concat $ mapMaybe fst gar3
         assertBool "fs3 doesn't  contain rel" (rel `elem` fs3)
@@ -108,7 +108,7 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         --sI<-fmap formatJSON (readFile  $ getInfoFile(root </> ".dist-buildwrapper" </>  rel))
         --putStrLn sI
         v<-readStoredUsage (root </> ".dist-buildwrapper" </>  rel)
-        sU<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  rel))
+        -- sU<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  rel))
         -- putStrLn sU
       
         assertPackageModule "BWTest-0.1" "A" [1,8,1,9] v
@@ -354,14 +354,14 @@ assertUsage tp pkg modu name lins (Array v) |
         Just (Object m4)<-HM.lookup tp m3,
         Just (Array arr)<-HM.lookup name m4=   do
                 let expected=S.fromList $ map (\(section,def,[sl,sc,el,ec])->(section,def,InFileSpan (InFileLoc sl sc) (InFileLoc el ec))) lins
-                let actual=S.fromList $ map (\v->
+                let actual=S.fromList $ map (\v2->
                         let (Success r)=Data.Aeson.Types.parse (\(Object o) ->do 
                                 --Success (Object o)<-fromJSON v 
                                 (String section)<-o .: "s"
                                 (Bool def)<-o .: "d"
-                                arr<-o .: "l"
-                                let (Success ifl)=fromJSON arr
-                                return (section,def,ifl::InFileSpan)) v
+                                arr2<-o .: "l"
+                                let (Success ifl)=fromJSON arr2
+                                return (section,def,ifl::InFileSpan)) v2
                         in r) $ V.toList arr
                 assertEqual (T.unpack modu ++ "." ++ T.unpack name ++ ": " ++ show lins) expected actual  
         --V.elem (Number (I line)) arr=return ()

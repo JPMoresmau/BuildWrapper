@@ -105,7 +105,7 @@ testSynchronizeDelete api= TestLabel "testSynchronizeDelete" (TestCase ( do
         writeFile new "module New where"
         ex1<-doesFileExist new
         assertBool "new does not exist" ex1
-        ((fps,dels),_)<-synchronize api root False
+        ((_,dels),_)<-synchronize api root False
         assertBool "no deletions" (not $ null dels) 
         assertBool "no New.hs" ("New.hs" `elem` dels)
         ex2<-doesFileExist new
@@ -711,9 +711,9 @@ testOutlineMultiParam api= TestLabel "testOutlineMultiParam" (TestCase ( do
                 ] 
         (_,nsErrors3f)<-getBuildFlags api root rel2
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
-        (OutlineResult or _ _,nsErrors1)<-getOutline api root rel2
+        (OutlineResult ors _ _,nsErrors1)<-getOutline api root rel2
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
-        assertBool "no outline" (not $ null or)
+        assertBool "no outline" (not $ null ors)
         ))
     
 testOutlineOperator  :: (APIFacade a)=> a -> Test
@@ -733,9 +733,9 @@ testOutlineOperator api= TestLabel "testOutlineMultiParam" (TestCase ( do
                 ]
         (_,nsErrors3f)<-getBuildFlags api root rel
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
-        (OutlineResult or _ _,nsErrors1)<-getOutline api root rel
+        (OutlineResult ors _ _,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
-        assertBool "no outline" (not $ null or)
+        assertBool "no outline" (not $ null ors)
         ))    
 
 
@@ -754,10 +754,10 @@ testOutlinePatternGuards api= TestLabel "testOutlinePatternGuards" (TestCase ( d
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
         (bool3,nsErrors3)<-build1 api root rel
         assertBool "returned false on bool3" bool3
-        assertBool ("errors on nsErrors3"++ (show nsErrors3)) (null $ filter (\x->BWError == bwn_status x) nsErrors3)
-        (OutlineResult or _ _,nsErrors1)<-getOutline api root rel
+        assertBool ("errors on nsErrors3"++ show nsErrors3) (not (any (\ x -> BWError == bwn_status x) nsErrors3))
+        (OutlineResult ors _ _,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
-        assertBool "no outline" (not $ null or)
+        assertBool "no outline" (not $ null ors)
         )) 
                 
 testPreviewTokenTypes :: (APIFacade a)=> a -> Test
@@ -1237,7 +1237,7 @@ testBuildFlags api=TestLabel "testFlags" (TestCase (do
         assertBool "no package-name" ("-package-name" `elem` ast)
         assertBool "no package name" ("BWTest-0.1" `elem` ast)
         assertBool "no -XOverlappingInstances" ("-XOverlappingInstances" `elem` ast)
-        assertBool "OverlappingInstances" (not $ "OverlappingInstances" `elem` ast)
+        assertBool "OverlappingInstances" ("OverlappingInstances" `notElem` ast)
         ))
         
 
@@ -1291,7 +1291,7 @@ createTestProject :: IO FilePath
 createTestProject = do
         temp<-getTemporaryDirectory
         let root=temp </> testProjectName
-        ex<-(doesDirectoryExist root)
+        ex<-doesDirectoryExist root
         when ex (removeDirectoryRecursive root)
         createDirectory root
         writeFile (testCabalFile root) testCabalContents

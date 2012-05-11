@@ -22,13 +22,11 @@ import Data.Attoparsec
 import Data.Aeson
 import Data.Aeson.Parser
 import qualified Data.ByteString.Char8 as BS
-import qualified Data.ByteString.Lazy.Char8 as BSC
 import Data.List
 import System.Exit
 import System.Process
 import System.FilePath
 import System.Directory
-import Distribution.Simple.Utils (cabalVersion)
 
 cmdTests::[Test]
 cmdTests= map (\f->f CMDAPI) tests
@@ -51,7 +49,7 @@ instance APIFacade CMDAPI where
         getNamesInScope _ r fp= runAPI r "namesinscope" ["--file="++fp]
         getCabalDependencies _ r= runAPI r "dependencies" []
         getCabalComponents _ r= runAPI r "components" []
-        generateUsage _ r retAll cc=runAPI r "generateusage" ["--returnall="++ show retAll,"--cabalcomponent="++(cabalComponentName cc)]
+        generateUsage _ r retAll cc=runAPI r "generateusage" ["--returnall="++ show retAll,"--cabalcomponent="++ cabalComponentName cc]
         
 exeExtension :: String
 #ifdef mingw32_HOST_OS
