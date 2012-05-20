@@ -107,7 +107,8 @@ generateUsage returnAll ccn=
                                 fullSrc<-getFullSrc f
                                 fullTgt<-getTargetPath f
                                 let fullUsage=getUsageFile fullTgt
-                                -- liftIO $ Prelude.print fullUsage
+                                liftIO $ Prelude.print fullSrc
+                                liftIO $ Prelude.print =<< isSourceMoreRecent fullSrc fullUsage 
                                 liftIO $ isSourceMoreRecent fullSrc fullUsage 
                                         ) mps1
                         opts<-fmap snd $ fileGhcOptions (lbi,cbi)        
@@ -155,8 +156,9 @@ generateUsage returnAll ccn=
                                         let ods=getHSEOutline ast
                                         --liftIO $ Prelude.print ods
                                         let val=reconcile pkg vals ods ius
+                                        let (es,is)=getHSEImportExport ast
                                         let modLoc=maybe Null toJSON (getModuleLocation ast) 
-                                        let valWithModule=Array $ V.fromList [toJSON pkg,toJSON modu,modLoc,val]
+                                        let valWithModule=Array $ V.fromList [toJSON pkg,toJSON modu,modLoc,val,toJSON $ OutlineResult ods es is]
                                         liftIO $ setUsageInfo tgt valWithModule
                                         return ()
                                 _ -> return ()
@@ -233,7 +235,7 @@ generateUsage returnAll ccn=
                                 (section,def)=getSection mods s ifs
                                 in [Usage (Just (if p=="main" then pkg else p)) mo s section (ht=="t") arr def]
                 ghcValToUsage _ _ _=[]
-                -- | retrieve section name for given location, and whether what we reference is actually a reference
+                -- | retrieve section name for given location, and whether what we reference is actually a reference, and in that case the comment
                 getSection :: Maybe [OutlineDef]  -> T.Text -> InFileSpan -> (T.Text,Bool)
                 getSection (Just ods) objName ifs =let
                         matchods=filter (\od-> ifsOverlap (od_loc od) ifs) ods
@@ -248,7 +250,8 @@ generateUsage returnAll ccn=
                                    a-> a
                                 ) matchods
                         in case bestods of
-                                (x:_)->let def=od_name x == objName && 
+                                (x:_)->let 
+                                        def=od_name x == objName && 
                                                 ((ifl_column (ifs_start $ od_loc x) == ifl_column (ifs_start ifs))
                                                 || (
                                                         (Data `elem` od_type x)
@@ -257,7 +260,7 @@ generateUsage returnAll ccn=
                                                 || (
                                                         (Type `elem` od_type x)
                                                     && (ifl_column (ifs_start $ od_loc x) + 5 == ifl_column (ifs_start ifs))    
-                                                    ))    
+                                                    ))  
                                        in (od_name x,def)
                                 _->("",False)
                 getSection _ _ _=("",False)

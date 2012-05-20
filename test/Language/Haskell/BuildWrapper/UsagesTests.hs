@@ -347,7 +347,7 @@ assertTypeUsage = assertUsage "types"
 
 assertUsage :: T.Text -> T.Text -> T.Text -> T.Text -> [(T.Text,Bool,[Int])] -> Value -> IO()
 assertUsage tp pkg modu name lins (Array v) |
-        V.length v==4,
+        V.length v==5,
         (Object m) <-v V.! 3,
         Just (Object m2)<-HM.lookup pkg m,
         Just (Object m3)<-HM.lookup modu m2,
@@ -369,7 +369,7 @@ assertUsage _ _ modu name line _=assertBool (T.unpack modu ++ "." ++ T.unpack na
 
 assertPackageModule :: T.Text -> T.Text -> [Int] -> Value -> IO()
 assertPackageModule pkg modu [sl,sc,el,ec] (Array v) |
-         V.length v==4,
+         V.length v==5,
         (String s0) <-v V.! 0,
         (String s1) <-v V.! 1,
         arr<- v V.! 2= do
