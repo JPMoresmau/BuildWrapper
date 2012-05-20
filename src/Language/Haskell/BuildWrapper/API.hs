@@ -370,15 +370,30 @@ withGHCAST'  fp f= do
 getOutline :: FilePath -- ^ source file
         -> BuildWrapper (OpResult OutlineResult)
 getOutline fp=do
-       (mast,bwns)<-getAST fp
-       case mast of
-        Just (ParseOk ast)->do
-                --liftIO $ Prelude.print ast
-                let ods=getHSEOutline ast
-                let (es,is)=getHSEImportExport ast
-                return (OutlineResult ods es is,bwns)
-        Just (ParseFailed failLoc err)->return (OutlineResult [] [] [],BWNote BWError err (BWLocation fp (srcLine failLoc) (srcColumn failLoc)) :bwns)
-        _ -> return (OutlineResult [] [] [],bwns)
+       tgt<-getTargetPath fp
+       let usageFile=getUsageFile tgt
+       usageStale<-liftIO $ isSourceMoreRecent tgt usageFile 
+       mods<-if not usageStale
+          then do
+               mv<-liftIO $ getUsageInfo tgt
+               return $ case mv of
+                        (Array arr) | V.length arr==5->let
+                                (Success r)= fromJSON (arr V.! 4)
+                                in (Just r) 
+                        _->Nothing
+          else return Nothing
+       case mods of
+                Just ods-> return (ods,[])
+                _ -> do   
+                       (mast,bwns)<-getAST fp
+                       case mast of
+                        Just (ParseOk ast)->do
+                                --liftIO $ Prelude.print ast
+                                let ods=getHSEOutline ast
+                                let (es,is)=getHSEImportExport ast
+                                return (OutlineResult ods es is,bwns)
+                        Just (ParseFailed failLoc err)->return (OutlineResult [] [] [],BWNote BWError err (BWLocation fp (srcLine failLoc) (srcColumn failLoc)) :bwns)
+                        _ -> return (OutlineResult [] [] [],bwns)
  
 -- | get lexer token types for source file 
 getTokenTypes :: FilePath -- ^ the source file

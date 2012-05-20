@@ -192,12 +192,27 @@ readStoredInfo fp=do
                 else return Nothing
        return $ fromMaybe (object []) mv
 
+-- | write the usage info file
 setUsageInfo :: FilePath -- ^ the source file
         -> Value -- ^ the value
         -> IO()
 setUsageInfo fp v=do
         let usageFile=getUsageFile fp
         BSS.writeFile usageFile $ BSS.concat $ BS.toChunks $ encode v
+
+-- | read the usage info file
+getUsageInfo :: FilePath -- ^ the source file
+        -> IO Value
+getUsageInfo fp=do
+        let usageFile=getUsageFile fp
+        ex<-doesFileExist usageFile
+        mv<-if ex
+                then do
+                       bs<-BSS.readFile usageFile
+                       return $ decode' $ BS.fromChunks [bs]
+                else return Nothing
+        return $ fromMaybe (object []) mv
+        
 
 -- | convert a Data into a JSON value, with specific treatment for interesting GHC AST objects, and avoiding the holes
 dataToJSON :: Data a =>a -> Value
