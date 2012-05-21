@@ -107,10 +107,11 @@ generateUsage returnAll ccn=
                                 fullSrc<-getFullSrc f
                                 fullTgt<-getTargetPath f
                                 let fullUsage=getUsageFile fullTgt
-                                liftIO $ Prelude.print fullSrc
-                                liftIO $ Prelude.print =<< isSourceMoreRecent fullSrc fullUsage 
                                 liftIO $ isSourceMoreRecent fullSrc fullUsage 
-                                        ) mps1
+                                        ) $ filter (\(f,_)->let ext=takeExtension f
+                                                in ext `elem` [".hs",".lhs"]
+                                                )
+                                                mps1
                         opts<-fmap snd $ fileGhcOptions (lbi,cbi)        
                         modules<-liftIO $ do
                                 cd<-getCurrentDirectory
