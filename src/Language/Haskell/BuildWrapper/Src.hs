@@ -20,7 +20,7 @@ import qualified Data.Map as DM
 
 import qualified Data.Text as T
 import Data.Char (isSpace)
-import Data.List (foldl')
+import Data.List (foldl', isPrefixOf)
 
 -- | get the AST
 getHSEAST :: String -- ^ input text
@@ -30,7 +30,7 @@ getHSEAST input options=do
         -- we add MultiParamTypeClasses because we may need it if the module we're parsing uses a type class with multiple parameters, which doesn't require the PRAGMA (only in the module DEFINING the type class)
         -- we add PatternGuards since GHC only gives a warning if not explicit
         -- we cannot add all the extensions because some conflict (NewQualifiedOperators breaks code with old operator syntax I think)
-        let exts=MultiParamTypeClasses : PatternGuards : map classifyExtension options
+        let exts=MultiParamTypeClasses : PatternGuards : (map classifyExtension $ map (\x->if isPrefixOf "-X" x then tail $ tail x else x) options)
         let extsFull=if "-fglasgow-exts" `elem` options
                 then exts ++ glasgowExts
                 else exts

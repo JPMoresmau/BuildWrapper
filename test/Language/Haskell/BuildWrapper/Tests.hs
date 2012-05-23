@@ -48,6 +48,7 @@ tests=  [
         testOutlineMultiParam,
         testOutlineOperator,
         testOutlinePatternGuards,
+          testOutlineExtension,
         testPreviewTokenTypes,
         testThingAtPoint,
         testThingAtPointNotInCabal,
@@ -759,6 +760,39 @@ testOutlinePatternGuards api= TestLabel "testOutlinePatternGuards" (TestCase ( d
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
         assertBool "no outline" (not $ null ors)
         )) 
+                
+testOutlineExtension     :: (APIFacade a)=> a -> Test
+testOutlineExtension api= TestLabel "testOutlineExtension" (TestCase ( do
+        root<-createTestProject
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:  base",
+                "  extensions: EmptyDataDecls"]
+        let rel="src"</>"A.hs"      
+        write api root rel $ unlines [
+                "module A",
+                "  where",
+                "data B"
+                ]
+        synchronize api root False        
+        configure api root Source
+        (_,nsErrors3f)<-getBuildFlags api root rel
+        assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
+        (bool3,nsErrors3)<-build1 api root rel
+        assertBool "returned false on bool3" bool3
+        assertBool ("errors on nsErrors3"++ show nsErrors3) (not (any (\ x -> BWError == bwn_status x) nsErrors3))
+        (OutlineResult ors _ _,nsErrors1)<-getOutline api root rel
+        assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
+        assertBool "no outline" (not $ null ors)
+        ))             
                 
 testPreviewTokenTypes :: (APIFacade a)=> a -> Test
 testPreviewTokenTypes api= TestLabel "testPreviewTokenTypes" (TestCase ( do
