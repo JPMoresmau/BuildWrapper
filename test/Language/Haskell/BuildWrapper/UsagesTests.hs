@@ -1,6 +1,7 @@
 {-# LANGUAGE CPP,OverloadedStrings,PatternGuards #-}
 module Language.Haskell.BuildWrapper.UsagesTests where
 
+import System.Directory (doesFileExist)
 import Language.Haskell.BuildWrapper.Base
 
 import Language.Haskell.BuildWrapper.Tests
@@ -103,8 +104,15 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         (BuildResult bool1 _,nsErrors1)<-build api root False Source
         assertBool ("returned false on bool1:" ++ show nsErrors1)  bool1
         assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
-        (comps,_)<-getCabalComponents api root    
-        mapM_ (generateUsage api root False) comps
+        (lib:exe:_,_)<-getCabalComponents api root    
+        --mapM_ (generateUsage api root False) comps
+        generateUsage api root False lib
+        let uf=getUsageFile $ root </> ".dist-buildwrapper" </> relMain
+        euf1<-doesFileExist uf
+        assertBool "main usage file exists after lib" (not euf1)
+        generateUsage api root False exe
+        euf2<-doesFileExist uf
+        assertBool "main usage file does not exist after exe" (euf2)
         --sI<-fmap formatJSON (readFile  $ getInfoFile(root </> ".dist-buildwrapper" </>  rel))
         --putStrLn sI
         v<-readStoredUsage (root </> ".dist-buildwrapper" </>  rel)

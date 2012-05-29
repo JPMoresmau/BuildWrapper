@@ -107,7 +107,9 @@ generateUsage returnAll ccn=
                                 fullSrc<-getFullSrc f
                                 fullTgt<-getTargetPath f
                                 let fullUsage=getUsageFile fullTgt
-                                liftIO $ isSourceMoreRecent fullSrc fullUsage 
+                                liftIO $ isSourceMoreRecent fullSrc fullUsage
+                                -- liftIO $ Prelude.putStrLn (fullSrc ++ "->" ++ fullUsage ++":"++(show recent))
+                                --return recent 
                                         ) $ filter (\(f,_)->let ext=takeExtension f
                                                 in ext `elem` [".hs",".lhs"]
                                                 )
@@ -141,29 +143,32 @@ generateUsage returnAll ccn=
                 -- | generate all usage information and stores it to file
                 generate :: T.Text  -- ^ the current package name
                         -> (FilePath,T.Text,RenamedSource,[Usage]) -> BuildWrapper()
-                generate pkg (fp,modu,(hsg,_,_,_),ius)=do
-                        tgt<-getTargetPath fp
-                        --mv<-liftIO $ readGHCInfo tgt
-                        let v = dataToJSON hsg
-                        -- liftIO $ Prelude.putStrLn tgt
-                        -- liftIO $ Prelude.putStrLn $ formatJSON $ BSC.unpack $ encode v
-                        --case mv of
-                        --        Just v->do
-                        let vals=extractUsages v
-                        --liftIO $ mapM_ (Prelude.putStrLn . formatJSON . BSC.unpack . encode) vals
-                        (mast,_)<-getAST fp
-                        case mast of
-                                Just (ParseOk ast)->do
-                                        let ods=getHSEOutline ast
-                                        --liftIO $ Prelude.print ods
-                                        let val=reconcile pkg vals ods ius
-                                        let (es,is)=getHSEImportExport ast
-                                        let modLoc=maybe Null toJSON (getModuleLocation ast) 
-                                        let valWithModule=Array $ V.fromList [toJSON pkg,toJSON modu,modLoc,val,toJSON $ OutlineResult ods es is]
-                                        liftIO $ setUsageInfo tgt valWithModule
-                                        return ()
-                                _ -> return ()
-                        return ()
+                generate pkg (fp,modu,(hsg,_,_,_),ius) 
+                        | modu=="Main" && ccn=="" = return () -- Main inside a library: do nothing
+                        | otherwise = do
+                                -- liftIO $ Prelude.putStrLn (show modu ++ ":" ++ show ccn) 
+                                tgt<-getTargetPath fp
+                                --mv<-liftIO $ readGHCInfo tgt
+                                let v = dataToJSON hsg
+                                -- liftIO $ Prelude.putStrLn tgt
+                                -- liftIO $ Prelude.putStrLn $ formatJSON $ BSC.unpack $ encode v
+                                --case mv of
+                                --        Just v->do
+                                let vals=extractUsages v
+                                --liftIO $ mapM_ (Prelude.putStrLn . formatJSON . BSC.unpack . encode) vals
+                                (mast,_)<-getAST fp
+                                case mast of
+                                        Just (ParseOk ast)->do
+                                                let ods=getHSEOutline ast
+                                                --liftIO $ Prelude.print ods
+                                                let val=reconcile pkg vals ods ius
+                                                let (es,is)=getHSEImportExport ast
+                                                let modLoc=maybe Null toJSON (getModuleLocation ast) 
+                                                let valWithModule=Array $ V.fromList [toJSON pkg,toJSON modu,modLoc,val,toJSON $ OutlineResult ods es is]
+                                                liftIO $ setUsageInfo tgt valWithModule
+                                                return ()
+                                        _ -> return ()
+                                return ()
                 -- | reconcile AST, usage information and outline into one final usage object        
                 reconcile :: T.Text  -- ^ the current package name
                         ->  [Value] -> [OutlineDef] ->  [Usage] -> Value
