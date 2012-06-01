@@ -355,7 +355,7 @@ data CabalBuildInfo=CabalBuildInfo {
         ,cbiComponentBuildInfo :: ComponentLocalBuildInfo -- ^ the component local build info
         ,cbiBuildFolder::FilePath -- ^ the folder to build that component into
         ,cbiIsLibrary::Bool -- ^ is the component the library
-        ,cbiModulePaths::[(ModuleName,FilePath)]  -- ^ the module name and corresponding source file for each contained Haskell module
+        ,cbiModulePaths::[(Maybe ModuleName,FilePath)]  -- ^ the module name and corresponding source file for each contained Haskell module
         ,cbiComponent::CabalComponent -- ^  the component handle
          } 
             
@@ -367,7 +367,7 @@ canonicalizeBuildInfo =onModulePathsM (mapM (\(m,path)->do
 
 -- | apply a function on the build info modules and paths, in a monad
 onModulePathsM :: (Monad a) 
-        =>([(ModuleName,FilePath)] -> a [(ModuleName,FilePath)]) -- ^ the function to apply
+        =>([(Maybe ModuleName,FilePath)] -> a [(Maybe ModuleName,FilePath)]) -- ^ the function to apply
         -> CabalBuildInfo -- ^ the original build info
         -> a CabalBuildInfo  -- ^ the result
 onModulePathsM f cbi=do
@@ -376,7 +376,7 @@ onModulePathsM f cbi=do
         return cbi{cbiModulePaths=fls}         
 
 -- | apply a function on the build info modules and paths
-onModulePaths :: ([(ModuleName,FilePath)] -> [(ModuleName,FilePath)]) -- ^ the function to apply
+onModulePaths :: ([(Maybe ModuleName,FilePath)] -> [(Maybe ModuleName,FilePath)]) -- ^ the function to apply
         -> CabalBuildInfo -- ^ the original build info
         -> CabalBuildInfo   -- ^ the result
 onModulePaths f =runIdentity . onModulePathsM (return . f)
@@ -407,8 +407,8 @@ getBuildInfo fp=do
  
 -- | get GHC options for a file            
 fileGhcOptions :: (LocalBuildInfo,CabalBuildInfo) -- ^ the cabal info
-        -> BuildWrapper(ModuleName,[String]) -- ^ the module name and the options to pass GHC
-fileGhcOptions (lbi,CabalBuildInfo bi clbi fp isLib ls _)=do
+        -> BuildWrapper([String]) -- ^ the module name and the options to pass GHC
+fileGhcOptions (lbi,CabalBuildInfo bi clbi fp isLib _ _)=do
         dist_dir<-getDistDir
         let inplace=dist_dir </> "package.conf.inplace"
         inplaceExist<-liftIO $ doesFileExist inplace
@@ -417,7 +417,7 @@ fileGhcOptions (lbi,CabalBuildInfo bi clbi fp isLib ls _)=do
                     ["-package-name", display $ packageId $ localPkgDescr lbi]
                   | inplaceExist = ["-package-conf", inplace]
                   | otherwise = []
-        return (fst $ head ls,pkg ++ ghcOptions (lbi{withOptimization=NoOptimisation}) bi clbi fp)
+        return (pkg ++ ghcOptions (lbi{withOptimization=NoOptimisation}) bi clbi fp)
 
 -- | get CPP options for a file
 fileCppOptions :: CabalBuildInfo -- ^ the cabal info
@@ -427,7 +427,7 @@ fileCppOptions cbi=cppOptions $ cbiBuildInfo cbi
 -- | get the cabal extensions
 cabalExtensions :: CabalBuildInfo -- ^ the cabal info
         -> (ModuleName,[String]) -- ^ the module name and cabal extensions
-cabalExtensions CabalBuildInfo{cbiBuildInfo=bi,cbiModulePaths=ls}=(fst $ head ls,map show (otherExtensions bi ++ defaultExtensions bi ++ oldExtensions bi))      
+cabalExtensions CabalBuildInfo{cbiBuildInfo=bi,cbiModulePaths=ls}=(fromJust $ fst $ head ls,map show (otherExtensions bi ++ defaultExtensions bi ++ oldExtensions bi))      
        
 -- | get the source directory from a build info
 getSourceDirs :: BuildInfo -- ^ the build info
@@ -471,21 +471,23 @@ getAllFiles lbi= do
                 testDir    = targetDir </> (testName' ++ "-tmp")
                 hsd=getSourceDirs tbi
                 in (tbi,fromJustDebug "extractFromTestAll" $ lookup testName' $ testSuiteConfigs lbi,testDir,False,hsd,cabalComponentFromTestSuite t)
-        copyAll :: [FilePath] -> BuildWrapper [(ModuleName,FilePath)]
+        copyAll :: [FilePath] -> BuildWrapper [(Maybe ModuleName,FilePath)]
         copyAll fps= do 
                   allF<-mapM copyAll' fps
                   return $ concat allF
-        copyAll' :: FilePath -> BuildWrapper [(ModuleName,FilePath)]
+        copyAll' :: FilePath -> BuildWrapper [(Maybe ModuleName,FilePath)]
         copyAll' fp=do
                 cf<-gets cabalFile
                 let dir=takeDirectory cf
                 fullFP<-getFullSrc fp
                 allF<-liftIO $ getRecursiveContents fullFP
                 tf<-gets tempFolder
+                let cabalDist=(takeDirectory tf) </> "dist"
                 -- exclude every file containing the temp folder name (".buildwrapper" by default)
                 -- which may happen if . is a source path
-                let notMyself=filter (not . isInfixOf tf) allF
-                return $ map (\(x,y)->(fromJust x,y)) $ filter (isJust . fst) $ map (\f->(simpleParse $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) notMyself
+                let notMyself=filter (not . isInfixOf cabalDist) $ filter (not . isInfixOf tf) allF
+                return $ map (\f->(simpleParse $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) notMyself
+                -- return $ map (\(x,y)->(fromJust x,y)) $ filter (isJust . fst) $ map (\f->(simpleParse $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) notMyself
  
 -- | get all components, referencing only the files explicitely indicated in the cabal file
 getReferencedFiles :: LocalBuildInfo -> BuildWrapper [CabalBuildInfo]
@@ -527,14 +529,14 @@ getReferencedFiles lbi= do
                     (TestSuiteLibV09 _ mn) -> copyModules [mn] hsd
                     _ -> []
                 in CabalBuildInfo tbi (fromJustDebug ("extractFromTestRef:"++testName' ++ show (testSuiteConfigs lbi)) $ lookup testName' $ testSuiteConfigs lbi) testDir False (extras ++ copyModules modules hsd) (cabalComponentFromTestSuite t)
-        copyModules :: [ModuleName] -> [FilePath] -> [(ModuleName,FilePath)]
+        copyModules :: [ModuleName] -> [FilePath] -> [(Maybe ModuleName,FilePath)]
         copyModules mods=copyFiles (concatMap (\m->[toFilePath m <.> "hs", toFilePath m <.> "lhs"]) mods)
-        copyFiles :: [FilePath] -> [FilePath] -> [(ModuleName,FilePath)]
+        copyFiles :: [FilePath] -> [FilePath] -> [(Maybe ModuleName,FilePath)]
         copyFiles mods dirs=let
                 rmods=filter (isJust . snd ) $ map (\x->(x,simpleParse $ fileToModule x)) mods
-                in [(modu,d </> m)  | (m,Just modu)<-rmods, d<-dirs]    
-        copyMain :: FilePath  ->[FilePath] ->  [(ModuleName,FilePath)]
-        copyMain fs = map (\ d -> (fromString "Main", d </> fs)) 
+                in [(Just modu,d </> m)  | (m,Just modu)<-rmods, d<-dirs]    
+        copyMain :: FilePath  ->[FilePath] ->  [(Maybe ModuleName,FilePath)]
+        copyMain fs = map (\ d -> (Just $ fromString "Main", d </> fs)) 
        
        
 stringToModuleName :: String -> Maybe ModuleName

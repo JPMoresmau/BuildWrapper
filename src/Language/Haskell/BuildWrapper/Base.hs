@@ -546,15 +546,19 @@ getLoadFiles MultipleFile{lmFiles=fs}=fs
 -- |  http://book.realworldhaskell.org/read/io-case-study-a-library-for-searching-the-filesystem.html
 getRecursiveContents :: FilePath -> IO [FilePath]
 getRecursiveContents topdir = do
-  names <- getDirectoryContents topdir
-  let properNames = filter (not . isPrefixOf ".") names
-  paths <- forM properNames $ \name -> do
-    let path = topdir </> name
-    isDirectory <- doesDirectoryExist path
-    if isDirectory
-      then getRecursiveContents path
-      else return [path]
-  return (concat paths)         
+  ex<-doesDirectoryExist topdir
+  if ex 
+        then do
+          names <- getDirectoryContents topdir
+          let properNames = filter (not . isPrefixOf ".") names
+          paths <- forM properNames $ \name -> do
+            let path = topdir </> name
+            isDirectory <- doesDirectoryExist path
+            if isDirectory
+              then getRecursiveContents path
+              else return [path]
+          return (concat paths) 
+        else return []      
 
 -- | delete files in temp folder but not in real folder anymore
 deleteGhosts :: [FilePath] -> BuildWrapper [FilePath]

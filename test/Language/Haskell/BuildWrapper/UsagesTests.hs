@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP,OverloadedStrings,PatternGuards #-}
 module Language.Haskell.BuildWrapper.UsagesTests where
 
-import System.Directory (doesFileExist)
 import Language.Haskell.BuildWrapper.Base
 
 import Language.Haskell.BuildWrapper.Tests
@@ -112,7 +111,7 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         assertBool "main usage file exists after lib" (not euf1)
         generateUsage api root False exe
         euf2<-doesFileExist uf
-        assertBool "main usage file does not exist after exe" (euf2)
+        assertBool "main usage file does not exist after exe" euf2
         --sI<-fmap formatJSON (readFile  $ getInfoFile(root </> ".dist-buildwrapper" </>  rel))
         --putStrLn sI
         v<-readStoredUsage (root </> ".dist-buildwrapper" </>  rel)

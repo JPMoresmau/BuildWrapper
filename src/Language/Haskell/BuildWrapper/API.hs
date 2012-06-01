@@ -102,7 +102,7 @@ generateUsage returnAll ccn=
                 let pkg=T.pack $ display $ packageId $ localPkgDescr lbi
                 allMps<-mapM (\cbi->do
                         let 
-                                mps1=map (\(m,f)->(f,moduleToString m)) $ cbiModulePaths cbi
+                                mps1=map (\(m,f)->(f,moduleToString $ fromJust m)) $ filter (isJust . fst) $ cbiModulePaths cbi
                         mps<-filterM (\(f,_)->do
                                 fullSrc<-getFullSrc f
                                 fullTgt<-getTargetPath f
@@ -114,7 +114,7 @@ generateUsage returnAll ccn=
                                                 in ext `elem` [".hs",".lhs"]
                                                 )
                                                 mps1
-                        opts<-fmap snd $ fileGhcOptions (lbi,cbi)        
+                        opts<-fileGhcOptions (lbi,cbi)        
                         modules<-liftIO $ do
                                 cd<-getCurrentDirectory
                                 setCurrentDirectory dir
@@ -307,17 +307,21 @@ getBuildFlags fp=do
                         (mcbi,bwns)<-getBuildInfo fp
                         ret<-case mcbi of
                                 Just cbi->do
-                                        (_,opts2)<-fileGhcOptions cbi
+                                        opts2<-fileGhcOptions cbi
+                                        -- liftIO $ Prelude.print fp
+                                        -- liftIO $ Prelude.print $ cbiModulePaths $ snd cbi
                                         -- liftIO $ Prelude.print opts2
                                         let 
-                                                (modName,_)=cabalExtensions $ snd cbi
+                                                fullFp=(takeDirectory src) </> fp
+                                                modName=listToMaybe $ mapMaybe fst (filter (\ (_, f) -> f == fullFp) $ cbiModulePaths $ snd cbi)
+                                                -- (modName,_)=cabalExtensions $ snd cbi
                                                 cppo=fileCppOptions (snd cbi) ++ unlitF
-                                                modS=moduleToString modName
+                                                modS=fmap moduleToString modName
                                         -- liftIO $ Prelude.print opts
                                         -- ghcOptions is sufficient, contains extensions and such
                                         -- opts ++
-                                        return (BuildFlags opts2 cppo  (Just modS),bwns)
-                                Nothing -> return (BuildFlags []  unlitF Nothing,[])
+                                        return (BuildFlags opts2 cppo modS,bwns)
+                                Nothing -> return (BuildFlags [] unlitF Nothing,[])
                         liftIO $ storeBuildFlagsInfo tgt ret
                         return ret
         where unlitF=let

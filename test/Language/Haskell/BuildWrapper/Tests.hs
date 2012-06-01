@@ -34,6 +34,7 @@ tests :: (APIFacade a)=> [a -> Test]
 tests=  [
         testSynchronizeAll,
         testSynchronizeDelete,
+        testSynchronizeExtraFiles,
         testConfigureWarnings, 
         testConfigureErrors,
         testBuildErrors,
@@ -48,7 +49,7 @@ tests=  [
         testOutlineMultiParam,
         testOutlineOperator,
         testOutlinePatternGuards,
-          testOutlineExtension,
+        testOutlineExtension,
         testPreviewTokenTypes,
         testThingAtPoint,
         testThingAtPointNotInCabal,
@@ -111,6 +112,20 @@ testSynchronizeDelete api= TestLabel "testSynchronizeDelete" (TestCase ( do
         assertBool "no New.hs" ("New.hs" `elem` dels)
         ex2<-doesFileExist new
         assertBool "new does still exist" (not ex2)
+        ))
+
+testSynchronizeExtraFiles :: (APIFacade a)=> a -> Test
+testSynchronizeExtraFiles api= TestLabel "testSynchronizeAll" (TestCase ( do
+        root<-createTestProject
+        let extra=root </> "src" -- need to be in hs-source-dirs
+        writeFile (extra </> "a.txt") "contents"
+        let new=root </> ".dist-buildwrapper" </> "src" </> "a.txt"
+        ex1<-doesFileExist new
+        assertBool "new does exist before synchronize" (not ex1)
+        ((fps,_),_)<-synchronize api root False
+        assertBool "no new in sync result" (("src" </> "a.txt") `elem` fps)
+        ex2<-doesFileExist new
+        assertBool "new does not exist after synchronize" ex2
         ))
 
 testConfigureErrors :: (APIFacade a)=> a -> Test
@@ -870,6 +885,8 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         assertEqual "not MkData" "MkData" (tapName $ fromJust tap4)
         assertEqual "not Main" (Just "Main") (tapModule $ fromJust tap4)
         assertEqual "not htype4"  (Just "v") (tapHType $ fromJust tap4)
+        assertEqual "gtype MkData"  (Just "DataCon") (tapGType $ fromJust tap4)
+        assertEqual "type MkData" (Just "String -> DataT") (tapType $ fromJust tap4)
         assertEqual "qtype MkData" (Just "GHC.Base.String -> Main.DataT") (tapQType $ fromJust tap4)
         
         (tap5,nsErrors5)<-getThingAtPoint api root rel 4 22

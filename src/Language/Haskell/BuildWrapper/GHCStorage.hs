@@ -58,6 +58,7 @@ import System.Time (ClockTime)
 import Type (splitFunTys)
 import Unique (getUnique)
 import Data.List (sortBy)
+import GHC.SYB.Utils (Stage(..), showData)
 
 
 -- | get the file storing the information for the given source file
@@ -139,7 +140,11 @@ storeGHCInfo :: FilePath -- ^ the source file
         -> TypecheckedModule -- ^ the GHC AST
         -> IO()
 storeGHCInfo fp tcm=  -- do
-        -- putStrLn $ showData TypeChecker 4 tcs
+--        putStrLn $ showData TypeChecker 4 $ typecheckedSource tcm
+--        let tcvals=extractUsages $ dataToJSON $ typecheckedSource tcm
+--        BSC.putStrLn $ encode $ Array $ V.fromList tcvals
+--        let rnvals=extractUsages $ dataToJSON $ tm_renamed_source tcm 
+--        BSC.putStrLn $ encode $ Array $ V.fromList rnvals
         setStoredInfo fp "AST" $ generateGHCInfo tcm
         
                 
