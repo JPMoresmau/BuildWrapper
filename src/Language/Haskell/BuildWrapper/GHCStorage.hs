@@ -139,8 +139,12 @@ generateGHCInfo tcm=let
 storeGHCInfo :: FilePath -- ^ the source file
         -> TypecheckedModule -- ^ the GHC AST
         -> IO()
-storeGHCInfo fp tcm=  -- do
+storeGHCInfo fp tcm= -- do
 --        putStrLn $ showData TypeChecker 4 $ typecheckedSource tcm
+--        putStrLn "Typechecked"
+--        BSC.putStrLn $ encode $ dataToJSON $ typecheckedSource tcm
+--        putStrLn "Renamed"
+--        BSC.putStrLn $ encode $ dataToJSON $ tm_renamed_source tcm
 --        let tcvals=extractUsages $ dataToJSON $ typecheckedSource tcm
 --        BSC.putStrLn $ encode $ Array $ V.fromList tcvals
 --        let rnvals=extractUsages $ dataToJSON $ tm_renamed_source tcm 
@@ -293,7 +297,8 @@ dataToJSON  =
                 "QType" .= string (showSDoc $ pprTypeForUser True t)]
               --  ,"AllTypes" .= (map string $ filter ("[]" /=) $ nubOrd $ map (showSDoc . withPprStyle (mkUserStyle ((\_ _ -> NameNotInScope2), const True) AllTheWay) . pprTypeForUser True) allT2)]
         hsBind :: HsBindLR Name Name -> Value
-        hsBind (FunBind fid _ (MatchGroup matches _) _ _ _) =arr $ map (\m->arr [arr [dataToJSON $ getLoc m,dataToJSON $ unLoc fid],dataToJSON m]) matches
+        --(arr [dataToJSON $ getLoc fid,dataToJSON $ unLoc fid]) :
+        hsBind (FunBind fid _ (MatchGroup matches _) _ _ _) =arr $  map (\m->arr [arr [dataToJSON $ getLoc m,dataToJSON $ unLoc fid],dataToJSON m]) matches
         hsBind a=generic a
         -- nameAndModule :: Name -> [Pair]
         nameAndModule n=let
@@ -455,14 +460,19 @@ extractName src (Object m) |
         Just ifl<-extractSource src,
         Just (String s)<-HM.lookup "Name" m,
         Just (String mo)<-HM.lookup "Module" m,
-        not $ T.null mo,
+        -- not $ T.null mo, -- keep local objects
         Just (String p)<-HM.lookup "Package" m,
         mqt<-HM.lookup "QType" m,
         mst<-HM.lookup "Type" m,
         mgt<-HM.lookup "GType" m,    
         Just (String t)<-HM.lookup "HType" m,
         at<-fromMaybe (Array V.empty) $ HM.lookup "AllTypes" m
-                =[object ["Name" .= s,"Module" .= mo,"Package" .= p,"HType" .= t,"AllTypes" .= at, "Pos" .= toJSON ifl, "QType" .= mqt, "Type" .= mst,"GType" .= mgt]]
+                =let
+                atts=["Name" .= s,"Module" .= mo,"Package" .= p,"HType" .= t,"AllTypes" .= at, "Pos" .= toJSON ifl, "QType" .= mqt, "Type" .= mst,"GType" .= mgt]
+                --atts1=if T.null mo 
+                --        then atts
+                --        else ():atts
+                in [object atts]
 extractName _ _=[]
 
 extractSource :: Value ->  Maybe InFileSpan

@@ -232,7 +232,7 @@ instance FromJSON NameDef where
     parseJSON (Object v) =NameDef <$>
                          v .: "n" <*>
                          v .: "t" <*>
-                         v .: "s"
+                         v .:? "s"
                          
 -- | element of the outline result
 data OutlineDef = OutlineDef
@@ -269,8 +269,8 @@ instance FromJSON OutlineDef where
                          v .: "t" <*>
                          v .: "l" <*>
                          v .: "c" <*>
-                         v .: "s" <*>
-                         v .: "d"
+                         v .:? "s" <*>
+                         v .:? "d"
     parseJSON _= mzero          
      
 -- | Lexer token
@@ -360,12 +360,12 @@ instance ToJSON ImportDef where
 instance FromJSON ImportDef where
     parseJSON (Object v) =ImportDef <$>
                          v .: "m" <*>
-                         v .: "p" <*>
+                         v .:? "p" <*>
                          v .: "l" <*>
                          v .: "q" <*>
                          v .: "h" <*>
                          v .: "a" <*>
-                         v .: "c"
+                         v .:? "c"
     parseJSON _= mzero     
 
 -- | complete result for outline    
@@ -401,7 +401,7 @@ instance FromJSON BuildFlags where
    parseJSON (Object v)=BuildFlags <$>
                          v .: "a" <*>
                          v .: "p" <*>
-                         v .: "m"
+                         v .:? "m"
    parseJSON _= mzero  
    
 data ThingAtPoint = ThingAtPoint {
@@ -420,11 +420,11 @@ instance ToJSON ThingAtPoint where
 instance FromJSON ThingAtPoint where
    parseJSON (Object v)=ThingAtPoint <$>
                          v .: "Name" <*>
-                         v .: "Module" <*>
-                         v .: "Type" <*>
-                         v .: "QType" <*>
-                         v .: "HType" <*>
-                         v .: "GType"
+                         v .:? "Module" <*>
+                         v .:? "Type" <*>
+                         v .:? "QType" <*>
+                         v .:? "HType" <*>
+                         v .:? "GType"
    parseJSON _= mzero         
    
 -- | get the full path for the temporary directory

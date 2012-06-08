@@ -233,6 +233,7 @@ generateUsage returnAll ccn=
                 ghcValToUsage pkg mapOds (Object m) |
                         Just (String s)<-HM.lookup "Name" m,
                         Just (String mo)<-HM.lookup "Module" m,
+                        not $ T.null mo, -- ignore local objects
                         Just (String p)<-HM.lookup "Package" m,
                         Just (String ht)<-HM.lookup "HType" m,
                         Just arr<-HM.lookup "Pos" m,
