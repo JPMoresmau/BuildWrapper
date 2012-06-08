@@ -109,6 +109,20 @@ instance FromJSON BuildResult where
                          v .: "fps" 
     parseJSON _= mzero    
 
+-- | result for building one file: success + names
+--data Build1Result=Build1Result Bool [NameDef]
+--        deriving (Show,Read,Eq)
+--  
+--instance ToJSON Build1Result  where
+--    toJSON (Build1Result b ns)= object ["r" .= b, "ns" .= map toJSON ns]       
+--
+--instance FromJSON Build1Result where
+--    parseJSON (Object v) =Build1Result <$>
+--                         v .: "r" <*>
+--                         v .: "ns" 
+--    parseJSON _= mzero    
+
+
 -- | which cabal file to use operations
 data WhichCabal=
         Source   -- ^ use proper file
@@ -203,6 +217,23 @@ mkFileSpan :: Int -- ^ start line
         -> InFileSpan
 mkFileSpan sr sc er ec=InFileSpan (InFileLoc sr sc) (InFileLoc er ec)
 
+
+data NameDef = NameDef
+        { ndName  :: T.Text -- ^  name
+        , ndType  :: [OutlineDefType] -- ^ types: can have several to combine
+        , ndSignature  :: Maybe T.Text -- ^ type signature if any
+        }
+        deriving (Show,Read,Eq,Ord)
+
+instance ToJSON NameDef where
+        toJSON (NameDef n tps ts)=  object ["n" .= n , "t" .= map toJSON tps,"s" .= ts]
+     
+instance FromJSON NameDef where
+    parseJSON (Object v) =NameDef <$>
+                         v .: "n" <*>
+                         v .: "t" <*>
+                         v .: "s"
+                         
 -- | element of the outline result
 data OutlineDef = OutlineDef
   { od_name       :: T.Text -- ^  name

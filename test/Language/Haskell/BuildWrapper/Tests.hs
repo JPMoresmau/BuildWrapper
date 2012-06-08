@@ -56,6 +56,7 @@ tests=  [
         testThingAtPointMain,
         testThingAtPointMainSubFolder,
         testNamesInScope,
+        testNameDefsInScope,
         testInPlaceReference,
         testCabalComponents,
         testCabalDependencies,
@@ -71,7 +72,7 @@ class APIFacade a where
         configure :: a -> FilePath -> WhichCabal -> IO (OpResult Bool)
         configureWithFlags :: a -> FilePath -> WhichCabal -> String -> IO (OpResult Bool)
         build :: a -> FilePath -> Bool -> WhichCabal -> IO (OpResult BuildResult)
-        build1 :: a -> FilePath -> FilePath -> IO (OpResult Bool)
+        build1 :: a -> FilePath -> FilePath -> IO (OpResult (Maybe [NameDef]))
         getBuildFlags :: a -> FilePath -> FilePath -> IO (OpResult BuildFlags)
         getOutline :: a -> FilePath ->  FilePath -> IO (OpResult OutlineResult)
         getTokenTypes :: a -> FilePath -> FilePath -> IO (OpResult [TokenDef])
@@ -305,7 +306,7 @@ testBuildErrors api = TestLabel "testBuildErrors" (TestCase ( do
         (_,nsErrors3f)<- getBuildFlags api root ("src"</>"A.hs")
         assertBool ("errors or warnings on nsErrors3f:" ++ show nsErrors3f) (null nsErrors3f)
         (bool3,nsErrors3)<-build1 api root ("src"</>"A.hs")
-        assertBool "returned true on bool3" (not bool3)
+        assertBool "returned true on bool3" (isNothing bool3)
         assertBool "no errors or warnings on nsErrors3" (not $ null nsErrors3)
         let (nsError3:[])=nsErrors3
         assertEqualNotesWithoutSpaces "not proper error 3" (BWNote BWError "Could not find module `Toto':\n  Use -v to see a list of the files searched for." (BWLocation rel 2 8)) nsError3
@@ -345,7 +346,7 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         (_,nsErrors3f)<-getBuildFlags api root rel
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
         (bool3,nsErrors3)<-build1 api root rel
-        assertBool "returned false on bool3" bool3
+        assertBool "returned false on bool3" (isJust bool3)
         assertEqual "not 2 errors or warnings on nsErrors3" 2 (length nsErrors3)
         let (nsError3:nsError4:[])=nsErrors3
         assertEqualNotesWithoutSpaces "not proper error 3" (BWNote BWWarning "The import of `Data.List' is redundant\n           except perhaps to import instances from `Data.List'\n         To import instances alone, use: import Data.List()" (BWLocation rel 2 1)) nsError3
@@ -354,7 +355,7 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         mf3<-synchronize1 api root True rel
         assertBool "mf3 not just" (isJust mf3)
         (bool4,nsErrors4)<-build1 api root rel
-        assertBool "returned false on bool4" bool4
+        assertBool "returned false on bool4" (isJust bool4)
         assertBool "no errors or warnings on nsErrors4" (not $ null nsErrors4)
         let (nsError5:[])=nsErrors4
         assertEqualNotesWithoutSpaces "not proper error 5" (BWNote BWWarning ("This binding for `pats' shadows the existing binding\n           defined at "++rel++":3:1") (BWLocation rel 4 5)) nsError5
@@ -394,7 +395,7 @@ testModuleNotInCabal api = TestLabel "testModuleNotInCabal" (TestCase ( do
         (_,nsErrors2f)<-getBuildFlags api root rel
         assertBool "no errors or warnings on nsErrors2f" (null nsErrors2f)
         (bool2, nsErrors2)<-build1 api root rel
-        assertBool ("returned false on bool2: " ++ show nsErrors2) bool2
+        assertBool ("returned false on bool2: " ++ show nsErrors2) (isJust bool2)
         assertBool ("errors or warnings on nsErrors2: " ++ show nsErrors2) (null nsErrors2)
         
         ))      
@@ -769,7 +770,7 @@ testOutlinePatternGuards api= TestLabel "testOutlinePatternGuards" (TestCase ( d
         (_,nsErrors3f)<-getBuildFlags api root rel
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
         (bool3,nsErrors3)<-build1 api root rel
-        assertBool "returned false on bool3" bool3
+        assertBool "returned false on bool3" (isJust bool3)
         assertBool ("errors on nsErrors3"++ show nsErrors3) (not (any (\ x -> BWError == bwn_status x) nsErrors3))
         (OutlineResult ors _ _,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
@@ -802,7 +803,7 @@ testOutlineExtension api= TestLabel "testOutlineExtension" (TestCase ( do
         (_,nsErrors3f)<-getBuildFlags api root rel
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
         (bool3,nsErrors3)<-build1 api root rel
-        assertBool "returned false on bool3" bool3
+        assertBool "returned false on bool3" (isJust bool3)
         assertBool ("errors on nsErrors3"++ show nsErrors3) (not (any (\ x -> BWError == bwn_status x) nsErrors3))
         (OutlineResult ors _ _,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
@@ -1042,6 +1043,31 @@ testNamesInScope api= TestLabel "testNamesInScope" (TestCase ( do
         assertBool "does not contain B.D.fD" ("B.D.fD" `elem` tts)
         assertBool "does not contain GHC.Types.Char" ("GHC.Types.Char" `elem` tts)
         )) 
+     
+testNameDefsInScope :: (APIFacade a)=> a -> Test
+testNameDefsInScope api= TestLabel "testNameDefsInScope" (TestCase ( do
+        root<-createTestProject
+        synchronize api root False
+        configure api root Source        
+        let rel="src"</>"Main.hs"
+        writeFile (root </> rel) $ unlines [  
+                  "module Main where",
+                  "import B.D",
+                  "main=return $ map id \"toto\"",
+                  "data Type1=MkType1_1 Int"
+                  ] 
+        build api root True Source
+        synchronize api root False
+        (mtts,_)<-build1 api root rel
+        assertBool "getNameDefsInScope not just" (isJust mtts)
+        let tts=fromJust mtts
+        assertBool "does not contain Main.main" (NameDef "Main.main" [Function] (Just "IO [Char]") `elem` tts)
+        assertBool "does not contain B.D.fD" (NameDef "B.D.fD" [Function] (Just "forall a. a") `elem` tts)
+        assertBool "does not contain Main.Type1" (NameDef "Main.Type1" [Type] Nothing `elem` tts)
+        assertBool "does not contain Main.MkType1_1" (NameDef "Main.MkType1_1" [Constructor] (Just "Int -> Type1") `elem` tts)
+        assertBool "does not contain GHC.Types.Char" (NameDef "GHC.Types.Char" [Type] Nothing `elem` tts)
+        )) 
+          
         
 testInPlaceReference  :: (APIFacade a)=> a -> Test
 testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do

@@ -277,10 +277,9 @@ generateUsage returnAll ccn=
 
 -- | build one source file in GHC
 build1 :: FilePath -- ^ the source file
-        -> BuildWrapper (OpResult Bool) -- ^ True if build is successful
-build1 fp=do
-        (mtm,msgs)<-getGHCAST fp
-        return (isJust mtm,msgs)
+        -> BuildWrapper (OpResult (Maybe [NameDef])) -- ^ True if build is successful
+build1 fp=withGHCAST' fp BwGHC.getGhcNameDefsInScope
+
 
 -- | preprocess a file
 preproc :: BuildFlags  -- ^ the build flags       
@@ -341,7 +340,7 @@ getAST fp=do
 -- | get GHC typechecked AST for source file
 getGHCAST :: FilePath -- ^ the source file
         -> BuildWrapper (OpResult (Maybe TypecheckedSource))
-getGHCAST fp = withGHCAST' fp (\_->BwGHC.getAST)
+getGHCAST fp = withGHCAST' fp BwGHC.getAST
 
 -- | perform an action on the GHC AST
 withGHCAST ::  FilePath -- ^ the source file
@@ -351,13 +350,12 @@ withGHCAST ::  FilePath -- ^ the source file
                 -> [String] --  ^ the GHC options
                 -> IO a)
         -> BuildWrapper (OpResult (Maybe a))
-withGHCAST fp f=withGHCAST' fp (\n a b c d->do
+withGHCAST fp f=withGHCAST' fp (\a b c d->do
         r<- f a b c d
-        return (Just r,n))
+        return (Just r,[]))
 
 withGHCAST' ::  FilePath -- ^ the source file
-        -> ([BWNote] --  ^ the notes from getting the flags
-        -> FilePath --  ^ the source file
+        -> (FilePath --  ^ the source file
         -> FilePath --  ^ the base directory
         ->  String --  ^ the module name
         -> [String] --  ^ the GHC options
@@ -371,7 +369,7 @@ withGHCAST'  fp f= do
                         liftIO $ do
                                 cd<-getCurrentDirectory
                                 setCurrentDirectory temp
-                                (pr,bwns2)<- f [] tgt temp modS opts
+                                (pr,bwns2)<- f tgt temp modS opts
                                 setCurrentDirectory cd
                                 return (pr,ns ++ bwns2)
                 _ -> return (Nothing,ns)

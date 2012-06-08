@@ -48,6 +48,9 @@ import StringBuffer
 import System.FilePath
 
 import qualified MonadUtils as GMU
+import Name (isTyVarName,isDataConName,isVarName,isTyConName)
+import Var (varType)
+import PprTyThing (pprTypeForUser)
 
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
@@ -154,6 +157,7 @@ withASTNotes f ff base_dir contents options=do
 #else
                 setContext [IIModule $ ms_mod modSum]
 #endif                         
+                names<-getNamesInScope
                 let fullfp=ff fp
                 -- GMU.liftIO $ putStrLn ("writing " ++ fullfp)
                 GMU.liftIO $ storeGHCInfo fullfp (dm_typechecked_module l)
@@ -216,6 +220,43 @@ getGhcNamesInScope f base_dir modul options=do
                 --GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
                 return $ map (showSDocDump . ppr ) names)  f base_dir modul options
         return $ fromMaybe[] names
+
+   
+-- | get all names in scope
+getGhcNameDefsInScope  :: FilePath -- ^ source path
+        -> FilePath -- ^ base directory
+        -> String -- ^ module name
+        -> [String] -- ^ build options
+        -> IO (OpResult (Maybe [NameDef]))
+getGhcNameDefsInScope fp base_dir modul options=do
+        (nns,ns)<-withASTNotes (\_ _->do
+                --c1<-GMU.liftIO getClockTime
+                names<-getNamesInScope
+                --c2<-GMU.liftIO getClockTime
+                --GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
+                mapM name2nd names) id base_dir (SingleFile fp modul) options
+        return $ case nns of
+                (x:_)->(Just x,ns)
+                _->(Nothing, ns)
+                
+        where name2nd :: GhcMonad m=> Name -> m NameDef
+              name2nd n=do
+                m<- getInfo n
+                let ty=case m of
+                        Just (tyt,_,_)->ty2t tyt
+                        Nothing->Nothing
+                return $ NameDef (T.pack $ showSDocDump $ ppr n) (name2t n) ty
+              name2t :: Name -> [OutlineDefType]
+              name2t n 
+                        | isTyVarName n=[Type]
+                        | isTyConName n=[Type]
+                        | isDataConName n = [Constructor]
+                        | isVarName n = [Function]
+                        | otherwise =[]
+              ty2t :: TyThing -> Maybe T.Text
+              ty2t (AnId id)=Just $ T.pack $ showSDocUnqual $ pprTypeForUser True $ varType id
+              ty2t (ADataCon dc)=Just $ T.pack $ showSDocUnqual $ pprTypeForUser True $ dataConUserType dc
+              ty2t _ = Nothing
 
 -- | get the "thing" at a particular point (line/column) in the source
 -- this is using the saved JSON info if available
