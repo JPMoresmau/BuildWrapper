@@ -288,13 +288,21 @@ testBuildErrors api = TestLabel "testBuildErrors" (TestCase ( do
         assertBool ("errors or warnings on build:"++show nsOK) (null nsOK)
         let rel="src"</>"A.hs"
         -- write source file
+        
         writeFile (root </> rel) $ unlines ["module A where","import toto","fA=undefined"]
+        synchronize1 api root True rel
+        (bool11,nsErrors11)<-build1 api root rel
+        assertBool "returned true on bool1_1" (isNothing bool11)
+        assertBool "no errors or warnings on nsErrors11" (not $ null nsErrors11)
+        let (nsError11:[])=nsErrors11
+        assertEqualNotesWithoutSpaces "not proper error 1_1" (BWNote BWError "parse error on input `toto'\n" (BWLocation rel 2 8)) nsError11
         (BuildResult bool1 _,nsErrors1)<-build api root False Source
         assertBool "returned true on bool1" (not bool1)
-        assertBool "no errors or warnings on nsErrors" (not $ null nsErrors1)
+        assertBool "no errors or warnings on nsErrors1" (not $ null nsErrors1)
         let (nsError1:[])=nsErrors1
         assertEqualNotesWithoutSpaces "not proper error 1" (BWNote BWError "parse error on input `toto'\n" (BWLocation rel 2 8)) nsError1
-        -- write file and synchronize
+        
+            -- write file and synchronize
         writeFile (root </> "src"</>"A.hs")$ unlines ["module A where","import Toto","fA=undefined"]
         mf2<-synchronize1 api root True rel
         assertBool "mf2 not just" (isJust mf2)
@@ -303,9 +311,15 @@ testBuildErrors api = TestLabel "testBuildErrors" (TestCase ( do
         assertBool "no errors or warnings on nsErrors2" (not $ null nsErrors2)
         let (nsError2:[])=nsErrors2
         assertEqualNotesWithoutSpaces "not proper error 2" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" (BWLocation rel 2 8)) nsError2
+        synchronize1 api root True rel
+        (bool21,nsErrors21)<-build1 api root rel
+        assertBool "returned true on bool21" (isNothing bool21)
+        assertBool "no errors or warnings on nsErrors2_1" (not $ null nsErrors21)
+        let (nsError21:[])=nsErrors21
+        assertEqualNotesWithoutSpaces "not proper error 2_1" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" (BWLocation rel 2 8)) nsError21
         (_,nsErrors3f)<- getBuildFlags api root ("src"</>"A.hs")
         assertBool ("errors or warnings on nsErrors3f:" ++ show nsErrors3f) (null nsErrors3f)
-        (bool3,nsErrors3)<-build1 api root ("src"</>"A.hs")
+        (bool3,nsErrors3)<-build1 api root rel
         assertBool "returned true on bool3" (isNothing bool3)
         assertBool "no errors or warnings on nsErrors3" (not $ null nsErrors3)
         let (nsError3:[])=nsErrors3

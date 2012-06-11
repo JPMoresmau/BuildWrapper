@@ -135,7 +135,8 @@ withASTNotes f ff base_dir contents options=do
                                 --mg<-getModuleGraph
                                 modSum <- getModSummary $ mkModuleName m
                                 fmap Just $ workOnResult f fp modSum)
-                                `gcatch` (\(_ :: GhcApiError) -> return Nothing)
+                               `gcatch` (\(_ :: SourceError) -> return Nothing)
+                               `gcatch` (\(_ :: GhcApiError) -> return Nothing)
                         ) fps
 #if __GLASGOW_HASKELL__ < 702                           
                 warns <- getWarnings
@@ -157,7 +158,6 @@ withASTNotes f ff base_dir contents options=do
 #else
                 setContext [IIModule $ ms_mod modSum]
 #endif                         
-                names<-getNamesInScope
                 let fullfp=ff fp
                 -- GMU.liftIO $ putStrLn ("writing " ++ fullfp)
                 GMU.liftIO $ storeGHCInfo fullfp (dm_typechecked_module l)
@@ -231,6 +231,7 @@ getGhcNameDefsInScope  :: FilePath -- ^ source path
 getGhcNameDefsInScope fp base_dir modul options=do
         (nns,ns)<-withASTNotes (\_ _->do
                 --c1<-GMU.liftIO getClockTime
+                GMU.liftIO $ putStrLn "getGhcNameDefsInScope"
                 names<-getNamesInScope
                 --c2<-GMU.liftIO getClockTime
                 --GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
@@ -254,7 +255,7 @@ getGhcNameDefsInScope fp base_dir modul options=do
                         | isVarName n = [Function]
                         | otherwise =[]
               ty2t :: TyThing -> Maybe T.Text
-              ty2t (AnId id)=Just $ T.pack $ showSDocUnqual $ pprTypeForUser True $ varType id
+              ty2t (AnId aid)=Just $ T.pack $ showSDocUnqual $ pprTypeForUser True $ varType aid
               ty2t (ADataCon dc)=Just $ T.pack $ showSDocUnqual $ pprTypeForUser True $ dataConUserType dc
               ty2t _ = Nothing
 

@@ -58,7 +58,7 @@ import System.Time (ClockTime)
 import Type (splitFunTys)
 import Unique (getUnique)
 import Data.List (sortBy)
-import GHC.SYB.Utils (Stage(..), showData)
+-- import GHC.SYB.Utils (Stage(..), showData)
 
 
 -- | get the file storing the information for the given source file
