@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE CPP, ScopedTypeVariables #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.Packages
 -- Author      : Thiago Arrais
@@ -26,7 +26,7 @@ import System.Directory
 import System.Environment (getEnv)
 import System.FilePath
 import System.IO
-import System.IO.Error
+import qualified Control.Exception as Exc
 
 import GHC.Paths
 
@@ -87,9 +87,9 @@ getPkgInfos =
         Just pkgs -> return pkgs
 
     -- Get the user package configuration database
-    e_appdir <- try $ getAppUserDataDirectory "ghc"
+    e_appdir <- Exc.try $ getAppUserDataDirectory "ghc"
     user_conf <- case e_appdir of
-                    Left _ -> return []
+                    Left (_::Exc.IOException) -> return []
                     Right appdir -> do 
                        let subdir
                              = currentArch ++ '-' : currentOS ++ '-' : ghcVersion
@@ -100,9 +100,9 @@ getPkgInfos =
                            Just pkgs -> return pkgs
 
     -- Process GHC_PACKAGE_PATH, if present:
-    e_pkg_path <- try (getEnv "GHC_PACKAGE_PATH")
+    e_pkg_path <- Exc.try (getEnv "GHC_PACKAGE_PATH")
     env_stack <- case e_pkg_path of
-        Left _     -> return []
+        Left (_::Exc.IOException)     -> return []
         Right path -> do
           pkgs <- mapM readContents [PkgDirectory pkg | pkg <- splitSearchPath path]
           return $ concat pkgs
@@ -135,8 +135,8 @@ readContents pkgdb =
 #if __GLASGOW_HASKELL__ >= 612
       -- fix the encoding to UTF-8
       hSetEncoding h utf8
-      catch (hGetContents h) (\err->do
-         putStrLn $ ioeGetErrorString  err
+      Exc.catch (hGetContents h) (\(err :: Exc.IOException)->do
+         putStrLn $ show err
          hClose h
          h' <- openFile file ReadMode
          hSetEncoding h' localeEncoding
@@ -169,16 +169,16 @@ readContents pkgdb =
     pkgInfoReader ::  FilePath
                       -> IO [InstalledPackageInfo]
     pkgInfoReader f = 
-      catch (
+      Exc.catch (
          do
               pkgStr <- readUTF8File f
               let pkgInfo = parseInstalledPackageInfo pkgStr
               case pkgInfo of
                 ParseOk _ info -> return [info]
                 ParseFailed err  -> do
-                        (print err)
+                        print err
                         return [emptyInstalledPackageInfo]
-        ) (\_->return [emptyInstalledPackageInfo])
+        ) (\(_::Exc.IOException)->return [emptyInstalledPackageInfo])
         
   in case pkgdb of
       (PkgDirectory pkgdbDir) -> do

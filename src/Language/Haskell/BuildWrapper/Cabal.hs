@@ -1,4 +1,4 @@
-{-# LANGUAGE PatternGuards,ScopedTypeVariables #-}
+{-# LANGUAGE PatternGuards,ScopedTypeVariables,CPP #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.Cabal
 -- Author      : JP Moresmau
@@ -29,6 +29,9 @@ import Exception (ghandle)
 import Distribution.ModuleName
 import Distribution.PackageDescription ( otherModules,library,executables,testSuites,Library,hsSourceDirs,libBuildInfo,Executable(..),exeName,modulePath,buildInfo,TestSuite(..),testName,TestSuiteInterface(..),testInterface,testBuildInfo,BuildInfo,cppOptions,defaultExtensions,otherExtensions,oldExtensions )
 import Distribution.Simple.GHC
+#if MIN_VERSION_Cabal(1,15,0)   
+import Distribution.Simple.Program.GHC
+#endif
 import Distribution.Simple.LocalBuildInfo
 import Distribution.Simple.Compiler(OptimisationLevel(..))
 import qualified Distribution.PackageDescription as PD 
@@ -407,18 +410,26 @@ getBuildInfo fp=do
  
 -- | get GHC options for a file            
 fileGhcOptions :: (LocalBuildInfo,CabalBuildInfo) -- ^ the cabal info
-        -> BuildWrapper([String]) -- ^ the module name and the options to pass GHC
+        -> BuildWrapper [String] -- ^ the module name and the options to pass GHC
 fileGhcOptions (lbi,CabalBuildInfo bi clbi fp isLib _ _)=do
         dist_dir<-getDistDir
         let inplace=dist_dir </> "package.conf.inplace"
         inplaceExist<-liftIO $ doesFileExist inplace
+#if MIN_VERSION_Cabal(1,15,0)   
+        v<-cabalV
+        let opts l b c f=renderGhcOptions (read VERSION_ghc) $ componentGhcOptions v l b c f 
+#else
+        let opts=ghcOptions
+#endif        
         let pkg
                   | isLib =
                     ["-package-name", display $ packageId $ localPkgDescr lbi]
                   | inplaceExist = ["-package-conf", inplace]
                   | otherwise = []
-        return (pkg ++ ghcOptions (lbi{withOptimization=NoOptimisation}) bi clbi fp)
+        return (pkg ++ opts (lbi{withOptimization=NoOptimisation}) bi clbi fp)
+ 
 
+                
 -- | get CPP options for a file
 fileCppOptions :: CabalBuildInfo -- ^ the cabal info
         -> [String] -- ^ the list of CPP options
@@ -482,7 +493,7 @@ getAllFiles lbi= do
                 fullFP<-getFullSrc fp
                 allF<-liftIO $ getRecursiveContents fullFP
                 tf<-gets tempFolder
-                let cabalDist=(takeDirectory tf) </> "dist"
+                let cabalDist=takeDirectory tf </> "dist"
                 -- exclude every file containing the temp folder name (".buildwrapper" by default)
                 -- which may happen if . is a source path
                 let notMyself=filter (not . isInfixOf cabalDist) $ filter (not . isInfixOf tf) allF

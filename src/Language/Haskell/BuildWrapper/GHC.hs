@@ -113,7 +113,7 @@ withASTNotes f ff base_dir contents options=do
                 -- so we can't use hscTarget = HscNothing
                 -- and it takes a while to actually generate the o and hi files for big modules
                 -- if we use CompManager, it's slower for modules with lots of dependencies but we can keep hscTarget= HscNothing which makes it better for bigger modules
-                setSessionDynFlags flg'  {hscTarget = HscNothing,  ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref }
+                setSessionDynFlags flg'  {hscTarget = HscNothing, ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref }
                 --  $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
                 let fps=getLoadFiles contents
                 mapM_ (\(fp,_)-> addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }) fps
@@ -121,10 +121,10 @@ withASTNotes f ff base_dir contents options=do
                 let howMuch=case contents of
                         SingleFile{lmModule=m}->LoadUpTo $ mkModuleName m
                         MultipleFile{}->LoadAllTargets
-                -- loadWithLogger (logWarnErr ref)
-                -- haskellEditor.getModuleName()
+                -- GMU.liftIO $ putStrLn "Loading..."
                 load howMuch
                            `gcatch` (\(e :: SourceError) -> handle_error ref e)
+                -- GMU.liftIO $ putStrLn "Loaded..."           
                 --(warns, errs) <- GMU.liftIO $ readIORef ref
                 --let notes = ghcMessagesToNotes base_dir (warns, errs)
                 notes <- GMU.liftIO $ readIORef ref
@@ -222,7 +222,7 @@ getGhcNamesInScope f base_dir modul options=do
         return $ fromMaybe[] names
 
    
--- | get all names in scope
+-- | get all names in scope, packaged in NameDefs
 getGhcNameDefsInScope  :: FilePath -- ^ source path
         -> FilePath -- ^ base directory
         -> String -- ^ module name
@@ -231,7 +231,7 @@ getGhcNameDefsInScope  :: FilePath -- ^ source path
 getGhcNameDefsInScope fp base_dir modul options=do
         (nns,ns)<-withASTNotes (\_ _->do
                 --c1<-GMU.liftIO getClockTime
-                GMU.liftIO $ putStrLn "getGhcNameDefsInScope"
+                -- GMU.liftIO $ putStrLn "getGhcNameDefsInScope"
                 names<-getNamesInScope
                 --c2<-GMU.liftIO getClockTime
                 --GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
