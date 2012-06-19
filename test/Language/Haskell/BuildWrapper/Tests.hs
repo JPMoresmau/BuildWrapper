@@ -136,7 +136,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         assertBool "configure returned true on no cabal" (not boolNoCabal)
         --assertEqual "errors or warnings on no cabal (should be ignored)" 0 (length nsNoCabal)        
         let bw=head nsNoCabal
-        assertEqual "wrong error on no cabal" BWError (bwn_status bw)   
+        assertEqual "wrong error on no cabal" BWError (bwnStatus bw)   
         
         synchronize api root False
         (boolOK,nsOK)<-configure api root Target
@@ -785,7 +785,7 @@ testOutlinePatternGuards api= TestLabel "testOutlinePatternGuards" (TestCase ( d
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
         (bool3,nsErrors3)<-build1 api root rel
         assertBool "returned false on bool3" (isJust bool3)
-        assertBool ("errors on nsErrors3"++ show nsErrors3) (not (any (\ x -> BWError == bwn_status x) nsErrors3))
+        assertBool ("errors on nsErrors3"++ show nsErrors3) (not (any (\ x -> BWError == bwnStatus x) nsErrors3))
         (OutlineResult ors _ _,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
         assertBool "no outline" (not $ null ors)
@@ -818,7 +818,7 @@ testOutlineExtension api= TestLabel "testOutlineExtension" (TestCase ( do
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
         (bool3,nsErrors3)<-build1 api root rel
         assertBool "returned false on bool3" (isJust bool3)
-        assertBool ("errors on nsErrors3"++ show nsErrors3) (not (any (\ x -> BWError == bwn_status x) nsErrors3))
+        assertBool ("errors on nsErrors3"++ show nsErrors3) (not (any (\ x -> BWError == bwnStatus x) nsErrors3))
         (OutlineResult ors _ _,nsErrors1)<-getOutline api root rel
         assertBool ("errors or warnings on getOutline:"++show nsErrors1) (null nsErrors1)
         assertBool "no outline" (not $ null ors)
@@ -995,7 +995,7 @@ testThingAtPointMain api= TestLabel "testThingAtPointMain" (TestCase ( do
         configure api root Target          
         (bf3,nsErrors3f)<-getBuildFlags api root rel
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
-        assertEqual "not main module" (Just "Main") (bf_modName bf3)
+        assertEqual "not main module" (Just "Main") (bfModName bf3)
         (tap1,nsErrors1)<-getThingAtPoint api root rel 3 16
         assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors1) (null nsErrors1)
         assertBool "not just tap1" (isJust tap1)
@@ -1039,7 +1039,7 @@ testThingAtPointMainSubFolder api= TestLabel "testThingAtPointMainSubFolder" (Te
         configure api root Target          
         (bf3,nsErrors3f)<-getBuildFlags api root rel
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
-        assertEqual "not main module" (Just "Main") (bf_modName bf3)
+        assertEqual "not main module" (Just "Main") (bfModName bf3)
         (tap1,nsErrors1)<-getThingAtPoint api root rel 3 16
         assertBool ("errors or warnings on getThingAtPoint1:"++show nsErrors1) (null nsErrors1)
         assertBool "not just tap1" (isJust tap1)
@@ -1230,9 +1230,9 @@ testCabalDependencies api= TestLabel "testCabalDependencies" (TestCase ( do
         assertBool ("errors or warnings on getCabalDependencies:"++show nsOK) (null nsOK)
         assertEqual "not two databases" 2 (length cps)
         let (_:(_,pkgs):[])=cps
-        let base=filter (\pkg->cp_name pkg == "base") pkgs
+        let base=filter (\pkg->cpName pkg == "base") pkgs
         assertEqual "not 1 base" 1 (length base)
-        let (l:ex:ts:[])=cp_dependent $ head base
+        let (l:ex:ts:[])=cpDependent $ head base
         assertEqual "not library true" (CCLibrary True) l
         assertEqual "not executable true" (CCExecutable "BWTest" True) ex
         assertEqual "not test suite true" (CCTestSuite "BWTest-test" True) ts
@@ -1340,7 +1340,7 @@ testBuildFlags api=TestLabel "testFlags" (TestCase (do
         (flgs,nsErrors3f)<-getBuildFlags api root rel
         print flgs
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
-        let ast=bf_ast flgs   
+        let ast=bfAst flgs   
         assertBool "no package-name" ("-package-name" `elem` ast)
         assertBool "no package name" ("BWTest-0.1" `elem` ast)
         assertBool "no -XOverlappingInstances" ("-XOverlappingInstances" `elem` ast)
@@ -1422,6 +1422,6 @@ removeSpaces = filter (/= ':') . filter (not . isSpace)
 assertEqualNotesWithoutSpaces :: String -> BWNote -> BWNote -> IO()
 assertEqualNotesWithoutSpaces msg n1 n2=do
         let
-                n1'=n1{bwn_title=removeSpaces $ bwn_title n1}
-                n2'=n1{bwn_title=removeSpaces $ bwn_title n2}
+                n1'=n1{bwnTitle=removeSpaces $ bwnTitle n1}
+                n2'=n1{bwnTitle=removeSpaces $ bwnTitle n2}
         assertEqual msg n1' n2'

@@ -111,8 +111,8 @@ generateGHCInfo tcm=let
                         Just _<-HM.lookup "Type" m,
                         Just "v"<-HM.lookup "HType" m,
                         Just _<-HM.lookup "GType" m=
-                                DM.insert (mo,s,ifl_line $ ifs_start ifs,0) v $ -- add column 0 for some cases where the spans are funny 
-                                DM.insert (mo,s,ifl_line $ ifs_start ifs,ifl_column $ ifs_start ifs) v dm
+                                DM.insert (mo,s,iflLine $ ifsStart ifs,0) v $ -- add column 0 for some cases where the spans are funny 
+                                DM.insert (mo,s,iflLine $ ifsStart ifs,iflColumn $ ifsStart ifs) v dm
                 buildMap _ dm=dm
                 addType dm v@(Object m1) |
                         Just pos<-HM.lookup "Pos" m1,
@@ -120,9 +120,9 @@ generateGHCInfo tcm=let
                         Just (String s)<-HM.lookup "Name" m1,
                         Just (String mo)<-HM.lookup "Module" m1,
                         Just "v"<-HM.lookup "HType" m1=let
-                                mv=DM.lookup (mo,s,ifl_line $ ifs_start ifs,ifl_column $ ifs_start ifs) dm
+                                mv=DM.lookup (mo,s,iflLine $ ifsStart ifs,iflColumn $ ifsStart ifs) dm
                                 mv2=case mv of
-                                        Nothing -> DM.lookup (mo,s,ifl_line $ ifs_start ifs,0) dm
+                                        Nothing -> DM.lookup (mo,s,iflLine $ ifsStart ifs,0) dm
                                         a->a
                                 in case mv2 of
                                         Just (Object m2) |
@@ -428,9 +428,9 @@ lastPos (Object m1) (Object m2) |
        Success ifs1 <- fromJSON pos1,
        Just pos2<-HM.lookup "Pos" m2,
        Success ifs2 <- fromJSON pos2 =let
-                c1=compare (ifl_line $ ifs_start ifs2) (ifl_line $ ifs_start ifs1)
+                c1=compare (iflLine $ ifsStart ifs2) (iflLine $ ifsStart ifs1)
                 in case c1 of
-                        EQ -> compare (ifl_column $ ifs_start ifs2) (ifl_column $ ifs_start ifs1)
+                        EQ -> compare (iflColumn $ ifsStart ifs2) (iflColumn $ ifsStart ifs1)
                         a -> a
 lastPos _ _=EQ      
 

@@ -134,18 +134,18 @@ getHSEOutline (Module _ _ _ _ decls,comments)=map addComment $ concatMap declOut
                 commentMap = foldl' buildCommentMap DM.empty comments     
                 addComment:: OutlineDef -> OutlineDef
                 addComment od=let
-                        st=ifl_line $ ifs_start $ od_loc od
+                        st=iflLine $ ifsStart$ odLoc od
                         -- search for comment before declaration (line above, same column)
                         pl=DM.lookup (st-1) commentMap
                         od2= case pl of
-                                Just (stc,t) | stc == ifl_column (ifs_start $ od_loc od) -> od{od_comment=Just t}
+                                Just (stc,t) | stc == iflColumn (ifsStart $ odLoc od) -> od{odComment=Just t}
                                 _ -> let
                                         -- search  for comment after declaration (same line)
                                         pl2=DM.lookup st commentMap
                                      in case pl2 of
-                                                Just (_,t)-> od{od_comment=Just t}
+                                                Just (_,t)-> od{odComment=Just t}
                                                 Nothing -> od
-                        in od2{od_children=map addComment $ od_children od2}
+                        in od2{odChildren=map addComment $ odChildren od2}
 getHSEOutline _ = []
 
 -- | get the ouline from the AST        

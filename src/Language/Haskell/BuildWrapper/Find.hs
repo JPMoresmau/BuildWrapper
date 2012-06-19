@@ -45,10 +45,18 @@ import qualified Data.Set as S
 
 
 isRecStmt :: StmtLR idL idR -> Bool
-isRecStmt (RecStmt {}) = True
+
+#if __GLASGOW_HASKELL__ < 611
+
+isRecStmt (RecStmt _ _ _ _ _) = True
 isRecStmt _ = False
 
+#else
 
+isRecStmt (RecStmt _ _ _ _ _ _ _ _) = True
+isRecStmt _ = False
+
+#endif
 
 -- | Pretty-print a search result.
 prettyResult :: OutputableBndr id => SearchResult id -> SDoc
@@ -67,7 +75,7 @@ qualifiedResult (FoundModule m) = ppr m
 qualifiedResult r = ppr r
 
 qualifiedName :: Name -> SDoc
-qualifiedName n = maybe empty (\ x -> (ppr x) <> dot) (nameModule_maybe n) <> ppr n
+qualifiedName n = maybe empty  (\x-> (ppr x) <> dot) (nameModule_maybe n) <> (ppr n)
 
 typeOf :: (SearchResult Id, [SearchResult Id]) -> Maybe Type
 typeOf (FoundId ident, path) =
@@ -322,7 +330,7 @@ instance Search id id => Search id (IPName id) where
 searchBindBag :: Search id id => (SrcSpan -> Bool) -> SrcSpan -> Bag (Located (HsBindLR id id)) -> SearchResults id
 searchBindBag p s bs = mconcat $ fmap (searchBinds p s) (bagToList bs)
     
-searchBinds :: Search id id => (SrcSpan -> Bool) -> SrcSpan -> Located (HsBindLR id id) -> SearchResults id
+searchBinds :: Search id id => (SrcSpan -> Bool) -> SrcSpan -> (Located (HsBindLR id id)) -> SearchResults id
 searchBinds p s (L _ a@AbsBinds{})= search p s a -- ignore location of the absbinds
 searchBinds p _ (L s a)
     | p s   = search p s a
@@ -409,7 +417,7 @@ instance Search Name (RenamedSource) where
   search p s (b,d,_,_) = search p s d `mappend` search p s b
 
 instance (Search id id) => Search id (ImportDecl id) where
-  search p s i=search p s (ideclName i)
+  search p s id=search p s (ideclName id)
 
 instance Search id ModuleName where
   search _ _ mn = only (FoundModule mn)

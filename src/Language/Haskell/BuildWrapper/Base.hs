@@ -56,9 +56,9 @@ instance FromJSON BWNoteStatus where
  
 -- | location of a note/error
 data BWLocation=BWLocation {
-        bwl_src::FilePath -- ^ source file 
-        ,bwl_line::Int -- ^ line
-        ,bwl_col::Int -- ^ column
+        bwlSrc::FilePath -- ^ source file 
+        ,bwlLine::Int -- ^ line
+        ,bwlCol::Int -- ^ column
         }
         deriving (Show,Read,Eq)
 
@@ -74,14 +74,14 @@ instance FromJSON BWLocation where
 
 -- | a note on a source file
 data BWNote=BWNote {
-        bwn_status :: BWNoteStatus -- ^ status of the note
-        ,bwn_title :: String -- ^ message
-        ,bwn_location :: BWLocation -- ^ where the note is
+        bwnStatus :: BWNoteStatus -- ^ status of the note
+        ,bwnTitle :: String -- ^ message
+        ,bwnLocation :: BWLocation -- ^ where the note is
         }
         deriving (Show,Read,Eq)
       
 isBWNoteError :: BWNote -> Bool
-isBWNoteError bw=bwn_status bw == BWError
+isBWNoteError bw=bwnStatus bw == BWError
         
 instance ToJSON BWNote  where
     toJSON (BWNote s t l)= object ["s" .= s, "t" .= t, "l" .= l]       
@@ -152,28 +152,28 @@ instance FromJSON OutlineDefType where
     parseJSON _= mzero
  
 -- | Location inside a file, the file is known and doesn't need to be repeated 
-data InFileLoc=InFileLoc {ifl_line::Int -- ^ line
-        ,ifl_column::Int -- ^ column
+data InFileLoc=InFileLoc {iflLine::Int -- ^ line
+        ,iflColumn::Int -- ^ column
         }
         deriving (Show,Read,Eq,Ord)
 
 -- | Span inside a file, the file is known and doesn't need to be repeated 
-data InFileSpan=InFileSpan {ifs_start::InFileLoc -- ^ start location
-        ,ifs_end::InFileLoc  -- ^ end location
+data InFileSpan=InFileSpan {ifsStart::InFileLoc -- ^ start location
+        ,ifsEnd::InFileLoc  -- ^ end location
         }
         deriving (Show,Read,Eq,Ord)
 
 ifsOverlap :: InFileSpan -> InFileSpan -> Bool
-ifsOverlap ifs1 ifs2 = iflOverlap ifs1 $ ifs_start ifs2
+ifsOverlap ifs1 ifs2 = iflOverlap ifs1 $ ifsStart ifs2
 
 iflOverlap :: InFileSpan -> InFileLoc -> Bool
 iflOverlap ifs1 ifs2 =let
-        l11=ifl_line $ ifs_start ifs1
-        l12=ifl_line $ ifs_end ifs1
-        c11=ifl_column $ ifs_start ifs1
-        c12=ifl_column $ ifs_end ifs1
-        l21=ifl_line ifs2
-        c21=ifl_column ifs2
+        l11=iflLine $ ifsStart ifs1
+        l12=iflLine $ ifsEnd ifs1
+        c11=iflColumn $ ifsStart ifs1
+        c12=iflColumn $ ifsEnd ifs1
+        l21=iflLine ifs2
+        c21=iflColumn ifs2
         in (l11<l21 || (l11==l21 && c11<=c21)) && (l12>l21 || (l12==l21 && c12>=c21))
 
 instance ToJSON InFileSpan  where
@@ -233,15 +233,16 @@ instance FromJSON NameDef where
                          v .: "n" <*>
                          v .: "t" <*>
                          v .:? "s"
-                         
+    parseJSON _= mzero    
+
 -- | element of the outline result
 data OutlineDef = OutlineDef
-  { od_name       :: T.Text -- ^  name
-  ,od_type       :: [OutlineDefType] -- ^ types: can have several to combine
-  ,od_loc        :: InFileSpan -- ^ span in source
-  ,od_children   :: [OutlineDef] -- ^ children (constructors...)
-  ,od_signature  :: Maybe T.Text -- ^ type signature if any
-  ,od_comment    :: Maybe T.Text -- ^ comment if any
+  { odName       :: T.Text -- ^  name
+  ,odType       :: [OutlineDefType] -- ^ types: can have several to combine
+  ,odLoc        :: InFileSpan -- ^ span in source
+  ,odChildren   :: [OutlineDef] -- ^ children (constructors...)
+  ,odSignature  :: Maybe T.Text -- ^ type signature if any
+  ,odComment    :: Maybe T.Text -- ^ comment if any
   }
   deriving (Show,Read,Eq,Ord)
      
@@ -275,8 +276,8 @@ instance FromJSON OutlineDef where
      
 -- | Lexer token
 data TokenDef = TokenDef {
-        td_name :: T.Text -- ^ type of token
-        ,td_loc :: InFileSpan -- ^ location
+        tdName :: T.Text -- ^ type of token
+        ,tdLoc :: InFileSpan -- ^ location
     }
         deriving (Show,Eq)     
     
@@ -307,10 +308,10 @@ instance FromJSON ImportExportType where
     
 -- | definition of export
 data ExportDef = ExportDef {
-        e_name :: T.Text -- ^ name
-        ,e_type :: ImportExportType -- ^ type
-        ,e_loc  :: InFileSpan -- ^ location in source file
-        ,e_children :: [T.Text] -- ^ children (constructor names, etc.)
+        eName :: T.Text -- ^ name
+        ,eType :: ImportExportType -- ^ type
+        ,eLoc  :: InFileSpan -- ^ location in source file
+        ,eChildren :: [T.Text] -- ^ children (constructor names, etc.)
     }   deriving (Show,Eq)     
      
 instance ToJSON ExportDef where
@@ -326,10 +327,10 @@ instance FromJSON ExportDef where
      
 -- | definition of an import element   
 data ImportSpecDef = ImportSpecDef {
-        is_name :: T.Text -- ^ name
-        ,is_type :: ImportExportType -- ^ type
-        ,is_loc  :: InFileSpan -- ^ location in source file
-        ,is_children :: [T.Text] -- ^ children (constructor names, etc.)
+        isName :: T.Text -- ^ name
+        ,isType :: ImportExportType -- ^ type
+        ,isLoc  :: InFileSpan -- ^ location in source file
+        ,isChildren :: [T.Text] -- ^ children (constructor names, etc.)
         }  deriving (Show,Eq)        
      
 instance ToJSON ImportSpecDef where
@@ -345,13 +346,13 @@ instance FromJSON ImportSpecDef where
      
 -- | definition of an import statement     
 data ImportDef = ImportDef {
-        i_module :: T.Text -- ^ module name
-        ,i_package :: Maybe T.Text -- ^ package name
-        ,i_loc  :: InFileSpan -- ^ location in source file
-        ,i_qualified :: Bool -- ^ is the import qualified
-        ,i_hiding :: Bool -- ^ is the import element list for hiding or exposing 
-        ,i_alias :: T.Text -- ^ alias name
-        ,i_children :: Maybe [ImportSpecDef]  -- ^ specific import elements
+        iModule :: T.Text -- ^ module name
+        ,iPackage :: Maybe T.Text -- ^ package name
+        ,iLoc  :: InFileSpan -- ^ location in source file
+        ,iQualified :: Bool -- ^ is the import qualified
+        ,iHiding :: Bool -- ^ is the import element list for hiding or exposing 
+        ,iAlias :: T.Text -- ^ alias name
+        ,iChildren :: Maybe [ImportSpecDef]  -- ^ specific import elements
         }  deriving (Show,Eq)    
     
 instance ToJSON ImportDef where
@@ -370,9 +371,9 @@ instance FromJSON ImportDef where
 
 -- | complete result for outline    
 data OutlineResult = OutlineResult {
-        or_outline :: [OutlineDef] -- ^ outline contents
-        ,or_exports :: [ExportDef] -- ^ exports
-        ,or_imports :: [ImportDef] -- ^ imports
+        orOutline :: [OutlineDef] -- ^ outline contents
+        ,orExports :: [ExportDef] -- ^ exports
+        ,orImports :: [ImportDef] -- ^ imports
         }    
         deriving (Show,Eq)
         
@@ -388,9 +389,9 @@ instance FromJSON OutlineResult where
       
 -- | build flags for a specific file        
 data BuildFlags = BuildFlags {
-        bf_ast :: [String] -- ^ flags for GHC
-        ,bf_preproc :: [String] -- ^ flags for preprocessor
-        ,bf_modName :: Maybe String -- ^ module name if known
+        bfAst :: [String] -- ^ flags for GHC
+        ,bfPreproc :: [String] -- ^ flags for preprocessor
+        ,bfModName :: Maybe String -- ^ module name if known
         }  
         deriving (Show,Read,Eq,Data,Typeable)
         
@@ -510,15 +511,15 @@ data Verbosity = Silent | Normal | Verbose | Deafening
 -- | component in cabal file    
 data CabalComponent
   = CCLibrary
-        { cc_buildable :: Bool -- ^ is the library buildable
+        { ccBuildable :: Bool -- ^ is the library buildable
         } -- ^ library
   | CCExecutable
-        { cc_exe_name :: String -- ^ executable name
-        , cc_buildable :: Bool -- ^ is the executable buildable
+        { ccExeName :: String -- ^ executable name
+        , ccBuildable :: Bool -- ^ is the executable buildable
        }  -- ^ executable
   | CCTestSuite 
-        { cc_test_name :: String -- ^ test suite name
-        , cc_buildable :: Bool -- ^ is the test suite buildable
+        { ccTestName :: String -- ^ test suite name
+        , ccBuildable :: Bool -- ^ is the test suite buildable
         } -- ^ test suite
   deriving (Eq, Show)
 
@@ -537,16 +538,16 @@ instance FromJSON CabalComponent where
 
 cabalComponentName :: CabalComponent -> String
 cabalComponentName CCLibrary{}=""
-cabalComponentName CCExecutable{cc_exe_name}=cc_exe_name
-cabalComponentName CCTestSuite{cc_test_name}=cc_test_name
+cabalComponentName CCExecutable{ccExeName}=ccExeName
+cabalComponentName CCTestSuite{ccTestName}=ccTestName
 
 -- | a cabal package
 data CabalPackage=CabalPackage {
-        cp_name::String -- ^ name of package
-        ,cp_version::String -- ^ version
-        ,cp_exposed::Bool -- ^ is the package exposed or hidden
-        ,cp_dependent::[CabalComponent] -- ^ components in the cabal file that use this package
-        ,cp_modules::[String] -- ^ all modules. We keep all modules so that we can try to open non exposed but imported modules directly
+        cpName::String -- ^ name of package
+        ,cpVersion::String -- ^ version
+        ,cpExposed::Bool -- ^ is the package exposed or hidden
+        ,cpDependent::[CabalComponent] -- ^ components in the cabal file that use this package
+        ,cpModules::[String] -- ^ all modules. We keep all modules so that we can try to open non exposed but imported modules directly
         }
    deriving (Eq, Show)
 

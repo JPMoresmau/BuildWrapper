@@ -179,10 +179,10 @@ generateUsage returnAll ccn=
                 -- | store outline def by line
                 mapOutline :: OutlineDef -> DM.Map Int [OutlineDef] -> DM.Map Int [OutlineDef]
                 mapOutline od m=let
-                        ifs=od_loc od
-                        lins=[(ifl_line $ ifs_start ifs) .. (ifl_line $ ifs_end ifs)]
+                        ifs=odLoc od
+                        lins=[(iflLine $ ifsStart ifs) .. (iflLine $ ifsEnd ifs)]
                         m2=foldr (addOutline od) m lins
-                        in foldr mapOutline m2 (od_children od)
+                        in foldr mapOutline m2 (odChildren od)
                 -- | add one outline def by line
                 addOutline :: OutlineDef -> Int -> DM.Map Int [OutlineDef] -> DM.Map Int [OutlineDef]
                 addOutline od l m=let
@@ -238,37 +238,37 @@ generateUsage returnAll ccn=
                         Just (String ht)<-HM.lookup "HType" m,
                         Just arr<-HM.lookup "Pos" m,
                         Success ifs <- fromJSON arr= let
-                                mods=DM.lookup (ifl_line $ ifs_start ifs) mapOds
+                                mods=DM.lookup (iflLine $ ifsStart ifs) mapOds
                                 (section,def)=getSection mods s ifs
                                 in [Usage (Just (if p=="main" then pkg else p)) mo s section (ht=="t") arr def]
                 ghcValToUsage _ _ _=[]
                 -- | retrieve section name for given location, and whether what we reference is actually a reference, and in that case the comment
                 getSection :: Maybe [OutlineDef]  -> T.Text -> InFileSpan -> (T.Text,Bool)
                 getSection (Just ods) objName ifs =let
-                        matchods=filter (\od-> ifsOverlap (od_loc od) ifs) ods
+                        matchods=filter (\od-> ifsOverlap (odLoc od) ifs) ods
                         bestods=sortBy (\od1 od2->let
-                                l1=ifl_line $ ifs_start $ od_loc od1
-                                l2=ifl_line $ ifs_start $ od_loc od2
+                                l1=iflLine $ ifsStart $ odLoc od1
+                                l2=iflLine $ ifsStart $ odLoc od2
                                 in case compare l2 l1 of
                                    EQ -> let
-                                        c1=ifl_column $ ifs_start $ od_loc od1
-                                        c2=ifl_column $ ifs_start $ od_loc od2
+                                        c1=iflColumn $ ifsStart $ odLoc od1
+                                        c2=iflColumn $ ifsStart $ odLoc od2
                                         in compare c2 c1
                                    a-> a
                                 ) matchods
                         in case bestods of
                                 (x:_)->let 
-                                        def=od_name x == objName && 
-                                                ((ifl_column (ifs_start $ od_loc x) == ifl_column (ifs_start ifs))
+                                        def=odName x == objName && 
+                                                ((iflColumn (ifsStart $ odLoc x) == iflColumn (ifsStart ifs))
                                                 || (
-                                                        (Data `elem` od_type x)
-                                                    && (ifl_column (ifs_start $ od_loc x) + 5==ifl_column (ifs_start ifs))    
+                                                        (Data `elem` odType x)
+                                                    && (iflColumn (ifsStart $ odLoc x) + 5==iflColumn (ifsStart ifs))    
                                                     )
                                                 || (
-                                                        (Type `elem` od_type x)
-                                                    && (ifl_column (ifs_start $ od_loc x) + 5 == ifl_column (ifs_start ifs))    
+                                                        (Type `elem` odType x)
+                                                    && (iflColumn (ifsStart $ odLoc x) + 5 == iflColumn (ifsStart ifs))    
                                                     ))  
-                                       in (od_name x,def)
+                                       in (odName x,def)
                                 _->("",False)
                 getSection _ _ _=("",False)
 --                importToUsage :: ImportDef -> [Usage]
@@ -288,7 +288,7 @@ preproc :: BuildFlags  -- ^ the build flags
         -> IO String -- ^ the resulting code
 preproc bf tgt= do
         inputOrig<-readFile tgt
-        let epo=parseOptions $ bf_preproc bf
+        let epo=parseOptions $ bfPreproc bf
         case epo of
                     Right opts2->runCpphs opts2 tgt inputOrig
                     Left _->return inputOrig
@@ -335,7 +335,7 @@ getAST fp=do
         (bf,ns)<-getBuildFlags fp
         tgt<-getTargetPath fp
         input<-liftIO $ preproc bf tgt
-        pr<- liftIO $ getHSEAST input (bf_ast bf)
+        pr<- liftIO $ getHSEAST input (bfAst bf)
         return (Just pr,ns)
 
 -- | get GHC typechecked AST for source file

@@ -306,7 +306,7 @@ parseBuildMessages cf cabalExe distDir s=let
                                        then (Just (jcn,l:msgs),ls)
                                        else (Nothing,ls++[makeNote jcn msgs])
                         --  | Just fp<-getBuiltPath l=(currentNote,ls,fp:fps)
-                        | Just n<-extractLocation l=(Just (n,[bwn_title n]),ls)
+                        | Just n<-extractLocation l=(Just (n,[bwnTitle n]),ls)
                         | Just (bw,n)<- cabalErrorLine cf cabalExe l=(Just (bw,n),addCurrent currentNote ls)
                         | otherwise =(Nothing,ls)
                 extractLocation el=let
@@ -340,8 +340,8 @@ makeNote :: BWNote  -- ^ original note
 makeNote bwn msgs=let
         title=dropWhile isSpace $ unlines $ reverse msgs
         in if "Warning:" `isPrefixOf` title
-                then bwn{bwn_title=dropWhile isSpace $ drop 8 title,bwn_status=BWWarning}    
-                else bwn{bwn_title=title}      
+                then bwn{bwnTitle=dropWhile isSpace $ drop 8 title,bwnStatus=BWWarning}    
+                else bwn{bwnTitle=title}      
 
 -- | get the path of a file getting compiled
 getBuiltPath :: String -- ^ the message line

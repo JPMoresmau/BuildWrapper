@@ -179,9 +179,9 @@ withASTNotes f ff base_dir contents options=do
             logAction :: IORef [BWNote] -> Severity -> SrcSpan -> PprStyle -> Message -> IO ()
             logAction ref s loc style msg
                 | (Just status)<-bwSeverity s=do
-                        let n=BWNote { bwn_location = ghcSpanToBWLocation base_dir loc
-                                 , bwn_status = status
-                                 , bwn_title = removeBaseDir base_dir $ removeStatus status $ showSDocForUser (qualName style,qualModule style) msg
+                        let n=BWNote { bwnLocation = ghcSpanToBWLocation base_dir loc
+                                 , bwnStatus = status
+                                 , bwnTitle = removeBaseDir base_dir $ removeStatus status $ showSDocForUser (qualName style,qualModule style) msg
                                  }
                         modifyIORef ref $  \ ns -> ns ++ [n]
                 | otherwise=return ()
@@ -455,7 +455,7 @@ generateTokens projectRoot contents literate options  xform filterFunc =do
      result<-  ghctokensArbitrary projectRoot ppC options
      case result of 
        Right toks ->do
-         let filterResult = filterFunc $ List.sortBy (comparing td_loc) (ppTs ++ xform toks)
+         let filterResult = filterFunc $ List.sortBy (comparing tdLoc) (ppTs ++ xform toks)
          return $ Right filterResult
        Left n -> return $ Left n
                
@@ -515,9 +515,9 @@ ghcWarnMsgToNote = ghcMsgToNote BWWarning
 -- in the source.
 ghcMsgToNote :: BWNoteStatus -> FilePath -> ErrMsg -> BWNote
 ghcMsgToNote note_kind base_dir msg =
-    BWNote { bwn_location = ghcSpanToBWLocation base_dir loc
-         , bwn_status = note_kind
-         , bwn_title = removeBaseDir base_dir $ removeStatus note_kind $ show_msg (errMsgShortDoc msg)
+    BWNote { bwnLocation = ghcSpanToBWLocation base_dir loc
+         , bwnStatus = note_kind
+         , bwnTitle = removeBaseDir base_dir $ removeStatus note_kind $ show_msg (errMsgShortDoc msg)
          }
   where
     loc | (s:_) <- errMsgSpans msg = s
