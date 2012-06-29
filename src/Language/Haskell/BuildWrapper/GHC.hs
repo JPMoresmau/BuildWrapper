@@ -113,7 +113,8 @@ withASTNotes f ff base_dir contents options=do
                 -- so we can't use hscTarget = HscNothing
                 -- and it takes a while to actually generate the o and hi files for big modules
                 -- if we use CompManager, it's slower for modules with lots of dependencies but we can keep hscTarget= HscNothing which makes it better for bigger modules
-                setSessionDynFlags flg'  {hscTarget = HscNothing, ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref }
+                -- we use target interpreted so that it works with TemplateHaskell
+                setSessionDynFlags flg'  {hscTarget = HscInterpreted, ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref }
                 --  $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
                 let fps=getLoadFiles contents
                 mapM_ (\(fp,_)-> addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }) fps
@@ -132,11 +133,14 @@ withASTNotes f ff base_dir contents options=do
                 --GMU.liftIO $ putStrLn ("load all targets: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
                 -- GMU.liftIO $ print fps
                 a<-fmap catMaybes $ mapM (\(fp,m)->(do
-                                --mg<-getModuleGraph
                                 modSum <- getModSummary $ mkModuleName m
                                 fmap Just $ workOnResult f fp modSum)
-                               `gcatch` (\(_ :: SourceError) -> return Nothing)
-                               `gcatch` (\(_ :: GhcApiError) -> return Nothing)
+                               `gcatch` (\(se :: SourceError) -> do
+                                        GMU.liftIO $ print se 
+                                        return Nothing)
+                               `gcatch` (\(ae :: GhcApiError) -> do
+                                        GMU.liftIO $ print ae
+                                        return Nothing)
                         ) fps
 #if __GLASGOW_HASKELL__ < 702                           
                 warns <- getWarnings

@@ -43,7 +43,7 @@ import Data.Aeson
 import Outputable (showSDoc,ppr)
 import Data.Foldable (foldrM)
 
-
+import qualified MonadUtils as GMU
 
 -- | copy all files from the project to the temporary folder
 synchronize ::  Bool -- ^ if true copy all files, if false only copy files newer than their corresponding temp files
@@ -98,6 +98,7 @@ generateUsage returnAll ccn=
                 cbis<-getAllFiles lbi
                 cf<-gets cabalFile
                 temp<-getFullTempDir
+                
                 let dir=takeDirectory cf
                 let pkg=T.pack $ display $ packageId $ localPkgDescr lbi
                 allMps<-mapM (\cbi->do
@@ -108,13 +109,10 @@ generateUsage returnAll ccn=
                                 fullTgt<-getTargetPath f
                                 let fullUsage=getUsageFile fullTgt
                                 liftIO $ isSourceMoreRecent fullSrc fullUsage
-                                -- liftIO $ Prelude.putStrLn (fullSrc ++ "->" ++ fullUsage ++":"++(show recent))
-                                --return recent 
-                                        ) $ filter (\(f,_)->let ext=takeExtension f
-                                                in ext `elem` [".hs",".lhs"]
+                                        ) $ filter (\(f,_)->fitForUsage f
                                                 )
                                                 mps1
-                        opts<-fileGhcOptions (lbi,cbi)        
+                        opts<-fileGhcOptions (lbi,cbi)    
                         modules<-liftIO $ do
                                 cd<-getCurrentDirectory
                                 setCurrentDirectory dir
@@ -127,6 +125,12 @@ generateUsage returnAll ccn=
                 return $ map fst $ concat allMps
                 )
         where
+                -- | fitForUsage
+                fitForUsage :: FilePath -> Bool
+                fitForUsage f 
+                        | takeDirectory f == "." && takeBaseName f == "Setup"=False -- exclude Setup
+                        | otherwise=let ext=takeExtension f
+                           in ext `elem` [".hs",".lhs"] -- only keep haskell files
                 -- | get module name and import/export usage information
                 getModule :: T.Text -- ^ the current package name
                         ->  FilePath -- ^ the file to process

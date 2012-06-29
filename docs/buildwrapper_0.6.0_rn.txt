@@ -1,4 +1,4 @@
-Buildwrapper 0.4.0: release notes
+Buildwrapper 0.6.0: release notes
 
 - set PatternGuards by default on outline since GHC only gives a warning if not explicitely enabled
 - getBuildFlags does not duplicate extensions without the -X (breaks GHCi invocation in EclipseFP)
