@@ -15,7 +15,8 @@ module Language.Haskell.BuildWrapper.Src where
 import Language.Haskell.BuildWrapper.Base
 
 import Language.Haskell.Exts.Annotated
-
+import Language.Haskell.Exts.Parser
+import qualified Language.Haskell.Exts.Syntax as S 
 import qualified Data.Map as DM
 
 import qualified Data.Text as T
@@ -30,12 +31,20 @@ getHSEAST input options=do
         -- we add MultiParamTypeClasses because we may need it if the module we're parsing uses a type class with multiple parameters, which doesn't require the PRAGMA (only in the module DEFINING the type class)
         -- we add PatternGuards since GHC only gives a warning if not explicit
         -- we cannot add all the extensions because some conflict (NewQualifiedOperators breaks code with old operator syntax I think)
-        let exts=MultiParamTypeClasses : PatternGuards : map (\x->classifyExtension $ if isPrefixOf "-X" x then tail $ tail x else x) options
-        let extsFull=if "-fglasgow-exts" `elem` options
+        let 
+            -- Parse options from options pragmas in source, since haskell-src-exts does not do it for us
+            input' = dropWhile (=='\n') . dropWhile (/='\n') $ input -- remove the first line, added by runCpphs (file: #line 1 "...")
+            topPragmas = case getTopPragmas input' of
+                           ParseOk pragmas -> pragmas
+                           _               -> []
+            optionsPragmas = [ optionsPragma | S.OptionsPragma _ _ optionsPragma <- topPragmas ]
+            optionsFromPragmas = concatMap words optionsPragmas
+            exts=MultiParamTypeClasses : PatternGuards : (map (\x->classifyExtension $ if "-X" `isPrefixOf` x then tail $ tail x else x) $ options ++ optionsFromPragmas)
+            extsFull=if "-fglasgow-exts" `elem` options ++ optionsFromPragmas
                 then exts ++ glasgowExts
-                else exts
-        -- fixities necessary (see http://trac.haskell.org/haskell-src-exts/ticket/189 and https://sourceforge.net/projects/eclipsefp/forums/forum/371922/topic/4808590)
-        let parseMode=defaultParseMode {extensions=extsFull,ignoreLinePragmas=False,ignoreLanguagePragmas=False,fixities = Just baseFixities} 
+                else exts 
+            -- fixities necessary (see http://trac.haskell.org/haskell-src-exts/ticket/189 and https://sourceforge.net/projects/eclipsefp/forums/forum/371922/topic/4808590)
+            parseMode=defaultParseMode {extensions=extsFull,ignoreLinePragmas=False,ignoreLanguagePragmas=False,fixities = Just baseFixities} 
         return $ parseFileContentsWithComments parseMode input
 
 -- | get the ouline from the AST        
