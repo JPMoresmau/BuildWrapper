@@ -305,10 +305,13 @@ ghcSpanToBWLocation :: FilePath -- ^ Base directory
 ghcSpanToBWLocation baseDir sp
   | GHC.isGoodSrcSpan sp =
       let (stl,stc)=start sp
+          (enl,enc)=end sp
       in BWLocation (makeRelative baseDir $ foldr f [] $ normalise $ unpackFS (sfile sp))
                  stl
-                 (ghcColToScionCol $stc)
-  | otherwise = BWLocation "" 1 1
+                 (ghcColToScionCol stc)
+                 enl
+                 (ghcColToScionCol enc)
+  | otherwise = mkEmptySpan "" 1 1                 
         where   
                 f c (x:xs) 
                         | c=='\\' && x=='\\'=x:xs   -- WHY do we get two slashed after the drive sometimes?

@@ -54,22 +54,29 @@ instance FromJSON BWNoteStatus where
     parseJSON (String t) =return $ read $ T.unpack $ T.append "BW" t
     parseJSON _= mzero  
  
--- | location of a note/error
+-- | location of a note/error (lines and columns start at 1)
 data BWLocation=BWLocation {
         bwlSrc::FilePath -- ^ source file 
         ,bwlLine::Int -- ^ line
         ,bwlCol::Int -- ^ column
+        ,bwlEndLine::Int -- ^ end line
+        ,bwlEndCol::Int -- ^ end line
         }
         deriving (Show,Read,Eq)
 
+mkEmptySpan :: FilePath -> Int -> Int -> BWLocation
+mkEmptySpan src line col = BWLocation src line col line col
+
 instance ToJSON BWLocation  where
-    toJSON (BWLocation s l c)=object ["f" .= s, "l" .= l , "c" .= c] 
+    toJSON (BWLocation s l c el ec)=object $ ["f" .= s, "l" .= l , "c" .= c, "el" .= el , "ec" .= ec] 
 
 instance FromJSON BWLocation where
     parseJSON (Object v) =BWLocation <$>
                          v .: "f" <*>
                          v .: "l" <*>
-                         v .: "c"
+                         v .: "c" <*>
+                         v .: "el" <*>
+                         v .: "ec" 
     parseJSON _= mzero
 
 -- | a note on a source file

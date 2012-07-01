@@ -152,8 +152,8 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         assertBool "bool1 returned true" (not bool1)
         assertEqual "no errors on no name" 2 (length nsErrors1)
         let (nsError1:nsError2:[])=nsErrors1
-        assertEqual "not proper error 1" (BWNote BWError "No 'name' field.\n" (BWLocation cfn 1 1)) nsError1
-        assertEqual "not proper error 2" (BWNote BWError "No executables and no library found. Nothing to do.\n" (BWLocation cfn 1 1)) nsError2
+        assertEqual "not proper error 1" (BWNote BWError "No 'name' field.\n" (mkEmptySpan cfn 1 1)) nsError1
+        assertEqual "not proper error 2" (BWNote BWError "No executables and no library found. Nothing to do.\n" (mkEmptySpan cfn 1 1)) nsError2
         writeFile cf $ unlines ["name: 4 P1",
                 "version:0.1",
                 "build-type:     Simple"]
@@ -162,7 +162,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         assertBool "bool2 returned true" (not bool2)
         assertEqual "no errors on invalid name" 1 (length nsErrors2)
         let (nsError3:[])=nsErrors2
-        assertEqual "not proper error 3" (BWNote BWError "Parse of field 'name' failed.\n" (BWLocation cfn 1 1)) nsError3
+        assertEqual "not proper error 3" (BWNote BWError "Parse of field 'name' failed.\n" (mkEmptySpan cfn 1 1)) nsError3
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.8",
@@ -178,7 +178,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         assertBool "bool3 returned true" (not bool3)
         assertEqual "no errors on unknown dependency" 1 (length nsErrors3)
         let (nsError4:[])=nsErrors3
-        assertEqual "not proper error 4" (BWNote BWError "At least the following dependencies are missing:\ntoto -any\n" (BWLocation cfn 1 1)) nsError4
+        assertEqual "not proper error 4" (BWNote BWError "At least the following dependencies are missing:\ntoto -any\n" (mkEmptySpan cfn 1 1)) nsError4
         
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
@@ -195,12 +195,12 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         assertBool "bool4 returned true" (not bool4)
         assertEqual "no errors on unknown dependencies" 1 (length nsErrors4)
         let (nsError5:[])=nsErrors4
-        assertEqual "not proper error 5" (BWNote BWError "At least the following dependencies are missing:\ntiti -any, toto -any\n" (BWLocation cfn 1 1)) nsError5
+        assertEqual "not proper error 5" (BWNote BWError "At least the following dependencies are missing:\ntiti -any, toto -any\n" (mkEmptySpan cfn 1 1)) nsError5
         (BuildResult bool4b _,nsErrors4b)<-build api root False Source
         assertBool "bool4b returned true" (not bool4b)
         assertEqual "no errors on unknown dependencies" 1 (length nsErrors4b)
         let (nsError5b:[])=nsErrors4b
-        assertEqual "not proper error 5b" (BWNote BWError "At least the following dependencies are missing:\ntiti -any, toto -any\n" (BWLocation cfn 1 1)) nsError5b
+        assertEqual "not proper error 5b" (BWNote BWError "At least the following dependencies are missing:\ntiti -any, toto -any\n" (mkEmptySpan cfn 1 1)) nsError5b
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.8",
@@ -215,7 +215,7 @@ testConfigureErrors api= TestLabel "testConfigureErrors" (TestCase ( do
         assertBool "bool5 returned true" (not bool5)
         assertEqual "no errors on no main" 1 (length nsErrors5)
         let (nsError6:[])=nsErrors5
-        assertEqual "not proper error 6" (BWNote BWError "No 'Main-Is' field found for executable BWTest\n" (BWLocation cfn 1 1)) nsError6
+        assertEqual "not proper error 6" (BWNote BWError "No 'Main-Is' field found for executable BWTest\n" (mkEmptySpan cfn 1 1)) nsError6
         
         ))
         
@@ -241,7 +241,7 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
         assertBool ("returned false 1 " ++ show ns1) bool1
         assertEqual ("didn't return 1 warning: " ++ show ns1) 1 (length ns1)
         let (nsWarning1:[])=ns1
-        assertEqual "not proper warning 1" (BWNote BWWarning "Unknown fields: field1 (line 5)\nFields allowed in this section:\nname, version, cabal-version, build-type, license, license-file,\ncopyright, maintainer, build-depends, stability, homepage,\npackage-url, bug-reports, synopsis, description, category, author,\ntested-with, data-files, data-dir, extra-source-files,\nextra-tmp-files\n" (BWLocation cfn 5 1)) nsWarning1
+        assertEqual "not proper warning 1" (BWNote BWWarning "Unknown fields: field1 (line 5)\nFields allowed in this section:\nname, version, cabal-version, build-type, license, license-file,\ncopyright, maintainer, build-depends, stability, homepage,\npackage-url, bug-reports, synopsis, description, category, author,\ntested-with, data-files, data-dir, extra-source-files,\nextra-tmp-files\n" (mkEmptySpan cfn 5 1)) nsWarning1
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "build-type:     Simple",
@@ -256,7 +256,7 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
         assertBool ("returned false 2 " ++ show ns2) bool2
         assertEqual ("didn't return 1 warning: " ++ show ns1) 1 (length ns2)
         let (nsWarning2:[])=ns2
-        assertEqual "not proper warning 2" (BWNote BWWarning "A package using section syntax must specify at least\n'cabal-version: >= 1.2'.\n" (BWLocation cfn 1 1)) nsWarning2
+        assertEqual "not proper warning 2" (BWNote BWWarning "A package using section syntax must specify at least\n'cabal-version: >= 1.2'.\n" (mkEmptySpan cfn 1 1)) nsWarning2
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.2",
@@ -273,7 +273,7 @@ testConfigureWarnings api = TestLabel "testConfigureWarnings" (TestCase ( do
         assertBool ("returned false 3 " ++ show ns3) bool3
         assertEqual ("didn't return 1 warning: " ++ show ns1) 1 (length ns3)
         let (nsWarning3:[])=ns3
-        assertEqual "not proper warning 3" (BWNote BWWarning "No 'build-type' specified. If you do not need a custom Setup.hs or\n./configure script then use 'build-type: Simple'.\n" (BWLocation cfn 1 1)) nsWarning3
+        assertEqual "not proper warning 3" (BWNote BWWarning "No 'build-type' specified. If you do not need a custom Setup.hs or\n./configure script then use 'build-type: Simple'.\n" (mkEmptySpan cfn 1 1)) nsWarning3
 
         ))   
         
@@ -296,12 +296,12 @@ testBuildErrors api = TestLabel "testBuildErrors" (TestCase ( do
         assertBool "returned true on bool1_1" (isNothing bool11)
         assertBool "no errors or warnings on nsErrors11" (not $ null nsErrors11)
         let (nsError11:[])=nsErrors11
-        assertEqualNotesWithoutSpaces "not proper error 1_1" (BWNote BWError "parse error on input `toto'\n" (BWLocation rel 2 8)) nsError11
+        assertEqualNotesWithoutSpaces "not proper error 1_1" (BWNote BWError "parse error on input `toto'\n" (mkEmptySpan rel 2 8)) nsError11
         (BuildResult bool1 _,nsErrors1)<-build api root False Source
         assertBool "returned true on bool1" (not bool1)
         assertBool "no errors or warnings on nsErrors1" (not $ null nsErrors1)
         let (nsError1:[])=nsErrors1
-        assertEqualNotesWithoutSpaces "not proper error 1" (BWNote BWError "parse error on input `toto'\n" (BWLocation rel 2 8)) nsError1
+        assertEqualNotesWithoutSpaces "not proper error 1" (BWNote BWError "parse error on input `toto'\n" (mkEmptySpan rel 2 8)) nsError1
         
             -- write file and synchronize
         writeFile (root </> "src"</>"A.hs")$ unlines ["module A where","import Toto","fA=undefined"]
@@ -311,20 +311,20 @@ testBuildErrors api = TestLabel "testBuildErrors" (TestCase ( do
         assertBool "returned true on bool2" (not bool2)
         assertBool "no errors or warnings on nsErrors2" (not $ null nsErrors2)
         let (nsError2:[])=nsErrors2
-        assertEqualNotesWithoutSpaces "not proper error 2" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" (BWLocation rel 2 8)) nsError2
+        assertEqualNotesWithoutSpaces "not proper error 2" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" (mkEmptySpan rel 2 8)) nsError2
         synchronize1 api root True rel
         (bool21,nsErrors21)<-build1 api root rel
         assertBool "returned true on bool21" (isNothing bool21)
         assertBool "no errors or warnings on nsErrors2_1" (not $ null nsErrors21)
         let (nsError21:[])=nsErrors21
-        assertEqualNotesWithoutSpaces "not proper error 2_1" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" (BWLocation rel 2 8)) nsError21
+        assertEqualNotesWithoutSpaces "not proper error 2_1" (BWNote BWError "Could not find module `Toto':\n      Use -v to see a list of the files searched for.\n" (mkEmptySpan rel 2 8)) nsError21
         (_,nsErrors3f)<- getBuildFlags api root ("src"</>"A.hs")
         assertBool ("errors or warnings on nsErrors3f:" ++ show nsErrors3f) (null nsErrors3f)
         (bool3,nsErrors3)<-build1 api root rel
         assertBool "returned true on bool3" (isNothing bool3)
         assertBool "no errors or warnings on nsErrors3" (not $ null nsErrors3)
         let (nsError3:[])=nsErrors3
-        assertEqualNotesWithoutSpaces "not proper error 3" (BWNote BWError "Could not find module `Toto':\n  Use -v to see a list of the files searched for." (BWLocation rel 2 8)) nsError3
+        assertEqualNotesWithoutSpaces "not proper error 3" (BWNote BWError "Could not find module `Toto':\n  Use -v to see a list of the files searched for." (mkEmptySpan rel 2 8)) nsError3
         
         ))        
         
@@ -356,16 +356,16 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         assertBool "no errors or warnings on nsErrors1" (not $ null nsErrors1)
         assertBool ("no rel in fps1: " ++ show fps1) (rel `elem` fps1)
         let (nsError1:nsError2:[])=nsErrors1
-        assertEqualNotesWithoutSpaces "not proper error 1" (BWNote BWWarning "The import of `Data.List' is redundant\n               except perhaps to import instances from `Data.List'\n             To import instances alone, use: import Data.List()\n" (BWLocation rel 2 1)) nsError1
-        assertEqualNotesWithoutSpaces "not proper error 2" (BWNote BWWarning "Top-level binding with no type signature:\n               fA :: forall a. a\n" (BWLocation rel 3 1)) nsError2
+        assertEqualNotesWithoutSpaces "not proper error 1" (BWNote BWWarning "The import of `Data.List' is redundant\n               except perhaps to import instances from `Data.List'\n             To import instances alone, use: import Data.List()\n" (mkEmptySpan rel 2 1)) nsError1
+        assertEqualNotesWithoutSpaces "not proper error 2" (BWNote BWWarning "Top-level binding with no type signature:\n               fA :: forall a. a\n" (mkEmptySpan rel 3 1)) nsError2
         (_,nsErrors3f)<-getBuildFlags api root rel
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
         (bool3,nsErrors3)<-build1 api root rel
         assertBool "returned false on bool3" (isJust bool3)
         assertEqual "not 2 errors or warnings on nsErrors3" 2 (length nsErrors3)
         let (nsError3:nsError4:[])=nsErrors3
-        assertEqualNotesWithoutSpaces "not proper error 3" (BWNote BWWarning "The import of `Data.List' is redundant\n           except perhaps to import instances from `Data.List'\n         To import instances alone, use: import Data.List()" (BWLocation rel 2 1)) nsError3
-        assertEqualNotesWithoutSpaces "not proper error 4" (BWNote BWWarning "Top-level binding with no type signature:\n           fA :: forall a. a" (BWLocation rel 3 1)) nsError4
+        assertEqualNotesWithoutSpaces "not proper error 3" (BWNote BWWarning "The import of `Data.List' is redundant\n           except perhaps to import instances from `Data.List'\n         To import instances alone, use: import Data.List()" (mkEmptySpan rel 2 1)) nsError3
+        assertEqualNotesWithoutSpaces "not proper error 4" (BWNote BWWarning "Top-level binding with no type signature:\n           fA :: forall a. a" (mkEmptySpan rel 3 1)) nsError4
         writeFile (root </> rel) $ unlines ["module A where","pats:: String -> String","pats a=reverse a","fB:: String -> Char","fB pats=head pats"] 
         mf3<-synchronize1 api root True rel
         assertBool "mf3 not just" (isJust mf3)
@@ -373,7 +373,7 @@ testBuildWarnings api = TestLabel "testBuildWarnings" (TestCase ( do
         assertBool "returned false on bool4" (isJust bool4)
         assertBool "no errors or warnings on nsErrors4" (not $ null nsErrors4)
         let (nsError5:[])=nsErrors4
-        assertEqualNotesWithoutSpaces "not proper error 5" (BWNote BWWarning ("This binding for `pats' shadows the existing binding\n           defined at "++rel++":3:1") (BWLocation rel 4 5)) nsError5
+        assertEqualNotesWithoutSpaces "not proper error 5" (BWNote BWWarning ("This binding for `pats' shadows the existing binding\n           defined at "++rel++":3:1") (mkEmptySpan rel 4 5)) nsError5
         )) 
         
 testBuildOutput :: (APIFacade a)=> a -> Test

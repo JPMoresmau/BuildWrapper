@@ -158,14 +158,14 @@ cabalConfigure srcOrTgt= do
                                                 lbi<-DSC.getPersistBuildConfig dist_dir
                                                 return (Just lbi,msgs)
                                 ExitFailure ec -> if null msgs
-                                                then return (Nothing,[BWNote BWError ("Cabal configure returned error code " ++ show ec) (BWLocation cf 0 1)])   
+                                                then return (Nothing,[BWNote BWError ("Cabal configure returned error code " ++ show ec) (mkEmptySpan cf 0 1)])   
                                                 else return (Nothing, msgs)
                         setCurrentDirectory cd
                         return ret
             else do
                 let err="Cabal file"++ cf ++" does not exist"
                 liftIO $ putStrLn err
-                return (Nothing,[BWNote BWError err (BWLocation cf 0 1)])       
+                return (Nothing,[BWNote BWError err (mkEmptySpan cf 0 1)])       
 
 -- | get the full path to the cabal file
 getCabalFile :: WhichCabal  -- ^ use original cabal or temp cabal file
@@ -226,13 +226,13 @@ parseCabalMessages cf cabalExe s=let
         where 
                 parseCabalLine :: (Maybe (BWNote,[String]),[BWNote]) -> String ->(Maybe (BWNote,[String]),[BWNote])
                 parseCabalLine (currentNote,ls) l 
-                        | "Error:" `isPrefixOf` l=(Just (BWNote BWError "" (BWLocation cf 1 1),[dropWhile isSpace $ drop 6 l]),addCurrent currentNote ls)
+                        | "Error:" `isPrefixOf` l=(Just (BWNote BWError "" (mkEmptySpan cf 1 1),[dropWhile isSpace $ drop 6 l]),addCurrent currentNote ls)
                         | "Warning:" `isPrefixOf` l=let
                                 msg=(dropWhile isSpace $ drop 8 l)
                                 msg2=if cf `isPrefixOf` msg
                                         then dropWhile isSpace $ drop (length cf + 1) msg
                                         else msg
-                                in (Just (BWNote BWWarning "" (BWLocation cf (extractLine msg2) 1),[msg2]),addCurrent currentNote ls)
+                                in (Just (BWNote BWWarning "" (mkEmptySpan cf (extractLine msg2) 1),[msg2]),addCurrent currentNote ls)
                         | Just (bw,n)<- cabalErrorLine cf cabalExe l=(Just (bw,n),addCurrent currentNote ls)
                         | Just (jcn,msgs)<-currentNote=
                                 if not $ null l
@@ -269,7 +269,7 @@ cabalErrorLine cf cabalExe l
                                 let 
                                         s2=dropWhile isSpace $ drop 1 s4 -- drop 1 for ":" that follows file name
                                 in if "At least the following" `isPrefixOf` s2
-                                                then Just (BWNote BWError "" (BWLocation cf 1 1), [s2])
+                                                then Just (BWNote BWError "" (mkEmptySpan cf 1 1), [s2])
                                                 else 
                                                         let
                                                                 (loc,rest)=span (/= ':') s2
@@ -283,7 +283,7 @@ cabalErrorLine cf cabalExe l
                                                                                         else if readInt line' (-1)==(-1)
                                                                                                 then (cf,"1",s2)
                                                                                                 else (loc,line',tail msg')
-                                                        in Just (BWNote BWError "" (BWLocation realloc (readInt line 1) 1),[msg])
+                                                        in Just (BWNote BWError "" (mkEmptySpan realloc (readInt line 1) 1),[msg])
          | otherwise=Nothing           
 
 -- | parse messages from build
@@ -312,11 +312,11 @@ parseBuildMessages cf cabalExe distDir s=let
                 extractLocation el=let
                         (_,_,aft,ls)=el =~ "(.+):([0-9]+):([0-9]+):" :: (String,String,String,[String])   
                         in case ls of
-                                (loc:line:col:[])-> Just $ BWNote BWError (dropWhile isSpace aft) (BWLocation loc (readInt line 1) (read col))
+                                (loc:line:col:[])-> Just $ BWNote BWError (dropWhile isSpace aft) (mkEmptySpan loc (readInt line 1) (read col))
                                 _ -> let
                                       (_,_,_,ls2)=el =~ "(.+)(\\(.+\\)):(.+):(.+):" :: (String,String,String,[String])
                                       in case ls2 of
-                                        (loc2:ext1:_:_:[])-> Just $ BWNote BWError (drop (length loc2 + length ext1 + 1) el) (BWLocation (validLoc cf distDir loc2) 1 1)
+                                        (loc2:ext1:_:_:[])-> Just $ BWNote BWError (drop (length loc2 + length ext1 + 1) el) (mkEmptySpan (validLoc cf distDir loc2) 1 1)
                                         _     -> Nothing
   
 validLoc :: FilePath -- ^ the cabal file 
