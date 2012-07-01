@@ -3,4 +3,8 @@ Buildwrapper 0.6.1: release notes
 Fixes:
 	- dump GHC errors to std out when loading specific package
 	- do not calculate usage on Setup.(l)hs as it can mess up loading since it's also a Main module
+	- use extensions defined in OPTIONS pragma in outline
+	
+Enhancements:
+	- error locations have exact span if available
 	
