@@ -60,9 +60,12 @@ exeExtension = ""
         
 runAPI:: (FromJSON a,Show a) => FilePath -> String -> [String] -> IO a
 runAPI root command args= do
-        let fullargs=[command,"--tempfolder=.dist-buildwrapper","--cabalpath=cabal","--cabalfile="++ testCabalFile root] ++ args
+        cd<-getCurrentDirectory
+        let fullargs=[command,"--tempfolder="++ (root </> ".dist-buildwrapper"),"--cabalpath=cabal","--cabalfile="++ testCabalFile root] ++ args
         exePath<-filterM doesFileExist [".dist-buildwrapper/dist/build/buildwrapper/buildwrapper" <.> exeExtension,"dist/build/buildwrapper/buildwrapper" <.> exeExtension]
-        (ex,out,err)<-readProcessWithExitCode (head exePath) fullargs ""
+        setCurrentDirectory root
+        (ex,out,err)<-readProcessWithExitCode (cd </> (head exePath)) fullargs ""
+        setCurrentDirectory cd
         putStrLn ("out:"++out)
         putStrLn ("err:"++err)
         assertEqual ("returned error: "++show fullargs++"\n:"++show err) ExitSuccess ex

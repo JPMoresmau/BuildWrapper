@@ -1426,6 +1426,12 @@ testMainTestContents=unlines ["module Main where","main=undefined"]
 testTestAContents :: String
 testTestAContents=unlines ["module TestA where","fTA=undefined"]           
         
+testSetupContents ::String
+testSetupContents = unlines ["#!/usr/bin/env runhaskell",
+        "import Distribution.Simple",
+        "main :: IO ()",
+        "main = defaultMain"]        
+        
 createTestProject :: IO FilePath
 createTestProject = do
         temp<-getTemporaryDirectory
@@ -1434,6 +1440,7 @@ createTestProject = do
         when ex (removeDirectoryRecursive root)
         createDirectory root
         writeFile (testCabalFile root) testCabalContents
+        writeFile (root </> "Setup.hs") testSetupContents
         let srcF=root </> "src"
         createDirectory srcF
         writeFile (srcF </> "A.hs") testAContents

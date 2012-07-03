@@ -16,7 +16,7 @@ import Language.Haskell.BuildWrapper.API
 import Language.Haskell.BuildWrapper.Base hiding (tempFolder,cabalPath, cabalFile, cabalFlags,verbosity)
 import Control.Monad.State
 import System.Console.CmdArgs hiding (Verbosity(..),verbosity)
-import System.Directory (canonicalizePath)
+import System.Directory (canonicalizePath, doesFileExist)
 import Paths_buildwrapper
 
 import Data.Aeson
@@ -125,17 +125,17 @@ cmdMain = cmdArgs
                 -- (since Eclipse does not correctly keep track of case changes on the project path)
                 handle ::BWCmd -> IO ()
                 handle c@Synchronize{force=f}=runCmd c (synchronize f)
-                handle c@Synchronize1{force=f,file=fi}=canonicalizePath fi >>= \fi' -> runCmd c (synchronize1 f fi')
-                handle c@Write{file=fi,contents=s}=canonicalizePath fi >>= \fi' -> runCmd c (write fi' s)
+                handle c@Synchronize1{force=f,file=fi}=runCmd c (synchronize1 f fi)
+                handle c@Write{file=fi,contents=s}=runCmd c (write fi s)
                 handle c@Configure{cabalTarget=w}=runCmd c (configure w)
                 handle c@Build{verbosity=ve,output=o,cabalTarget=w}=runCmdV ve c (build o w)
-                handle c@Build1{file=fi}=canonicalizePath fi >>= \fi' -> runCmd c (build1 fi')
-                handle c@GetBuildFlags{file=fi}=canonicalizePath fi >>= \fi' -> runCmd c (getBuildFlags fi')
-                handle c@Outline{file=fi}=canonicalizePath fi >>= \fi' -> runCmd c (getOutline fi')
-                handle c@TokenTypes{file=fi}=canonicalizePath fi >>= \fi' -> runCmd c (getTokenTypes fi')
-                handle c@Occurrences{file=fi,token=t}=canonicalizePath fi >>= \fi' -> runCmd c (getOccurrences fi' t)
-                handle c@ThingAtPointCmd{file=fi,line=l,column=col}=canonicalizePath fi >>= \fi' -> runCmd c (getThingAtPoint fi' l col)
-                handle c@NamesInScope{file=fi}=canonicalizePath fi >>= \fi' -> runCmd c (getNamesInScope fi')
+                handle c@Build1{file=fi}=runCmd c (build1 fi)
+                handle c@GetBuildFlags{file=fi}=runCmd c (getBuildFlags fi)
+                handle c@Outline{file=fi}=runCmd c (getOutline fi)
+                handle c@TokenTypes{file=fi}=runCmd c (getTokenTypes fi)
+                handle c@Occurrences{file=fi,token=t}=runCmd c (getOccurrences fi t)
+                handle c@ThingAtPointCmd{file=fi,line=l,column=col}=runCmd c (getThingAtPoint fi l col)
+                handle c@NamesInScope{file=fi}=runCmd c (getNamesInScope fi)
                 handle c@Dependencies{}=runCmd c getCabalDependencies
                 handle c@Components{}=runCmd c getCabalComponents
                 handle c@GenerateUsage{returnAll=reta,cabalComponent=comp}=runCmd c (generateUsage reta comp)
@@ -144,8 +144,7 @@ cmdMain = cmdArgs
                 runCmdV:: (ToJSON a) => Verbosity -> BWCmd -> StateT BuildWrapperState IO a -> IO ()
                 runCmdV vb cmd f=
                  do { tempFolder' <- canonicalizePath $ tempFolder cmd
-                    ; cabalPath' <- canonicalizePath $ cabalPath cmd
                     ; cabalFile' <- canonicalizePath $ cabalFile cmd
-                    ; resultJson <- evalStateT f (BuildWrapperState tempFolder' cabalPath' cabalFile' vb (cabalFlags cmd) (cabalOption cmd))
+                    ; resultJson <- evalStateT f (BuildWrapperState tempFolder' (cabalPath cmd) cabalFile' vb (cabalFlags cmd) (cabalOption cmd))
                     ; BSC.putStrLn . BS.append "build-wrapper-json:" . encode $ resultJson
                     }
