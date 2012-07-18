@@ -143,8 +143,7 @@ cmdMain = cmdArgs
                 runCmd=runCmdV Normal
                 runCmdV:: (ToJSON a) => Verbosity -> BWCmd -> StateT BuildWrapperState IO a -> IO ()
                 runCmdV vb cmd f=
-                 do { tempFolder' <- canonicalizePath $ tempFolder cmd
-                    ; cabalFile' <- canonicalizePath $ cabalFile cmd
-                    ; resultJson <- evalStateT f (BuildWrapperState tempFolder' (cabalPath cmd) cabalFile' vb (cabalFlags cmd) (cabalOption cmd))
+                 do { cabalFile' <- canonicalizePath $ cabalFile cmd
+                    ; resultJson <- evalStateT f (BuildWrapperState (tempFolder cmd) (cabalPath cmd) cabalFile' vb (cabalFlags cmd) (cabalOption cmd))
                     ; BSC.putStrLn . BS.append "build-wrapper-json:" . encode $ resultJson
                     }
