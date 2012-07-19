@@ -61,7 +61,7 @@ exeExtension = ""
 runAPI:: (FromJSON a,Show a) => FilePath -> String -> [String] -> IO a
 runAPI root command args= do
         cd<-getCurrentDirectory
-        let fullargs=[command,"--tempfolder="++ (root </> ".dist-buildwrapper"),"--cabalpath=cabal","--cabalfile="++ testCabalFile root] ++ args
+        let fullargs=[command,"--tempfolder=.dist-buildwrapper","--cabalpath=cabal","--cabalfile="++ testCabalFile root] ++ args
         exePath<-filterM doesFileExist [".dist-buildwrapper/dist/build/buildwrapper/buildwrapper" <.> exeExtension,"dist/build/buildwrapper/buildwrapper" <.> exeExtension]
         setCurrentDirectory root
         (ex,out,err)<-readProcessWithExitCode (cd </> (head exePath)) fullargs ""
