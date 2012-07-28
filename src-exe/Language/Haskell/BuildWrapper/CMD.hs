@@ -121,9 +121,7 @@ cmdMain = cmdArgs
      summary
        ("buildwrapper executable, version " ++ showVersion version))
   >>= handle
-        where   -- all file and path arguments are canonicalized to prevent case conflicts
-                -- (since Eclipse does not correctly keep track of case changes on the project path)
-                handle ::BWCmd -> IO ()
+        where   handle ::BWCmd -> IO ()
                 handle c@Synchronize{force=f}=runCmd c (synchronize f)
                 handle c@Synchronize1{force=f,file=fi}=runCmd c (synchronize1 f fi)
                 handle c@Write{file=fi,contents=s}=runCmd c (write fi s)
@@ -143,7 +141,7 @@ cmdMain = cmdArgs
                 runCmd=runCmdV Normal
                 runCmdV:: (ToJSON a) => Verbosity -> BWCmd -> StateT BuildWrapperState IO a -> IO ()
                 runCmdV vb cmd f=
-                 do { cabalFile' <- canonicalizePath $ cabalFile cmd
+                 do { cabalFile' <- canonicalizePath $ cabalFile cmd -- canonicalize cabal-file path because Eclipse does not correctly keep track of case changes on the project path
                     ; resultJson <- evalStateT f (BuildWrapperState (tempFolder cmd) (cabalPath cmd) cabalFile' vb (cabalFlags cmd) (cabalOption cmd))
                     ; BSC.putStrLn . BS.append "build-wrapper-json:" . encode $ resultJson
                     }
