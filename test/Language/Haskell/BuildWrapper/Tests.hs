@@ -53,6 +53,7 @@ tests=  [
         testOutlineOptions,
         testPreviewTokenTypes,
         testThingAtPoint,
+        testThingAtPointTypeReduction,
         testThingAtPointNotInCabal,
         testThingAtPointMain,
         testThingAtPointMainSubFolder,
@@ -908,8 +909,8 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         assertBool "not just tap1" (isJust tap1)
         assertEqual "not map" "map" (tapName $ fromJust tap1)
         assertEqual "not GHC.Base" (Just "GHC.Base") (tapModule $ fromJust tap1)
-        assertEqual "not qtype"  (Just "forall a b. (a -> b) -> [a] -> [b] GHC.Types.Char GHC.Types.Char") (tapQType $ fromJust tap1)
-        assertEqual "not type"  (Just "forall a b. (a -> b) -> [a] -> [b] Char Char") (tapType $ fromJust tap1)
+        assertEqual "not qtype"  (Just "(GHC.Types.Char -> GHC.Types.Char)\n-> [GHC.Types.Char]\n-> [GHC.Types.Char]") (tapQType $ fromJust tap1)
+        assertEqual "not type"  (Just "(Char -> Char) -> [Char] -> [Char]") (tapType $ fromJust tap1)
         assertEqual "not htype"  (Just "v") (tapHType $ fromJust tap1)
         assertEqual "not gtype"  (Just "Var") (tapGType $ fromJust tap1)
         
@@ -980,9 +981,42 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         assertEqual "not empty module" (Just "") (tapModule $ fromJust tap9)
         assertEqual "not htype9"  (Just "v") (tapHType $ fromJust tap9)
         assertEqual "qtype l2" (Just "[GHC.Types.Char]") (tapQType $ fromJust tap9)
-        
-        
-        
+      ))
+
+testThingAtPointTypeReduction :: (APIFacade a)=> a -> Test
+testThingAtPointTypeReduction api= TestLabel "testThingAtPointTypeReduction" (TestCase ( do
+        root<-createTestProject
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "executable BWTest",
+                "  hs-source-dirs:  src",
+                "  main-is:         Main.hs",
+                "  build-depends:  base, containers"]
+        let rel="src"</>"Main.hs"        
+        write api root rel $ unlines [  
+                  "module Main where",
+                  "import qualified Data.Map as M",
+                  "main=putStrLn \"M\"",
+                  "",
+                  "fun1 :: M.Map String Int",
+                  "fun1 = M.insert \"key\" 1 M.empty"
+                  ] 
+        synchronize api root False
+        configure api root Source   
+        build api root True Source             
+        (_,nsErrorsMf)<-getBuildFlags api root rel
+        assertBool "errors or warnings on nsErrorsMf" (null nsErrorsMf)          
+        (tapM,nsErrorsM)<-getThingAtPoint api root rel 6 13
+        assertBool ("errors or warnings on getThingAtPointM:"++show nsErrorsM) (null nsErrorsM)
+        assertBool "not just tapM" (isJust tapM)
+        assertEqual "not insert" "insert" (tapName $ fromJust tapM)
+        assertEqual "not Data.Map module" (Just "Data.Map") (tapModule $ fromJust tapM)
+        assertEqual "not htypeM"  (Just "v") (tapHType $ fromJust tapM)
+        assertEqual "qtype insert" (Just "GHC.Base.String -> GHC.Types.Int -> Data.Map.Map GHC.Base.String GHC.Types.Int") (tapQType $ fromJust tapM)
         )) 
 
 testThingAtPointNotInCabal :: (APIFacade a)=> a -> Test
@@ -1024,7 +1058,7 @@ testThingAtPointMain api= TestLabel "testThingAtPointMain" (TestCase ( do
                   "main=return $ head [2,3,4]"
                   ]
         synchronize api root False
-        configure api root Target          
+        configure api root Target     
         (bf3,nsErrors3f)<-getBuildFlags api root rel
         assertBool "errors or warnings on nsErrors3f" (null nsErrors3f)
         assertEqual "not main module" (Just "Main") (bfModName bf3)
@@ -1189,7 +1223,7 @@ testInPlaceReference api= TestLabel "testInPlaceReference" (TestCase ( do
         assertBool "not just tap1" (isJust tap1)
         assertEqual "not map" "map" (tapName $ fromJust tap1)
         assertEqual "not GHC.Base" (Just "GHC.Base") (tapModule $ fromJust tap1)
-        assertEqual "not qtype"  (Just "forall a b. (a -> b) -> [a] -> [b] GHC.Types.Char GHC.Types.Char") (tapQType $ fromJust tap1)
+        assertEqual "not qtype"  (Just "(GHC.Types.Char -> GHC.Types.Char) -> [GHC.Types.Char] -> [GHC.Types.Char]") (tapQType $ fromJust tap1)
         (mtts2,nsErrors2)<-getNamesInScope api root rel2
         assertBool ("errors or warnings on getNamesInScope in place 2:"++show nsErrors2) (null nsErrors2)
         assertBool "getNamesInScope in place 2 not just" (isJust mtts2)
