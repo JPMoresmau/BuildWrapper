@@ -33,11 +33,13 @@ import GHC.SYB.Instances
 #endif 
 
 #if __GLASGOW_HASKELL__ < 702
-import TypeRep ( Type(..), PredType(..) )
+import TypeRep (Type(..), PredType(..))
 #elif __GLASGOW_HASKELL__ < 704
-import TypeRep ( Type(..), Pred(..) )
+import TypeRep (Type(..), Pred(..), tyVarsOfType)
+import VarSet (isEmptyVarSet)
 #else
-import TypeRep ( Type(..) )
+import TypeRep (Type(..), tyVarsOfType)
+import VarSet (isEmptyVarSet)
 #endif
 
 #if __GLASGOW_HASKELL__ >= 704
@@ -524,37 +526,38 @@ typeOfExpr (HsWrap wr (HsVar ident)) =
 -- All other search results produce no type information
 typeOfExpr _ = Nothing
 
--- | Reduce a top-level type application if possible.  That is, we perform the
--- following simplification step:
--- @
---     (forall v . t) t'   ==>   t [t'/v]
--- @
--- where @[t'/v]@ is the substitution of @t'@ for @v@.
---
+-- | Reduce type-level applications by pushing 'AppTy' arguments on a stack and binding them in an environment at the
+--   appropriate 'ForAllTy'. Class constraints that have no free variables after reduction are removed. 
 reduceType :: Type -> Type
-reduceType (AppTy (ForAllTy tv b) t) =
-    reduceType (substType tv t b)
-reduceType t = t
-
-substType :: TyVar -> Type -> Type -> Type
-substType v t'  = go 
-  where
-    go t = case t of
-      TyVarTy tv 
-        | tv == v   -> t'
-        | otherwise -> t
-      AppTy t1 t2   -> AppTy (go t1) (go t2)
-      TyConApp c ts -> TyConApp c (map go ts)
-      FunTy t1 t2   -> FunTy (go t1) (go t2)
-      ForAllTy v' bt 
-        | v == v'   -> t
-        | otherwise -> ForAllTy v' (go bt)
+reduceType = reduce [] []
+ where reduce :: [Type] -> [(Var,Type)] -> Type -> Type
+       -- The stack is only passed into AppTy and ForallTy cases, since otherwise it will be empty anyway.
+       -- We probably don't even need to reduce in the other cases, but it won't cause any problems and keeps this
+       -- function simpler (we do need to substitute).
+       -- NOTE: when working on this code, make sure to temporarily disable caching in GHC.withJSONAST.
+       reduce _          env t@(TyVarTy var)      | Just arg <- lookup var env = arg -- note: var's are unique
+                                                  | otherwise                  = t
+       reduce _          env (TyConApp tycon kts) = TyConApp tycon $ map (reduce [] env) kts
+       reduce stck       env (AppTy typ1 typ2)    = reduce (reduce [] env typ2 : stck) env typ1 -- push argument onto stack
+       reduce []         env (ForAllTy var typ)   = ForAllTy var $ reduce [] env typ
+       reduce (arg:stck) env (ForAllTy var typ)   = reduce stck ((var,arg) : env) typ           -- bind argument from stack to var
+       reduce _          env (FunTy typ1 typ2)    = 
+         let rtyp1 = reduce [] env typ1
+             rtyp2 = reduce [] env typ2
+         in  case typ1 of
+#if __GLASGOW_HASKELL__ >= 702
+               -- remove class constraints without free variables to prevent things like (Ord Char => Char) 
 #if __GLASGOW_HASKELL__ < 704       
-      PredTy pt     -> PredTy (go_pt pt) 
-      
-   -- XXX: this is probably not right
-    go_pt (ClassP c ts)  = ClassP c (map go ts)
-    go_pt (IParam i t)   = IParam i (go t)
-    go_pt (EqPred t1 t2) = EqPred (go t1) (go t2)
+               PredTy _         | isEmptyVarSet (tyVarsOfType rtyp1)                       -> rtyp2
+#else
+               TyConApp tycon _ | isClassTyCon tycon && isEmptyVarSet (tyVarsOfType rtyp1) -> rtyp2      
+#endif
+#endif
+               _                                                                           -> FunTy rtyp1 rtyp2 
+#if __GLASGOW_HASKELL__ < 704       
+       -- before ghc 7.4, constraints were encoded with a PredTy constructor
+       reduce _ env (PredTy pt) = PredTy $ reducePredType pt
+        where reducePredType (ClassP c ts)  = ClassP c $ map (reduce [] env) ts
+              reducePredType (IParam i t)   = IParam i (reduce [] env t)
+              reducePredType (EqPred t1 t2) = EqPred (reduce [] env t1) (reduce [] env t2)
 #endif    
-    
