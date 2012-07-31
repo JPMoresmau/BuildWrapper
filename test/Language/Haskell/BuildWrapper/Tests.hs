@@ -996,7 +996,9 @@ testThingAtPointTypeReduction api= TestLabel "testThingAtPointTypeReduction" (Te
                 "  hs-source-dirs:  src",
                 "  main-is:         Main.hs",
                 "  build-depends:  base, containers"]
-        let rel="src"</>"Main.hs"        
+        let rel="src"</>"Main.hs"
+        synchronize api root False
+        configure api root Source   
         write api root rel $ unlines [  
                   "module Main where",
                   "import qualified Data.Map as M",
@@ -1005,9 +1007,6 @@ testThingAtPointTypeReduction api= TestLabel "testThingAtPointTypeReduction" (Te
                   "fun1 :: M.Map String Int",
                   "fun1 = M.insert \"key\" 1 M.empty"
                   ] 
-        synchronize api root False
-        configure api root Source   
-        build api root True Source             
         (_,nsErrorsMf)<-getBuildFlags api root rel
         assertBool "errors or warnings on nsErrorsMf" (null nsErrorsMf)          
         (tapM,nsErrorsM)<-getThingAtPoint api root rel 6 13
@@ -1016,7 +1015,7 @@ testThingAtPointTypeReduction api= TestLabel "testThingAtPointTypeReduction" (Te
         assertEqual "not insert" "insert" (tapName $ fromJust tapM)
         assertEqual "not Data.Map module" (Just "Data.Map") (tapModule $ fromJust tapM)
         assertEqual "not htypeM"  (Just "v") (tapHType $ fromJust tapM)
-        assertEqual "qtype insert" (Just "GHC.Base.String -> GHC.Types.Int -> Data.Map.Map GHC.Base.String GHC.Types.Int") (tapQType $ fromJust tapM)
+        assertEqual "qtype insert" (Just "GHC.Base.String\n-> GHC.Types.Int\n-> Data.Map.Map GHC.Base.String GHC.Types.Int\n-> Data.Map.Map GHC.Base.String GHC.Types.Int") (tapQType $ fromJust tapM)
         )) 
 
 testThingAtPointNotInCabal :: (APIFacade a)=> a -> Test
