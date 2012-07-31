@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP, OverloadedStrings #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.Tests
 -- Author      : JP Moresmau
@@ -84,7 +84,14 @@ class APIFacade a where
         getCabalDependencies :: a -> FilePath -> IO (OpResult [(FilePath,[CabalPackage])])
         getCabalComponents :: a -> FilePath -> IO (OpResult [CabalComponent])
         generateUsage :: a -> FilePath -> Bool -> CabalComponent -> IO (OpResult (Maybe [FilePath]))
-        
+
+exeExtension :: String
+#ifdef mingw32_HOST_OS
+exeExtension = "exe"
+#else
+exeExtension = ""
+#endif        
+
 testSynchronizeAll :: (APIFacade a)=> a -> Test
 testSynchronizeAll api= TestLabel "testSynchronizeAll" (TestCase ( do
         root<-createTestProject
@@ -909,7 +916,7 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         assertBool "not just tap1" (isJust tap1)
         assertEqual "not map" "map" (tapName $ fromJust tap1)
         assertEqual "not GHC.Base" (Just "GHC.Base") (tapModule $ fromJust tap1)
-        assertEqual "not qtype"  (Just "(GHC.Types.Char -> GHC.Types.Char)\n-> [GHC.Types.Char]\n-> [GHC.Types.Char]") (tapQType $ fromJust tap1)
+        assertEqual "not qtype"  (Just "(GHC.Types.Char -> GHC.Types.Char) -> [GHC.Types.Char] -> [GHC.Types.Char]") (tapQType $ fromJust tap1)
         assertEqual "not type"  (Just "(Char -> Char) -> [Char] -> [Char]") (tapType $ fromJust tap1)
         assertEqual "not htype"  (Just "v") (tapHType $ fromJust tap1)
         assertEqual "not gtype"  (Just "Var") (tapGType $ fromJust tap1)
@@ -931,6 +938,8 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         assertEqual "not htype3"  (Just "t") (tapHType $ fromJust tap3)
         assertEqual "qtype DataT" Nothing (tapQType $ fromJust tap3)
         
+#if __GLASGOW_HASKELL__ < 704
+        -- type information for constructors at the declaration is not supported by ghc 7.4       
         (tap4,nsErrors4)<-getThingAtPoint api root rel 4 14
         assertBool ("errors or warnings on getThingAtPoint4:"++show nsErrors4) (null nsErrors4)
         assertBool "not just tap4" (isJust tap4)
@@ -940,7 +949,8 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         assertEqual "gtype MkData"  (Just "DataCon") (tapGType $ fromJust tap4)
         assertEqual "type MkData" (Just "String -> DataT") (tapType $ fromJust tap4)
         assertEqual "qtype MkData" (Just "GHC.Base.String -> Main.DataT") (tapQType $ fromJust tap4)
-        
+#endif
+
         (tap5,nsErrors5)<-getThingAtPoint api root rel 4 22
         assertBool ("errors or warnings on getThingAtPoint5:"++show nsErrors5) (null nsErrors5)
         assertBool "not just tap5" (isJust tap5)
@@ -956,7 +966,9 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         assertEqual "not Main" (Just "Main") (tapModule $ fromJust tap6)
         assertEqual "not htype6"  (Just "t") (tapHType $ fromJust tap6)
         assertEqual "qtype Toot" Nothing (tapQType $ fromJust tap6)
-        
+
+#if __GLASGOW_HASKELL__ < 704
+        -- type information for constructors at the declaration is not supported by ghc 7.4       
         (tap7,nsErrors7)<-getThingAtPoint api root rel 6 14
         assertBool ("errors or warnings on getThingAtPoint7:"++show nsErrors7) (null nsErrors7)
         assertBool "not just tap7" (isJust tap7)
@@ -965,6 +977,7 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         assertEqual "not htype7"  (Just "v") (tapHType $ fromJust tap7)
         assertEqual "qtype Toot" (Just "GHC.Base.String -> Main.Toot") (tapQType $ fromJust tap7)
         
+        -- type information for field names at the declaration is not supported by ghc 7.4       
         (tap8,nsErrors8)<-getThingAtPoint api root rel 6 19
         assertBool ("errors or warnings on getThingAtPoint8:"++show nsErrors8) (null nsErrors8)
         assertBool "not just tap8" (isJust tap8)
@@ -972,8 +985,8 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         assertEqual "not Main" (Just "Main") (tapModule $ fromJust tap8)
         assertEqual "not htype8"  (Just "v") (tapHType $ fromJust tap8)
         assertEqual "qtype toot" (Just "Main.Toot -> GHC.Base.String") (tapQType $ fromJust tap8)
-        
-        
+#endif        
+                
         (tap9,nsErrors9)<-getThingAtPoint api root rel 9 5
         assertBool ("errors or warnings on getThingAtPoint9:"++show nsErrors9) (null nsErrors9)
         assertBool "not just tap9" (isJust tap9)
@@ -1015,7 +1028,7 @@ testThingAtPointTypeReduction api= TestLabel "testThingAtPointTypeReduction" (Te
         assertEqual "not insert" "insert" (tapName $ fromJust tapM)
         assertEqual "not Data.Map module" (Just "Data.Map") (tapModule $ fromJust tapM)
         assertEqual "not htypeM"  (Just "v") (tapHType $ fromJust tapM)
-        assertEqual "qtype insert" (Just "GHC.Base.String\n-> GHC.Types.Int\n-> Data.Map.Map GHC.Base.String GHC.Types.Int\n-> Data.Map.Map GHC.Base.String GHC.Types.Int") (tapQType $ fromJust tapM)
+        assertEqual "qtype insert" (Just "GHC.Base.String -> GHC.Types.Int -> Data.Map.Map GHC.Base.String GHC.Types.Int -> Data.Map.Map GHC.Base.String GHC.Types.Int") (tapQType $ fromJust tapM)
         )) 
 
 testThingAtPointNotInCabal :: (APIFacade a)=> a -> Test
@@ -1373,14 +1386,14 @@ testFlags api=TestLabel "testFlags" (TestCase (do
                 ]
         configure api root Source
         build api root True Source
-        let exePath=root </> ".dist-buildwrapper" </> "dist" </> "build" </> testProjectName </> "BWTest.exe"
+        let exePath=root </> ".dist-buildwrapper" </> "dist" </> "build" </> testProjectName </> "BWTest" <.> exeExtension
         ex1<-doesFileExist exePath
         assertBool "exe exists!" (not ex1)
         
         configureWithFlags api root Source "server"
         build api root True Source
         ex2<-doesFileExist exePath
-        assertBool "exe doesn't exists!" ex2
+        assertBool "exe doesn't exist!" ex2
         
         ))    
 
