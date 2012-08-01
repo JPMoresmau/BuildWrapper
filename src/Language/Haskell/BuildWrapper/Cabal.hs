@@ -573,9 +573,21 @@ cabalDependencies = do
                   return [])
             $
             do pkgs <- liftIO getPkgInfos
-               return $ dependencies (localPkgDescr lbi) pkgs
+               putStrLn $ unlines $ concatMap (showPkgDb showIPkg) pkgs
+               putStrLn $ "\n\nLocal build info\n"++ show lbi
+               let ds = dependencies (localPkgDescr lbi) pkgs
+               putStrLn $ unlines $ concatMap (showPkgDb showCPkg) ds
+               return ds
             )
      return (fromMaybe [] rs,ns)
+ where showPkgDb :: (pack -> [String]) ->(FilePath, [pack]) -> [String]
+       showPkgDb showPkg (fp,pkgs) = ("packagedb at "++fp) : concatMap showPkg pkgs
+       
+       showIPkg :: InstalledPackageInfo -> [String]
+       showIPkg pkg = [show $ installedPackageId pkg]++[ " - "++show dep | dep<-IPI.depends pkg]
+
+       showCPkg :: CabalPackage -> [String]
+       showCPkg pkg = [cpName pkg]++ [ " - "++show dep | dep <- cpDependent pkg ]
 
 -- | get all dependencies from the package description and the list of installed packages        
 dependencies :: PD.PackageDescription -- ^ the cabal description
