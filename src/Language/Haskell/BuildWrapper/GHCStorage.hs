@@ -34,6 +34,7 @@ import GHC.SYB.Instances
 
 #if __GLASGOW_HASKELL__ < 702
 import TypeRep (Type(..), PredType(..))
+import VarSet
 #elif __GLASGOW_HASKELL__ < 704
 import TypeRep (Type(..), Pred(..), tyVarsOfType)
 import VarSet (isEmptyVarSet)
@@ -545,13 +546,11 @@ reduceType = reduce [] []
          let rtyp1 = reduce [] env typ1
              rtyp2 = reduce [] env typ2
          in  case typ1 of
-#if __GLASGOW_HASKELL__ >= 702
                -- remove class constraints without free variables to prevent things like (Ord Char => Char) 
 #if __GLASGOW_HASKELL__ < 704       
                PredTy _         | isEmptyVarSet (tyVarsOfType rtyp1)                       -> rtyp2
 #else
                TyConApp tycon _ | isClassTyCon tycon && isEmptyVarSet (tyVarsOfType rtyp1) -> rtyp2      
-#endif
 #endif
                _                                                                           -> FunTy rtyp1 rtyp2 
 #if __GLASGOW_HASKELL__ < 704       
@@ -560,4 +559,25 @@ reduceType = reduce [] []
         where reducePredType (ClassP c ts)  = ClassP c $ map (reduce [] env) ts
               reducePredType (IParam i t)   = IParam i (reduce [] env t)
               reducePredType (EqPred t1 t2) = EqPred (reduce [] env t1) (reduce [] env t2)
+
+#if __GLASGOW_HASKELL__ < 702 
+
+-- before ghc 7.2, tyVarsOfType was not defined. The code below comes from the ghc-7.2.2 version of TypeRep.hs.
+tyVarsOfType :: Type -> VarSet
+-- ^ NB: for type synonyms tyVarsOfType does /not/ expand the synonym
+tyVarsOfType (TyVarTy v)         = unitVarSet v
+tyVarsOfType (TyConApp _ tys)    = tyVarsOfTypes tys
+tyVarsOfType (PredTy sty)        = varsOfPred tyVarsOfType sty
+tyVarsOfType (FunTy arg res)     = tyVarsOfType arg `unionVarSet` tyVarsOfType res
+tyVarsOfType (AppTy fun arg)     = tyVarsOfType fun `unionVarSet` tyVarsOfType arg
+tyVarsOfType (ForAllTy tyvar ty) = delVarSet (tyVarsOfType ty) tyvar
+
+tyVarsOfTypes :: [Type] -> TyVarSet
+tyVarsOfTypes tys = foldr (unionVarSet . tyVarsOfType) emptyVarSet tys
+
+varsOfPred :: (Type -> VarSet) -> PredType -> VarSet
+varsOfPred f (IParam _ ty)    = f ty
+varsOfPred f (ClassP _ tys)   = foldr (unionVarSet . f) emptyVarSet tys
+varsOfPred f (EqPred ty1 ty2) = f ty1 `unionVarSet` f ty2
 #endif    
+#endif

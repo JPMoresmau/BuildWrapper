@@ -45,19 +45,20 @@ instance APIFacade CMDAPI where
         getOutline _ r fp= runAPI r "outline" ["--file="++fp]
         getTokenTypes _ r fp= runAPI r "tokentypes" ["--file="++fp]
         getOccurrences _ r fp s= runAPI r "occurrences" ["--file="++fp,"--token="++s]
-        getThingAtPoint _ r fp l c= runAPI r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show c]
+        getThingAtPoint _ r fp l c= fmap removeLayoutTAP $ runAPI r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show c]
         getNamesInScope _ r fp= runAPI r "namesinscope" ["--file="++fp]
         getCabalDependencies _ r= runAPI r "dependencies" []
         getCabalComponents _ r= runAPI r "components" []
         generateUsage _ r retAll cc=runAPI r "generateusage" ["--returnall="++ show retAll,"--cabalcomponent="++ cabalComponentName cc]
-        
-exeExtension :: String
-#ifdef mingw32_HOST_OS
-exeExtension = "exe"
-#else
-exeExtension = ""
-#endif        
-        
+
+removeLayoutTAP :: OpResult (Maybe ThingAtPoint) -> OpResult (Maybe ThingAtPoint) 
+removeLayoutTAP res = case res of
+                        (Just tap@ThingAtPoint{tapType=tp,tapQType=qtp},xs) ->
+                          (Just tap{tapType=removeLayout tp, tapQType=removeLayout qtp},xs)
+                        _ -> res
+ where removeLayout (Just tp) = Just $ unwords . concatMap words . lines $ tp -- replace sequences of spaces and newlines by single space
+       removeLayout Nothing   = Nothing
+                
 runAPI:: (FromJSON a,Show a) => FilePath -> String -> [String] -> IO a
 runAPI root command args= do
         cd<-getCurrentDirectory
