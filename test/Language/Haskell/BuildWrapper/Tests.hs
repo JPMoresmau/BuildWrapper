@@ -1307,7 +1307,8 @@ testCabalDependencies api= TestLabel "testCabalDependencies" (TestCase ( do
         (cps,nsOK)<-getCabalDependencies api root
         assertBool ("errors or warnings on getCabalDependencies:"++show nsOK) (null nsOK)
         assertEqual "not two databases" 2 (length cps)
-        let (_:(_,pkgs):[])=cps
+        let [(_,pkgs1),(_,pkgs2)] = cps -- One is global and one is local, but the order depends on the paths, 
+            pkgs = pkgs1 ++ pkgs2       -- so we concatenate the two.
         let base=filter (\pkg->cpName pkg == "base") pkgs
         assertEqual "not 1 base" 1 (length base)
         let (l:ex:ts:[])=cpDependent $ head base
