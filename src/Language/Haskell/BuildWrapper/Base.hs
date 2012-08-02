@@ -68,7 +68,7 @@ mkEmptySpan :: FilePath -> Int -> Int -> BWLocation
 mkEmptySpan src line col = BWLocation src line col line col
 
 instance ToJSON BWLocation  where
-    toJSON (BWLocation s l c el ec)=object $ ["f" .= s, "l" .= l , "c" .= c, "el" .= el , "ec" .= ec] 
+    toJSON (BWLocation s l c el ec)=object ["f" .= s, "l" .= l , "c" .= c, "el" .= el , "ec" .= ec] 
 
 instance FromJSON BWLocation where
     parseJSON (Object v) =BWLocation <$>
@@ -650,6 +650,7 @@ nubOrd=S.toList . S.fromList
 formatJSON :: String -> String
 formatJSON s1=snd $ foldl f (0,"") s1
         where 
+                f :: (Int,String) -> Char -> (Int,String)
                 f (i,s) '['=(i + 4, s ++ "\n" ++ map (const ' ') [0 .. i] ++ "[")
                 f (i,s) ']'  =(i - 4, s ++ "\n" ++ map (const ' ') [0 .. i] ++ "]")
                 f (i,s) c =(i,s++[c])

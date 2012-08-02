@@ -65,7 +65,7 @@ runAPI root command args= do
         let fullargs=[command,"--tempfolder=.dist-buildwrapper","--cabalpath=cabal","--cabalfile="++ testCabalFile root] ++ args
         exePath<-filterM doesFileExist [".dist-buildwrapper/dist/build/buildwrapper/buildwrapper" <.> exeExtension,"dist/build/buildwrapper/buildwrapper" <.> exeExtension]
         setCurrentDirectory root
-        (ex,out,err)<-readProcessWithExitCode (cd </> (head exePath)) fullargs ""
+        (ex,out,err)<-readProcessWithExitCode (cd </> head exePath) fullargs ""
         setCurrentDirectory cd
         putStrLn ("out:"++out)
         putStrLn ("err:"++err)

@@ -43,7 +43,7 @@ import Data.Aeson
 import Outputable (showSDoc,ppr)
 import Data.Foldable (foldrM)
 
-import qualified MonadUtils as GMU
+--import qualified MonadUtils as GMU
 
 -- | copy all files from the project to the temporary folder
 synchronize ::  Bool -- ^ if true copy all files, if false only copy files newer than their corresponding temp files

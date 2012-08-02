@@ -45,18 +45,9 @@ import qualified Data.Set as S
 
 
 isRecStmt :: StmtLR idL idR -> Bool
-
-#if __GLASGOW_HASKELL__ < 611
-
-isRecStmt (RecStmt _ _ _ _ _) = True
+isRecStmt (RecStmt {}) = True
 isRecStmt _ = False
 
-#else
-
-isRecStmt (RecStmt _ _ _ _ _ _ _ _) = True
-isRecStmt _ = False
-
-#endif
 
 -- | Pretty-print a search result.
 prettyResult :: OutputableBndr id => SearchResult id -> SDoc
@@ -417,7 +408,7 @@ instance Search Name (RenamedSource) where
   search p s (b,d,_,_) = search p s d `mappend` search p s b
 
 instance (Search id id) => Search id (ImportDecl id) where
-  search p s id=search p s (ideclName id)
+  search p s i=search p s (ideclName i)
 
 instance Search id ModuleName where
   search _ _ mn = only (FoundModule mn)

@@ -16,7 +16,7 @@ import Language.Haskell.BuildWrapper.API
 import Language.Haskell.BuildWrapper.Base hiding (tempFolder,cabalPath, cabalFile, cabalFlags,verbosity)
 import Control.Monad.State
 import System.Console.CmdArgs hiding (Verbosity(..),verbosity)
-import System.Directory (canonicalizePath, doesFileExist)
+import System.Directory (canonicalizePath)
 import Paths_buildwrapper
 
 import Data.Aeson
