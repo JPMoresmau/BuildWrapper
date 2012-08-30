@@ -12,7 +12,7 @@
 -- Abstract tests of the behavior
 module Language.Haskell.BuildWrapper.Tests where
 
-import Language.Haskell.BuildWrapper.Base
+import Language.Haskell.BuildWrapper.Base hiding (writeFile,readFile)
 
 import Data.ByteString.Lazy ()
 import Data.ByteString.Lazy.Char8()

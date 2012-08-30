@@ -1,7 +1,7 @@
 {-# LANGUAGE CPP,OverloadedStrings,PatternGuards #-}
 module Language.Haskell.BuildWrapper.UsagesTests where
 
-import Language.Haskell.BuildWrapper.Base
+import Language.Haskell.BuildWrapper.Base hiding (readFile,writeFile)
 
 import Language.Haskell.BuildWrapper.Tests
 import Language.Haskell.BuildWrapper.CMDTests

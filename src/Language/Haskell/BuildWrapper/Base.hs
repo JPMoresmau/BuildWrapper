@@ -15,6 +15,8 @@ module Language.Haskell.BuildWrapper.Base where
 import Control.Applicative
 import Control.Monad
 import Control.Monad.State
+import Control.Exception (bracket)
+
 
 import Data.Data
 import Data.Aeson
@@ -28,7 +30,8 @@ import System.FilePath
 import Data.List (isPrefixOf)
 import Data.Maybe (catMaybes)
 
-
+import System.IO.UTF8 (hPutStr,hGetContents)
+import System.IO (IOMode, openBinaryFile, IOMode(..), Handle, hClose)
 
 -- | State type
 type BuildWrapper=StateT BuildWrapperState IO
@@ -666,4 +669,14 @@ data Usage = Usage {
         usDef::Bool
         } 
         deriving (Show,Eq)
-                
+ 
+readFile :: FilePath -> IO String
+readFile n = hGetContents =<< openBinaryFile n ReadMode
+
+writeFile :: FilePath -> String -> IO ()
+writeFile n s = withBinaryFile n WriteMode (\ h -> hPutStr h s)      
+
+withBinaryFile :: FilePath -> IOMode -> (Handle -> IO a) -> IO a
+withBinaryFile n m f = bracket (openBinaryFile n m) hClose f
+
+          

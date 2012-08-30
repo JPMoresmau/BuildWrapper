@@ -30,7 +30,8 @@ import Data.List (sortBy)
 import Prelude hiding (readFile, writeFile)
 import qualified Data.Vector as V
 
-import System.IO.UTF8
+--import System.IO.UTF8 hiding (readFile, writeFile)
+--import Codec.Binary.UTF8.String
 
 import Control.Monad.State
 import Language.Haskell.Exts.Annotated hiding (String)
@@ -44,6 +45,10 @@ import Outputable (showSDoc,ppr)
 import Data.Foldable (foldrM)
 
 --import qualified MonadUtils as GMU
+
+
+
+
 
 -- | copy all files from the project to the temporary folder
 synchronize ::  Bool -- ^ if true copy all files, if false only copy files newer than their corresponding temp files
@@ -316,7 +321,7 @@ getBuildFlags fp=do
                                         -- liftIO $ Prelude.print $ cbiModulePaths $ snd cbi
                                         -- liftIO $ Prelude.print opts2
                                         let 
-                                                fullFp=(takeDirectory src) </> fp
+                                                fullFp=takeDirectory src </> fp
                                                 modName=listToMaybe $ mapMaybe fst (filter (\ (_, f) -> f == fullFp) $ cbiModulePaths $ snd cbi)
                                                 -- (modName,_)=cabalExtensions $ snd cbi
                                                 cppo=fileCppOptions (snd cbi) ++ unlitF
