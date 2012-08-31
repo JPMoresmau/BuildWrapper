@@ -51,6 +51,7 @@ import qualified MonadUtils as GMU
 import Name (isTyVarName,isDataConName,isVarName,isTyConName)
 import Var (varType)
 import PprTyThing (pprTypeForUser)
+import Control.Monad (when)
 
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
@@ -136,10 +137,16 @@ withASTNotes f ff base_dir contents options=do
                                 modSum <- getModSummary $ mkModuleName m
                                 fmap Just $ workOnResult f fp modSum)
                                `gcatch` (\(se :: SourceError) -> do
-                                        GMU.liftIO $ print se 
+                                        when (processError contents (show se)) (do
+                                                GMU.liftIO $ print m
+                                                GMU.liftIO $ print se 
+                                                )
                                         return Nothing)
                                `gcatch` (\(ae :: GhcApiError) -> do
-                                        GMU.liftIO $ print ae
+                                        when (processError contents (show ae)) (do
+                                                GMU.liftIO $ print m
+                                                GMU.liftIO $ print ae 
+                                                )
                                         return Nothing)
                         ) fps
 #if __GLASGOW_HASKELL__ < 702                           
@@ -150,6 +157,11 @@ withASTNotes f ff base_dir contents options=do
                 return $ (a,List.nub $ notes2)
 #endif
         where
+            processError :: LoadContents -> String -> Bool
+            processError MultipleFile{} "Module not part of module graph"=False -- we ignore the error when we process several files and some we can't find
+            processError _ _=True
+            
+        
             workOnResult :: GHCApplyFunction a -> FilePath -> ModSummary -> Ghc a
             workOnResult f2 fp modSum= do
                 p <- parseModule modSum
