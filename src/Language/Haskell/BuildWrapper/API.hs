@@ -165,7 +165,7 @@ generateUsage returnAll ccn=
                                 --        Just v->do
                                 let vals=extractUsages v
                                 --liftIO $ mapM_ (Prelude.putStrLn . formatJSON . BSC.unpack . encode) vals
-                                (mast,_)<-getAST fp
+                                (mast,_)<-getAST fp (Just ccn)
                                 case mast of
                                         Just (ParseOk ast)->do
                                                 let ods=getHSEOutline ast
@@ -287,8 +287,9 @@ generateUsage returnAll ccn=
 
 -- | build one source file in GHC
 build1 :: FilePath -- ^ the source file
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
         -> BuildWrapper (OpResult (Maybe [NameDef])) -- ^ True if build is successful
-build1 fp=withGHCAST' fp BwGHC.getGhcNameDefsInScope
+build1 fp mccn=withGHCAST' fp mccn BwGHC.getGhcNameDefsInScope
 
 
 -- | preprocess a file
@@ -304,16 +305,17 @@ preproc bf tgt= do
 
 -- | get the build flags for a source file
 getBuildFlags :: FilePath -- ^ the source file
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
         -> BuildWrapper (OpResult BuildFlags)
-getBuildFlags fp=do
+getBuildFlags fp mccn=do
         tgt<-getTargetPath fp
         src<-getCabalFile Source
         modSrc<-liftIO $ getModificationTime src
         mbf<-liftIO $ readBuildFlagsInfo tgt modSrc
-        case mbf of
+        case filterBuildFlags mccn mbf of
                 Just bf-> return bf
                 Nothing -> do
-                        (mcbi,bwns)<-getBuildInfo fp
+                        (mcbi,bwns)<-getBuildInfo fp mccn
                         ret<-case mcbi of
                                 Just cbi->do
                                         opts2<-fileGhcOptions cbi
@@ -329,19 +331,24 @@ getBuildFlags fp=do
                                         -- liftIO $ Prelude.print opts
                                         -- ghcOptions is sufficient, contains extensions and such
                                         -- opts ++
-                                        return (BuildFlags opts2 cppo modS,bwns)
-                                Nothing -> return (BuildFlags [] unlitF Nothing,[])
+                                        return (BuildFlags opts2 cppo modS (Just $ cabalComponentName $ cbiComponent $ snd cbi),bwns)
+                                Nothing -> return (BuildFlags [] unlitF Nothing Nothing,[])
                         liftIO $ storeBuildFlagsInfo tgt ret
                         return ret
-        where unlitF=let
-                lit=".lhs" == takeExtension fp
-                in ("-D__GLASGOW_HASKELL__=" ++ show (__GLASGOW_HASKELL__ :: Int)) : ["--unlit" | lit]
-
+        where 
+                unlitF=let
+                        lit=".lhs" == takeExtension fp
+                        in ("-D__GLASGOW_HASKELL__=" ++ show (__GLASGOW_HASKELL__ :: Int)) : ["--unlit" | lit]
+                filterBuildFlags :: Maybe String -> Maybe (BuildFlags,[BWNote]) -> Maybe (BuildFlags,[BWNote])
+                filterBuildFlags mccn (Just (bf,_)) | mccn /= (bfComponent bf)=Nothing
+                filterBuildFlags _ mbf=mbf
+                
 -- | get haskell-src-exts commented AST for source file
 getAST :: FilePath -- ^  the source file
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
         -> BuildWrapper (OpResult (Maybe (ParseResult (Module SrcSpanInfo, [Comment]))))
-getAST fp=do
-        (bf,ns)<-getBuildFlags fp
+getAST fp mccn=do
+        (bf,ns)<-getBuildFlags fp mccn
         tgt<-getTargetPath fp
         input<-liftIO $ preproc bf tgt
         pr<- liftIO $ getHSEAST input (bfAst bf)
@@ -349,31 +356,34 @@ getAST fp=do
 
 -- | get GHC typechecked AST for source file
 getGHCAST :: FilePath -- ^ the source file
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
         -> BuildWrapper (OpResult (Maybe TypecheckedSource))
-getGHCAST fp = withGHCAST' fp BwGHC.getAST
+getGHCAST fp mccn = withGHCAST' fp mccn BwGHC.getAST
 
 -- | perform an action on the GHC AST
 withGHCAST ::  FilePath -- ^ the source file
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
         -> (FilePath --  ^ the source file
                 -> FilePath --  ^ the base directory
                 ->  String --  ^ the module name
                 -> [String] --  ^ the GHC options
                 -> IO a)
         -> BuildWrapper (OpResult (Maybe a))
-withGHCAST fp f=withGHCAST' fp (\a b c d->do
+withGHCAST fp mccn f=withGHCAST' fp mccn (\a b c d->do
         r<- f a b c d
         return (Just r,[]))
 
 withGHCAST' ::  FilePath -- ^ the source file
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
         -> (FilePath --  ^ the source file
         -> FilePath --  ^ the base directory
         ->  String --  ^ the module name
         -> [String] --  ^ the GHC options
         ->  IO (OpResult (Maybe a))) -> BuildWrapper (OpResult (Maybe a))
-withGHCAST'  fp f= do
-        (bf,ns)<-getBuildFlags fp
+withGHCAST'  fp mccn f= do
+        (bf,ns)<-getBuildFlags fp mccn
         case bf of 
-                (BuildFlags opts _ (Just modS))-> do
+                (BuildFlags opts _ (Just modS) _)-> do
                         tgt<-getTargetPath fp
                         temp<-getFullTempDir
                         liftIO $ do
@@ -386,8 +396,9 @@ withGHCAST'  fp f= do
 
 -- | get outline for source file
 getOutline :: FilePath -- ^ source file
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
         -> BuildWrapper (OpResult OutlineResult)
-getOutline fp=do
+getOutline fp mccn=do
        tgt<-getTargetPath fp
        let usageFile=getUsageFile tgt
        usageStale<-liftIO $ isSourceMoreRecent tgt usageFile 
@@ -403,7 +414,7 @@ getOutline fp=do
        case mods of
                 Just ods-> return (ods,[])
                 _ -> do   
-                       (mast,bwns)<-getAST fp
+                       (mast,bwns)<-getAST fp mccn
                        case mast of
                         Just (ParseOk ast)->do
                                 --liftIO $ Prelude.print ast
@@ -429,9 +440,10 @@ getTokenTypes fp=do
 -- ^ get all occurrences of a token in the file
 getOccurrences :: FilePath -- ^ the source file
         -> String -- ^ the token to search for
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
         -> BuildWrapper (OpResult [TokenDef])
-getOccurrences fp query=do
-        (BuildFlags opts _ _, _)<-getBuildFlags fp
+getOccurrences fp query mccn=do
+        (BuildFlags opts _ _ _, _)<-getBuildFlags fp mccn
         tgt<-getTargetPath fp
         input<-liftIO $ readFile tgt
         ett<-liftIO $ BwGHC.occurrences tgt input (T.pack query) (".lhs" == takeExtension fp) opts
@@ -444,18 +456,21 @@ getOccurrences fp query=do
 getThingAtPoint :: FilePath -- ^ the source file
         -> Int -- ^ the line
         -> Int -- ^ the column
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
 --        -> Bool -- ^ do we want the result qualified?
 --        -> Bool -- ^ do we want the result typed?
         -> BuildWrapper (OpResult (Maybe ThingAtPoint))
-getThingAtPoint fp line col=do
-        mm<-withGHCAST fp $ BwGHC.getThingAtPointJSON line col
+getThingAtPoint fp line col mccn=do
+        mm<-withGHCAST fp mccn $ BwGHC.getThingAtPointJSON line col
         return $ case mm of 
                 (Just m,ns)->(m,ns)
                 (Nothing,ns)-> (Nothing,ns)
                 
 -- | get all names in scope (GHC API)                
-getNamesInScope :: FilePath-> BuildWrapper (OpResult (Maybe [String]))
-getNamesInScope fp=withGHCAST fp BwGHC.getGhcNamesInScope
+getNamesInScope :: FilePath
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
+        -> BuildWrapper (OpResult (Maybe [String]))
+getNamesInScope fp mccn=withGHCAST fp mccn BwGHC.getGhcNamesInScope
 
 -- | get cabal dependencies
 getCabalDependencies :: BuildWrapper (OpResult [(FilePath,[CabalPackage])])

@@ -35,15 +35,15 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | Write {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, contents::String}  
         | Configure {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], verbosity::Verbosity,cabalTarget::WhichCabal}
         | Build {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], verbosity::Verbosity,output::Bool,cabalTarget::WhichCabal}
-        | Build1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath}
-        | Outline {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath} 
-        | TokenTypes {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath} 
-        | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath,token::String}
-        | ThingAtPointCmd {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, line::Int, column::Int}
-        | NamesInScope {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath} 
+        | Build1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String}
+        | Outline {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String} 
+        | TokenTypes {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String} 
+        | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath,token::String, component:: Maybe String}
+        | ThingAtPointCmd {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, line::Int, column::Int, component:: Maybe String}
+        | NamesInScope {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String} 
         | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String]}
         | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String]}
-        | GetBuildFlags {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath}
+        | GetBuildFlags {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String}
         | GenerateUsage {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], returnAll:: Bool, cabalComponent::String}
     deriving (Show,Read,Data,Typeable)    
   
@@ -71,6 +71,9 @@ wc=Target &= help "which cabal file to use: original or temporary"
 cc :: String
 cc=def &= help "cabal component"
 
+mcc :: Maybe String
+mcc=def &= help "cabal component"
+
 ra :: Bool
 ra=def &= help "return all source paths"
 
@@ -85,21 +88,21 @@ mwrite= Write tf cp cf uf co fp (def &= help "file contents")
 mbuild :: BWCmd
 mbuild = Build tf cp cf uf co v (def &= help "output compilation and linking result") wc
 mbuild1 :: BWCmd
-mbuild1 = Build1 tf cp cf uf co fp
+mbuild1 = Build1 tf cp cf uf co fp mcc
 mgetbf :: BWCmd
-mgetbf = GetBuildFlags tf cp cf uf co fp
+mgetbf = GetBuildFlags tf cp cf uf co fp mcc
 moutline :: BWCmd
-moutline = Outline tf cp cf uf co fp
+moutline = Outline tf cp cf uf co fp mcc
 mtokenTypes :: BWCmd
-mtokenTypes= TokenTypes tf cp cf uf co fp
+mtokenTypes= TokenTypes tf cp cf uf co fp mcc
 moccurrences :: BWCmd
-moccurrences=Occurrences tf cp cf uf co fp (def &= help "text to search occurrences of" &= name "token")
+moccurrences=Occurrences tf cp cf uf co fp (def &= help "text to search occurrences of" &= name "token") mcc
 mthingAtPoint :: BWCmd
 mthingAtPoint=ThingAtPointCmd tf cp cf uf co fp 
         (def &= help "line" &= name "line")
-        (def &= help "column" &= name "column")
+        (def &= help "column" &= name "column") mcc
 mnamesInScope :: BWCmd
-mnamesInScope=NamesInScope tf cp cf uf co fp 
+mnamesInScope=NamesInScope tf cp cf uf co fp mcc
 mdependencies :: BWCmd
 mdependencies=Dependencies tf cp cf uf co
 mcomponents :: BWCmd
@@ -127,13 +130,13 @@ cmdMain = cmdArgs
                 handle c@Write{file=fi,contents=s}=runCmd c (write fi s)
                 handle c@Configure{cabalTarget=w}=runCmd c (configure w)
                 handle c@Build{verbosity=ve,output=o,cabalTarget=w}=runCmdV ve c (build o w)
-                handle c@Build1{file=fi}=runCmd c (build1 fi)
-                handle c@GetBuildFlags{file=fi}=runCmd c (getBuildFlags fi)
-                handle c@Outline{file=fi}=runCmd c (getOutline fi)
+                handle c@Build1{file=fi,component=mcomp}=runCmd c (build1 fi mcomp)
+                handle c@GetBuildFlags{file=fi,component=mcomp}=runCmd c (getBuildFlags fi mcomp)
+                handle c@Outline{file=fi,component=mcomp}=runCmd c (getOutline fi mcomp)
                 handle c@TokenTypes{file=fi}=runCmd c (getTokenTypes fi)
-                handle c@Occurrences{file=fi,token=t}=runCmd c (getOccurrences fi t)
-                handle c@ThingAtPointCmd{file=fi,line=l,column=col}=runCmd c (getThingAtPoint fi l col)
-                handle c@NamesInScope{file=fi}=runCmd c (getNamesInScope fi)
+                handle c@Occurrences{file=fi,token=t,component=mcomp}=runCmd c (getOccurrences fi t mcomp)
+                handle c@ThingAtPointCmd{file=fi,line=l,column=col,component=mcomp}=runCmd c (getThingAtPoint fi l col mcomp)
+                handle c@NamesInScope{file=fi,component=mcomp}=runCmd c (getNamesInScope fi mcomp)
                 handle c@Dependencies{}=runCmd c getCabalDependencies
                 handle c@Components{}=runCmd c getCabalComponents
                 handle c@GenerateUsage{returnAll=reta,cabalComponent=comp}=runCmd c (generateUsage reta comp)

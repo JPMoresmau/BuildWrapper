@@ -402,17 +402,19 @@ data BuildFlags = BuildFlags {
         bfAst :: [String] -- ^ flags for GHC
         ,bfPreproc :: [String] -- ^ flags for preprocessor
         ,bfModName :: Maybe String -- ^ module name if known
+        ,bfComponent :: Maybe String -- ^ component used to get flags, if known
         }  
         deriving (Show,Read,Eq,Data,Typeable)
         
 instance ToJSON BuildFlags where
-        toJSON (BuildFlags ast preproc modName)=  object ["a" .= map toJSON ast, "p" .=  map toJSON preproc, "m" .= toJSON modName]
+        toJSON (BuildFlags ast preproc modName comp)=  object ["a" .= map toJSON ast, "p" .=  map toJSON preproc, "m" .= toJSON modName, "c" .= toJSON comp]
 
 instance FromJSON BuildFlags where
    parseJSON (Object v)=BuildFlags <$>
                          v .: "a" <*>
                          v .: "p" <*>
-                         v .:? "m"
+                         v .:? "m" <*>
+                         v .:? "c"
    parseJSON _= mzero  
    
 data ThingAtPoint = ThingAtPoint {

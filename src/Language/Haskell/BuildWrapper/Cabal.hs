@@ -387,26 +387,33 @@ onModulePaths f =runIdentity . onModulePathsM (return . f)
 -- | get the build info for a given source file
 -- if a source file is in several component, get the first one             
 getBuildInfo ::  FilePath  -- ^the source file
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified
         -> BuildWrapper (OpResult (Maybe (LocalBuildInfo,CabalBuildInfo)))
-getBuildInfo fp=do
-        (mmr,bwns)<-go getReferencedFiles
+getBuildInfo fp mccn=do
+        (mmr,bwns)<-go getReferencedFiles mccn
         case mmr of
                 Just (Just a)->return (Just a, bwns)
                 _ -> do
-                        (mmr2,bwns2)<-go getAllFiles
+                        (mmr2,bwns2)<-go getAllFiles Nothing -- no component found for the asked name
                         return $ case mmr2 of
                                 Just (Just a)-> (Just a,bwns2)
                                 _-> (Nothing,bwns)
         where 
-             go f=withCabal Source (\lbi->do
+             go f mccn2=withCabal Source (\lbi->do
                 fps<-f lbi
-                fpC<-canonicalizeFullPath fp
                 fpsC<-mapM canonicalizeBuildInfo fps
-                let ok=filter (not . null . cbiModulePaths) $
-                        map (onModulePaths (filter (\(_,b)->equalFilePath fpC b))) fpsC
+                ok<-getComp mccn2 fpsC
                 return  $ if null ok
                         then Nothing
                         else Just (lbi, head ok))
+             getComp :: Maybe String -> [CabalBuildInfo] -> BuildWrapper [CabalBuildInfo] 
+             getComp Nothing fps=do
+                fpC<-canonicalizeFullPath fp
+                fpsC<-mapM canonicalizeBuildInfo fps
+                return $ filter (not . null . cbiModulePaths) $
+                        map (onModulePaths (filter (\(_,b)->equalFilePath fpC b))) fpsC
+             getComp (Just ccn) fps=
+                return $ filter (\cbi->cabalComponentName (cbiComponent cbi) == ccn) fps
  
 -- | get GHC options for a file            
 fileGhcOptions :: (LocalBuildInfo,CabalBuildInfo) -- ^ the cabal info

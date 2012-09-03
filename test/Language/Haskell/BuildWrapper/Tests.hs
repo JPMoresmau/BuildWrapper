@@ -64,7 +64,8 @@ tests=  [
         testCabalDependencies,
         testNoSourceDir,
         testFlags,
-        testBuildFlags
+        testBuildFlags,
+        testExplicitComponent
         ]
 
 class APIFacade a where
@@ -75,6 +76,7 @@ class APIFacade a where
         configureWithFlags :: a -> FilePath -> WhichCabal -> String -> IO (OpResult Bool)
         build :: a -> FilePath -> Bool -> WhichCabal -> IO (OpResult BuildResult)
         build1 :: a -> FilePath -> FilePath -> IO (OpResult (Maybe [NameDef]))
+        build1c :: a -> FilePath -> FilePath -> String -> IO (OpResult (Maybe [NameDef]))
         getBuildFlags :: a -> FilePath -> FilePath -> IO (OpResult BuildFlags)
         getOutline :: a -> FilePath ->  FilePath -> IO (OpResult OutlineResult)
         getTokenTypes :: a -> FilePath -> FilePath -> IO (OpResult [TokenDef])
@@ -1426,7 +1428,53 @@ testBuildFlags api=TestLabel "testFlags" (TestCase (do
         assertBool "OverlappingInstances" ("OverlappingInstances" `notElem` ast)
         ))
         
-
+testExplicitComponent :: (APIFacade a)=> a -> Test
+testExplicitComponent api=TestLabel "testExplicitComponent" (TestCase (do
+        root<-createTestProject
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B",
+                "  build-depends:  base,containers",
+                "executable BWTest",
+                "  hs-source-dirs:  src",
+                "  main-is:         Main.hs",
+                "  other-modules:  B",
+                "  build-depends:  base,containers",
+                "",
+                "executable BWTest2",
+                "  hs-source-dirs:  src",
+                "  main-is:         Main2.hs",
+                "  other-modules:  B",
+                "  build-depends:  base"
+                ]
+        let rel="src"</>"B.hs"  
+        writeFile (root </> rel) $ unlines [
+                "module B where",
+                "import qualified Data.Map as M",
+                "ins=M.insert 'k' 0 M.empty"
+                ]
+        configure api root Source 
+        
+        synchronize1 api root True rel
+        --build1 api root rel
+        (names1,nsErrors1)<-build1c api root rel ""
+        assertBool "returned nothing on bool1" (isJust names1)
+        assertBool "errors or warnings on nsErrors1" (null nsErrors1)
+        (names2,nsErrors2)<-build1c api root rel "BWTest"
+        assertBool "returned nothing on bool2" (isJust names2)
+        assertBool "errors or warnings on nsErrors2" (null nsErrors2)
+        (names3,nsErrors3)<-build1c api root rel "BWTest2"
+        assertBool "returned nothing on bool3" (isNothing names3)
+        assertBool "no errors or warnings on nsErrors2" (not $ null nsErrors3)
+        ))
+        
 testProjectName :: String
 testProjectName="BWTest"         
         
