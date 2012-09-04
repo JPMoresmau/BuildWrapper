@@ -247,7 +247,7 @@ getGhcNameDefsInScope  :: FilePath -- ^ source path
 getGhcNameDefsInScope fp base_dir modul options=do
         (nns,ns)<-withASTNotes (\_ _->do
                 --c1<-GMU.liftIO getClockTime
-                -- GMU.liftIO $ putStrLn "getGhcNameDefsInScope"
+                --GMU.liftIO $ putStrLn "getGhcNameDefsInScope"
                 names<-getNamesInScope
                 --c2<-GMU.liftIO getClockTime
                 --GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))

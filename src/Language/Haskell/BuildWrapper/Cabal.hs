@@ -361,6 +361,7 @@ data CabalBuildInfo=CabalBuildInfo {
         ,cbiModulePaths::[(Maybe ModuleName,FilePath)]  -- ^ the module name and corresponding source file for each contained Haskell module
         ,cbiComponent::CabalComponent -- ^  the component handle
          } 
+      deriving (Read,Show)      
             
 -- | canonicalize the paths in the build info
 canonicalizeBuildInfo :: CabalBuildInfo -> BuildWrapper CabalBuildInfo
@@ -390,14 +391,21 @@ getBuildInfo ::  FilePath  -- ^the source file
         -> Maybe String -- ^ the cabal component to use, or Nothing if not specified
         -> BuildWrapper (OpResult (Maybe (LocalBuildInfo,CabalBuildInfo)))
 getBuildInfo fp mccn=do
-        (mmr,bwns)<-go getReferencedFiles mccn
-        case mmr of
-                Just (Just a)->return (Just a, bwns)
+        case mccn of
+                Nothing -> do
+                        (mmr,bwns)<-go getReferencedFiles Nothing
+                        case mmr of
+                                Just (Just a)->return (Just a, bwns)
+                                _ -> do
+                                        (mmr2,bwns2)<-go getAllFiles Nothing -- no component found for the asked name
+                                        return $ case mmr2 of
+                                                Just (Just a)-> (Just a,bwns2)
+                                                _-> (Nothing,bwns)
                 _ -> do
-                        (mmr2,bwns2)<-go getAllFiles Nothing -- no component found for the asked name
+                        (mmr2,bwns2)<-go getAllFiles mccn
                         return $ case mmr2 of
-                                Just (Just a)-> (Just a,bwns2)
-                                _-> (Nothing,bwns)
+                                        Just (Just a)-> (Just a,bwns2)
+                                        _-> (Nothing,bwns2)
         where 
              go f mccn2=withCabal Source (\lbi->do
                 fps<-f lbi

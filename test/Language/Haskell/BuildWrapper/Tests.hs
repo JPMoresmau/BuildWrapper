@@ -65,7 +65,8 @@ tests=  [
         testNoSourceDir,
         testFlags,
         testBuildFlags,
-        testExplicitComponent
+        testExplicitComponent,
+        testExplicitComponentUnRef
         ]
 
 class APIFacade a where
@@ -1474,6 +1475,50 @@ testExplicitComponent api=TestLabel "testExplicitComponent" (TestCase (do
         assertBool "returned nothing on bool3" (isNothing names3)
         assertBool "no errors or warnings on nsErrors2" (not $ null nsErrors3)
         ))
+   
+testExplicitComponentUnRef :: (APIFacade a)=> a -> Test
+testExplicitComponentUnRef api=TestLabel "testExplicitComponentUnRef" (TestCase (do
+        root<-createTestProject
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  build-depends:  base,containers",
+                "executable BWTest",
+                "  hs-source-dirs:  src",
+                "  main-is:         Main.hs",
+                "  build-depends:  base,containers",
+                "",
+                "executable BWTest2",
+                "  hs-source-dirs:  src",
+                "  main-is:         Main2.hs",
+                "  build-depends:  base"
+                ]
+        let rel="src"</>"B.hs"  
+        writeFile (root </> rel) $ unlines [
+                "module B where",
+                "import qualified Data.Map as M",
+                "ins=M.insert 'k' 0 M.empty"
+                ]
+        configure api root Source 
+        
+        synchronize1 api root True rel
+        --build1 api root rel
+        (names1,nsErrors1)<-build1c api root rel ""
+        assertBool "returned nothing on bool1" (isJust names1)
+        assertBool "errors or warnings on nsErrors1" (null nsErrors1)
+        (names2,nsErrors2)<-build1c api root rel "BWTest"
+        assertBool "returned nothing on bool2" (isJust names2)
+        assertBool "errors or warnings on nsErrors2" (null nsErrors2)
+        (names3,nsErrors3)<-build1c api root rel "BWTest2"
+        assertBool "returned nothing on bool3" (isNothing names3)
+        assertBool "no errors or warnings on nsErrors2" (not $ null nsErrors3)
+        ))   
         
 testProjectName :: String
 testProjectName="BWTest"         

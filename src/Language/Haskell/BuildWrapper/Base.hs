@@ -533,7 +533,7 @@ data CabalComponent
         { ccTestName :: String -- ^ test suite name
         , ccBuildable :: Bool -- ^ is the test suite buildable
         } -- ^ test suite
-  deriving (Eq, Show)
+  deriving (Eq, Show, Read)
 
 instance ToJSON CabalComponent where
         toJSON (CCLibrary b)=  object ["Library" .= b]
