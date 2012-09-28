@@ -316,7 +316,7 @@ getBuildFlags fp mccn=do
                 Just bf-> return bf
                 Nothing -> do
                         (mcbi,bwns)<-getBuildInfo fp mccn
-                        liftIO $ print mcbi
+                        -- liftIO $ print mcbi
                         ret<-case mcbi of
                                 Just cbi->do
                                         opts2<-fileGhcOptions cbi
