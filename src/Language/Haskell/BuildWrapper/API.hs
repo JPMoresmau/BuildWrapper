@@ -39,9 +39,9 @@ import Language.Preprocessor.Cpphs
 import Data.Maybe
 import System.Directory
 import System.FilePath
-import GHC (RenamedSource, TypecheckedSource, TypecheckedModule(..), Ghc, ms_mod, pm_mod_summary, moduleName)
+import GHC (TypecheckedSource, TypecheckedModule(..), Ghc, ms_mod, pm_mod_summary, moduleName, getSessionDynFlags)
 import Data.Aeson
-import Outputable (showSDoc,ppr)
+import Outputable (ppr)
 import Data.Foldable (foldrM)
 
 --import qualified MonadUtils as GMU
@@ -140,25 +140,26 @@ generateUsage returnAll ccn=
                 getModule :: T.Text -- ^ the current package name
                         ->  FilePath -- ^ the file to process
                         -> TypecheckedModule -- ^ the GHC typechecked module
-                        -> Ghc(FilePath,T.Text,RenamedSource,[Usage])
+                        -> Ghc(FilePath,T.Text,Value,[Usage])
                 getModule pkg f tm=do
-                        let rs@(_,imps,mexps,_)=fromJust $ tm_renamed_source tm
+                        let (hsg,imps,mexps,_)=fromJust $ tm_renamed_source tm
                         (ius,aliasMap)<-foldrM (BwGHC.ghcImportToUsage pkg) ([],DM.empty) imps
                         -- GMU.liftIO $ Prelude.print $ showSDoc $ ppr aliasMap
-                        let modu=T.pack $ showSDoc $ ppr $ moduleName $ ms_mod $ pm_mod_summary $ tm_parsed_module tm
-                        eus<-mapM (BwGHC.ghcExportToUsage pkg modu aliasMap) (fromMaybe [] mexps)
+                        df <- getSessionDynFlags
+                        let modu=T.pack $ showSD True df $ ppr $ moduleName $ ms_mod $ pm_mod_summary $ tm_parsed_module tm
+                        eus<-mapM (BwGHC.ghcExportToUsage df pkg modu aliasMap) (fromMaybe [] mexps)
                         --ms_mod $ pm_mod_summary $ tm_parsed_module tm
-                        return (f,modu,rs,ius ++ concat eus)
+                        return (f,modu,dataToJSON df hsg,ius ++ concat eus)
                 -- | generate all usage information and stores it to file
                 generate :: T.Text  -- ^ the current package name
-                        -> (FilePath,T.Text,RenamedSource,[Usage]) -> BuildWrapper()
-                generate pkg (fp,modu,(hsg,_,_,_),ius) 
+                        -> (FilePath,T.Text,Value,[Usage]) -> BuildWrapper()
+                generate pkg (fp,modu,v,ius) 
                         | modu=="Main" && ccn=="" = return () -- Main inside a library: do nothing
                         | otherwise = do
                                 -- liftIO $ Prelude.putStrLn (show modu ++ ":" ++ show ccn) 
                                 tgt<-getTargetPath fp
                                 --mv<-liftIO $ readGHCInfo tgt
-                                let v = dataToJSON hsg
+                                -- let v = dataToJSON hsg
                                 -- liftIO $ Prelude.putStrLn tgt
                                 -- liftIO $ Prelude.putStrLn $ formatJSON $ BSC.unpack $ encode v
                                 --case mv of
@@ -312,7 +313,7 @@ getBuildFlags fp mccn=do
         src<-getCabalFile Source
         modSrc<-liftIO $ getModificationTime src
         mbf<-liftIO $ readBuildFlagsInfo tgt modSrc
-        case filterBuildFlags mccn mbf of
+        case filterBuildFlags mbf of
                 Just bf-> return bf
                 Nothing -> do
                         (mcbi,bwns)<-getBuildInfo fp mccn
@@ -340,9 +341,9 @@ getBuildFlags fp mccn=do
                 unlitF=let
                         lit=".lhs" == takeExtension fp
                         in ("-D__GLASGOW_HASKELL__=" ++ show (__GLASGOW_HASKELL__ :: Int)) : ["--unlit" | lit]
-                filterBuildFlags :: Maybe String -> Maybe (BuildFlags,[BWNote]) -> Maybe (BuildFlags,[BWNote])
-                filterBuildFlags mccn (Just (bf,_)) | mccn /= (bfComponent bf)=Nothing
-                filterBuildFlags _ mbf=mbf
+                filterBuildFlags :: Maybe (BuildFlags,[BWNote]) -> Maybe (BuildFlags,[BWNote])
+                filterBuildFlags (Just (bf,_)) | mccn /= bfComponent bf=Nothing
+                filterBuildFlags mbf=mbf
                 
 -- | get haskell-src-exts commented AST for source file
 getAST :: FilePath -- ^  the source file

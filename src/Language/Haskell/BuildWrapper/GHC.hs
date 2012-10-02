@@ -28,7 +28,11 @@ import qualified Data.Text as T
 import qualified Data.Map as DM
 
 import DynFlags
-import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,WarningMessages, Message )
+#if __GLASGOW_HASKELL__ > 704
+import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,WarningMessages,MsgDoc)
+#else
+import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,WarningMessages,Message)
+#endif
 import GHC
 import GHC.Paths ( libdir )
 import HscTypes ( srcErrorMessages, SourceError, GhcApiError)
@@ -88,10 +92,13 @@ withJSONAST f fp base_dir modul options=do
         case mv of 
                 Just v-> fmap Just (f v) 
                 Nothing->do
-                        mTc<-withAST return fp base_dir modul options
-                        case mTc of
-                                Just tc->fmap Just (f (generateGHCInfo tc)) 
-                                Nothing -> return Nothing
+                        mv2<-withAST gen fp base_dir modul options
+                        case mv2 of
+                                Just v2->fmap Just (f v2) 
+                                Nothing-> return Nothing
+        where gen tc=do
+                df<-getSessionDynFlags
+                return $ generateGHCInfo df tc 
 
 -- | the main method loading the source contents into GHC
 withASTNotes ::  GHCApplyFunction a -- ^ the final action to perform on the result
@@ -115,7 +122,11 @@ withASTNotes f ff base_dir contents options=do
                 -- and it takes a while to actually generate the o and hi files for big modules
                 -- if we use CompManager, it's slower for modules with lots of dependencies but we can keep hscTarget= HscNothing which makes it better for bigger modules
                 -- we use target interpreted so that it works with TemplateHaskell
+#if __GLASGOW_HASKELL__ > 704  
                 setSessionDynFlags flg'  {hscTarget = HscInterpreted, ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref }
+#else                
+                setSessionDynFlags flg'  {hscTarget = HscInterpreted, ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref flg' }
+#endif
                 --  $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
                 let fps=getLoadFiles contents
                 mapM_ (\(fp,_)-> addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }) fps
@@ -151,7 +162,8 @@ withASTNotes f ff base_dir contents options=do
                         ) fps
 #if __GLASGOW_HASKELL__ < 702                           
                 warns <- getWarnings
-                return (a,List.nub $ notes ++ reverse (ghcMessagesToNotes base_dir (warns, emptyBag)))
+                df <- getSessionDynFlags
+                return (a,List.nub $ notes ++ reverse (ghcMessagesToNotes df base_dir (warns, emptyBag)))
 #else
                 notes2 <- GMU.liftIO $ readIORef ref
                 return $ (a,List.nub $ notes2)
@@ -172,17 +184,23 @@ withASTNotes f ff base_dir contents options=do
 #if __GLASGOW_HASKELL__ < 704
                 setContext [ms_mod modSum] []
 #else
+#if __GLASGOW_HASKELL__ < 706
                 setContext [IIModule $ ms_mod modSum]
+#else
+                setContext [IIModule $ moduleName  $ ms_mod modSum]       
+#endif             
 #endif                         
                 let fullfp=ff fp
+                opts<-getSessionDynFlags
                 -- GMU.liftIO $ putStrLn ("writing " ++ fullfp)
-                GMU.liftIO $ storeGHCInfo fullfp (dm_typechecked_module l)
+                GMU.liftIO $ storeGHCInfo opts fullfp (dm_typechecked_module l)
                 --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
                 f2 fp $ dm_typechecked_module l                
         
             add_warn_err :: GhcMonad m => IORef [BWNote] -> WarningMessages -> ErrorMessages -> m()
             add_warn_err ref warns errs = do
-              let notes = ghcMessagesToNotes base_dir (warns, errs)
+              df <- getSessionDynFlags
+              let notes = ghcMessagesToNotes df base_dir (warns, errs)
               GMU.liftIO $ modifyIORef ref $
                          \ ns -> ns ++ notes
         
@@ -191,13 +209,16 @@ withASTNotes f ff base_dir contents options=do
                let errs = srcErrorMessages e
                add_warn_err ref emptyBag errs
                return Failed
-               
-            logAction :: IORef [BWNote] -> Severity -> SrcSpan -> PprStyle -> Message -> IO ()
-            logAction ref s loc style msg
+#if __GLASGOW_HASKELL__ > 704              
+            logAction :: IORef [BWNote] -> DynFlags -> Severity -> SrcSpan -> PprStyle -> MsgDoc -> IO ()
+#else
+            logAction :: IORef [BWNote] -> DynFlags -> Severity -> SrcSpan -> PprStyle -> Message -> IO ()
+#endif
+            logAction ref df s loc style msg
                 | (Just status)<-bwSeverity s=do
                         let n=BWNote { bwnLocation = ghcSpanToBWLocation base_dir loc
                                  , bwnStatus = status
-                                 , bwnTitle = removeBaseDir base_dir $ removeStatus status $ showSDocForUser (qualName style,qualModule style) msg
+                                 , bwnTitle = removeBaseDir base_dir $ removeStatus status $ showSDUser (qualName style,qualModule style) df msg
                                  }
                         modifyIORef ref $  \ ns -> ns ++ [n]
                 | otherwise=return ()
@@ -213,11 +234,12 @@ withASTNotes f ff base_dir contents options=do
 --
 -- This will mix warnings and errors, but you can split them back up
 -- by filtering the '[BWNote]' based on the 'bw_status'.
-ghcMessagesToNotes :: FilePath -- ^ base directory
+ghcMessagesToNotes :: DynFlags -> 
+        FilePath -- ^ base directory
         ->  Messages -- ^ GHC messages
         -> [BWNote]
-ghcMessagesToNotes base_dir (warns, errs) = map_bag2ms (ghcWarnMsgToNote base_dir) warns ++
-        map_bag2ms (ghcErrMsgToNote base_dir) errs
+ghcMessagesToNotes df base_dir (warns, errs) = map_bag2ms (ghcWarnMsgToNote df base_dir) warns ++
+        map_bag2ms (ghcErrMsgToNote df base_dir) errs
   where
     map_bag2ms f =  map f . Bag.bagToList   
    
@@ -232,9 +254,10 @@ getGhcNamesInScope f base_dir modul options=do
         names<-withAST (\_->do
                 --c1<-GMU.liftIO getClockTime
                 names<-getNamesInScope
+                df<-getSessionDynFlags
                 --c2<-GMU.liftIO getClockTime
                 --GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
-                return $ map (showSDocDump . ppr ) names)  f base_dir modul options
+                return $ map (showSDDump df . ppr ) names)  f base_dir modul options
         return $ fromMaybe[] names
 
    
@@ -259,10 +282,11 @@ getGhcNameDefsInScope fp base_dir modul options=do
         where name2nd :: GhcMonad m=> Name -> m NameDef
               name2nd n=do
                 m<- getInfo n
+                df<-getSessionDynFlags
                 let ty=case m of
-                        Just (tyt,_,_)->ty2t tyt
+                        Just (tyt,_,_)->ty2t df tyt
                         Nothing->Nothing
-                return $ NameDef (T.pack $ showSDocDump $ ppr n) (name2t n) ty
+                return $ NameDef (T.pack $ showSDDump df $ ppr n) (name2t n) ty
               name2t :: Name -> [OutlineDefType]
               name2t n 
                         | isTyVarName n=[Type]
@@ -270,10 +294,10 @@ getGhcNameDefsInScope fp base_dir modul options=do
                         | isDataConName n = [Constructor]
                         | isVarName n = [Function]
                         | otherwise =[]
-              ty2t :: TyThing -> Maybe T.Text
-              ty2t (AnId aid)=Just $ T.pack $ showSDocUnqual $ pprTypeForUser True $ varType aid
-              ty2t (ADataCon dc)=Just $ T.pack $ showSDocUnqual $ pprTypeForUser True $ dataConUserType dc
-              ty2t _ = Nothing
+              ty2t :: DynFlags -> TyThing -> Maybe T.Text
+              ty2t df (AnId aid)=Just $ T.pack $ showSD False df $ pprTypeForUser True $ varType aid
+              ty2t df (ADataCon dc)=Just $ T.pack $ showSD False df $ pprTypeForUser True $ dataConUserType dc
+              ty2t _ _ = Nothing
 
 -- | get the "thing" at a particular point (line/column) in the source
 -- this is using the saved JSON info if available
@@ -376,7 +400,13 @@ ghctokensArbitrary base_dir contents options= do
                 let prTS = lexTokenStream sb lexLoc dflags1
                 case prTS of
                         POk _ toks      -> return $ Right $ filter ofInterest toks
-                        PFailed loc msg -> return $ Left $ ghcErrMsgToNote base_dir $ mkPlainErrMsg loc msg
+                        PFailed loc msg -> return $ Left $ ghcErrMsgToNote dflags1 base_dir $ 
+#if __GLASGOW_HASKELL__ < 706
+                                mkPlainErrMsg loc msg
+#else
+                                mkPlainErrMsg dflags1 loc msg
+#endif
+
 
 #if __GLASGOW_HASKELL__ < 702
 lexLoc :: SrcLoc
@@ -522,18 +552,18 @@ data PPBehavior=Continue Int | Indent Int | Start
         deriving Eq
 
 -- | convert a GHC error message to our note type
-ghcErrMsgToNote :: FilePath -> ErrMsg -> BWNote
-ghcErrMsgToNote = ghcMsgToNote BWError
+ghcErrMsgToNote :: DynFlags -> FilePath -> ErrMsg -> BWNote
+ghcErrMsgToNote df= ghcMsgToNote df BWError
 
 -- | convert a GHC warning message to our note type
-ghcWarnMsgToNote :: FilePath -> WarnMsg -> BWNote
-ghcWarnMsgToNote = ghcMsgToNote BWWarning
+ghcWarnMsgToNote :: DynFlags -> FilePath -> WarnMsg -> BWNote
+ghcWarnMsgToNote df= ghcMsgToNote df BWWarning
 
 -- Note that we do *not* include the extra info, since that information is
 -- only useful in the case where we do not show the error location directly
 -- in the source.
-ghcMsgToNote :: BWNoteStatus -> FilePath -> ErrMsg -> BWNote
-ghcMsgToNote note_kind base_dir msg =
+ghcMsgToNote :: DynFlags -> BWNoteStatus -> FilePath -> ErrMsg -> BWNote
+ghcMsgToNote df note_kind base_dir msg =
     BWNote { bwnLocation = ghcSpanToBWLocation base_dir loc
          , bwnStatus = note_kind
          , bwnTitle = removeBaseDir base_dir $ removeStatus note_kind $ show_msg (errMsgShortDoc msg)
@@ -542,7 +572,7 @@ ghcMsgToNote note_kind base_dir msg =
     loc | (s:_) <- errMsgSpans msg = s
         | otherwise                    = GHC.noSrcSpan
     unqual = errMsgContext msg
-    show_msg = showSDocForUser unqual
+    show_msg = showSDUser unqual df
 
 -- | remove the initial status text from a message
 removeStatus :: BWNoteStatus -> String -> String
@@ -677,8 +707,10 @@ tokenType  ITbiglam="ES"                    -- GHC-extension symbols
 
 tokenType  ITocurly="SS"                    -- special symbols
 tokenType  ITccurly="SS" 
+#if __GLASGOW_HASKELL__ < 706   
 tokenType  ITocurlybar="SS"                 -- "{|", for type applications
 tokenType  ITccurlybar="SS"                 -- "|}", for type applications
+#endif
 tokenType  ITvocurly="SS" 
 tokenType  ITvccurly="SS" 
 tokenType  ITobrack="SS" 
@@ -823,10 +855,11 @@ ghcImportToUsage :: T.Text -> LImportDecl Name ->  ([Usage],AliasMap) -> Ghc ([U
 ghcImportToUsage myPkg (L _ imp) (ls,moduMap)=(do
         let L src modu=ideclName imp
         pkg<-lookupModule modu (ideclPkgQual imp)
-        let tmod=T.pack $ showSDoc $ ppr modu
-            tpkg=T.pack $ showSDoc $ ppr $ modulePackageId pkg
+        df<-getSessionDynFlags
+        let tmod=T.pack $ showSD True df $ ppr modu
+            tpkg=T.pack $ showSD True df $ ppr $ modulePackageId pkg
             nomain=if tpkg=="main" then myPkg else tpkg
-            subs=concatMap (ghcLIEToUsage (Just nomain) tmod "import") $ maybe [] snd $ ideclHiding imp
+            subs=concatMap (ghcLIEToUsage df (Just nomain) tmod "import") $ maybe [] snd $ ideclHiding imp
             moduMap2=maybe moduMap (\alias->let
                 mlmods=DM.lookup alias moduMap
                 newlmods=case mlmods of
@@ -840,35 +873,36 @@ ghcImportToUsage myPkg (L _ imp) (ls,moduMap)=(do
                 GMU.liftIO $ print se
                 return ([],moduMap))
          
-ghcLIEToUsage :: Maybe T.Text -> T.Text -> T.Text -> LIE Name -> [Usage]
-ghcLIEToUsage tpkg tmod tsection (L src (IEVar nm))=[ghcNameToUsage tpkg tmod tsection nm src False]
-ghcLIEToUsage tpkg tmod tsection (L src (IEThingAbs nm))=[ghcNameToUsage tpkg tmod tsection nm src True ] 
-ghcLIEToUsage tpkg tmod tsection (L src (IEThingAll nm))=[ghcNameToUsage tpkg tmod tsection nm src True] 
-ghcLIEToUsage tpkg tmod tsection (L src (IEThingWith nm cons))=ghcNameToUsage tpkg tmod tsection nm src True :
-        map (\ x -> ghcNameToUsage tpkg tmod tsection x src False) cons 
-ghcLIEToUsage tpkg tmod tsection (L src (IEModuleContents _))= [Usage tpkg tmod "" tsection False (toJSON $ ghcSpanToLocation src) False]              
-ghcLIEToUsage _ _ _ _=[]
+ghcLIEToUsage :: DynFlags -> Maybe T.Text -> T.Text -> T.Text -> LIE Name -> [Usage]
+ghcLIEToUsage df tpkg tmod tsection (L src (IEVar nm))=[ghcNameToUsage df tpkg tmod tsection nm src False]
+ghcLIEToUsage df tpkg tmod tsection (L src (IEThingAbs nm))=[ghcNameToUsage df tpkg tmod tsection nm src True ] 
+ghcLIEToUsage df tpkg tmod tsection (L src (IEThingAll nm))=[ghcNameToUsage df tpkg tmod tsection nm src True] 
+ghcLIEToUsage df tpkg tmod tsection (L src (IEThingWith nm cons))=ghcNameToUsage df tpkg tmod tsection nm src True :
+        map (\ x -> ghcNameToUsage df tpkg tmod tsection x src False) cons 
+ghcLIEToUsage _ tpkg tmod tsection (L src (IEModuleContents _))= [Usage tpkg tmod "" tsection False (toJSON $ ghcSpanToLocation src) False]              
+ghcLIEToUsage _ _ _ _ _=[]
         
-ghcExportToUsage :: T.Text -> T.Text ->AliasMap -> LIE Name -> Ghc [Usage]        
-ghcExportToUsage myPkg myMod moduMap lie@(L _ name)=(do
+ghcExportToUsage :: DynFlags -> T.Text -> T.Text ->AliasMap -> LIE Name -> Ghc [Usage]        
+ghcExportToUsage df myPkg myMod moduMap lie@(L _ name)=(do
         ls<-case name of
                 (IEModuleContents modu)-> do
                         let realModus=fromMaybe [modu] (DM.lookup modu moduMap)
                         mapM (\modu2->do
                                 pkg<-lookupModule modu2 Nothing
-                                let tpkg=T.pack $ showSDoc $ ppr $ modulePackageId pkg
-                                let tmod=T.pack $ showSDoc $ ppr modu2
+                                df<-getSessionDynFlags
+                                let tpkg=T.pack $ showSD True df $ ppr $ modulePackageId pkg
+                                let tmod=T.pack $ showSD True df $ ppr modu2
                                 return (tpkg,tmod)
                                 ) realModus
                 _ -> return [(myPkg,myMod)]
-        return $ concatMap (\(tpkg,tmod)->ghcLIEToUsage (Just tpkg) tmod "export" lie) ls
+        return $ concatMap (\(tpkg,tmod)->ghcLIEToUsage df (Just tpkg) tmod "export" lie) ls
         )
         `gcatch` (\(se :: SourceError) -> do
                 GMU.liftIO $ print se
                 return [])
         
-ghcNameToUsage ::  Maybe T.Text -> T.Text -> T.Text -> Name -> SrcSpan -> Bool -> Usage 
-ghcNameToUsage tpkg tmod tsection nm src typ=Usage tpkg tmod (T.pack $ showSDocUnqual $ ppr nm) tsection typ (toJSON $ ghcSpanToLocation src) False
+ghcNameToUsage ::  DynFlags -> Maybe T.Text -> T.Text -> T.Text -> Name -> SrcSpan -> Bool -> Usage 
+ghcNameToUsage df tpkg tmod tsection nm src typ=Usage tpkg tmod (T.pack $ showSD False df $ ppr nm) tsection typ (toJSON $ ghcSpanToLocation src) False
         
 --getGHCOutline :: ParsedSource
 --        -> [OutlineDef]

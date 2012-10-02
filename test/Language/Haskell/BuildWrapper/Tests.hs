@@ -941,7 +941,7 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         assertEqual "not htype3"  (Just "t") (tapHType $ fromJust tap3)
         assertEqual "qtype DataT" Nothing (tapQType $ fromJust tap3)
         
-#if __GLASGOW_HASKELL__ < 704
+#if __GLASGOW_HASKELL__ != 704
         -- type information for constructors at the declaration is not supported by ghc 7.4       
         (tap4,nsErrors4)<-getThingAtPoint api root rel 4 14
         assertBool ("errors or warnings on getThingAtPoint4:"++show nsErrors4) (null nsErrors4)
@@ -970,7 +970,7 @@ testThingAtPoint api= TestLabel "testThingAtPoint" (TestCase ( do
         assertEqual "not htype6"  (Just "t") (tapHType $ fromJust tap6)
         assertEqual "qtype Toot" Nothing (tapQType $ fromJust tap6)
 
-#if __GLASGOW_HASKELL__ < 704
+#if __GLASGOW_HASKELL__ != 704
         -- type information for constructors at the declaration is not supported by ghc 7.4       
         (tap7,nsErrors7)<-getThingAtPoint api root rel 6 14
         assertBool ("errors or warnings on getThingAtPoint7:"++show nsErrors7) (null nsErrors7)

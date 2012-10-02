@@ -48,7 +48,7 @@ import TcEvidence
 #endif
 
 import qualified Data.ByteString.Lazy as BS
-import qualified Data.ByteString.Lazy.Char8 as BSC (putStrLn)
+-- import qualified Data.ByteString.Lazy.Char8 as BSC (putStrLn)
 import qualified Data.ByteString as BSS
 import Data.Aeson
 import Data.Maybe
@@ -57,7 +57,11 @@ import qualified Data.HashMap.Lazy as HM
 import qualified Data.Map as DM
 import qualified Data.Vector as V
 import Data.Attoparsec.Number (Number(I))
+#if __GLASGOW_HASKELL__ < 706
 import System.Time (ClockTime)
+#else
+import Data.Time.Clock (UTCTime)
+#endif
 import Type (splitFunTys)
 import Unique (getUnique)
 import Data.List (sortBy)
@@ -93,14 +97,14 @@ storeBuildFlagsInfo fp bf=setStoredInfo fp "BuildFlags"  (toJSON bf)
 
 -- | generate the JSON from the typechecked module
 -- this incorporates info from the renamed source with types annotations from the typechecked source
-generateGHCInfo :: TypecheckedModule -> Value
-generateGHCInfo tcm=let
+generateGHCInfo :: DynFlags -> TypecheckedModule -> Value
+generateGHCInfo df tcm=let
         -- extract usages from typechecked source
-        tcvals=extractUsages $ dataToJSON $ typecheckedSource tcm
+        tcvals=extractUsages $ dataToJSON df $ typecheckedSource tcm
         -- store objects with type annotations in a map keyed by module, name, line and column
         tcByNameLoc=foldr buildMap DM.empty tcvals
         -- extract usages from renamed source
-        rnvals=extractUsages $ dataToJSON $ tm_renamed_source tcm
+        rnvals=extractUsages $ dataToJSON df $ tm_renamed_source tcm
         -- add type information on objects
         typedVals=map (addType tcByNameLoc) rnvals
         in (Array $ V.fromList typedVals)
@@ -139,10 +143,12 @@ generateGHCInfo tcm=let
                 addType _ v=v
 
 -- | store the GHC generated AST
-storeGHCInfo :: FilePath -- ^ the source file
+storeGHCInfo ::
+        DynFlags
+        -> FilePath -- ^ the source file
         -> TypecheckedModule -- ^ the GHC AST
         -> IO()
-storeGHCInfo fp tcm= -- do
+storeGHCInfo df fp tcm= -- do
 --        putStrLn $ showData TypeChecker 4 $ typecheckedSource tcm
 --        putStrLn "Typechecked"
 --        BSC.putStrLn $ encode $ dataToJSON $ typecheckedSource tcm
@@ -152,7 +158,7 @@ storeGHCInfo fp tcm= -- do
 --        BSC.putStrLn $ encode $ Array $ V.fromList tcvals
 --        let rnvals=extractUsages $ dataToJSON $ tm_renamed_source tcm 
 --        BSC.putStrLn $ encode $ Array $ V.fromList rnvals
-        setStoredInfo fp "AST" $ generateGHCInfo tcm
+        setStoredInfo fp "AST" $ generateGHCInfo df tcm
         
                 
 -- | read the GHC AST as a JSON value
@@ -164,7 +170,11 @@ readGHCInfo fp=do
 
 -- | read the build flags and notes as a JSON value
 readBuildFlagsInfo :: FilePath -- ^ the source file
+#if __GLASGOW_HASKELL__ < 706
         -> ClockTime -- ^ time the cabal file was changed. If the file was changed after the storage file, we return Nothing
+#else
+        -> UTCTime
+#endif
         -> IO (Maybe (BuildFlags,[BWNote]))
 readBuildFlagsInfo fp ct=do
        let ghcInfoFile=getInfoFile fp
@@ -227,19 +237,19 @@ getUsageInfo fp=do
         
 
 -- | convert a Data into a JSON value, with specific treatment for interesting GHC AST objects, and avoiding the holes
-dataToJSON :: Data a =>a -> Value
-dataToJSON  = 
+dataToJSON :: Data a => DynFlags -> a -> Value
+dataToJSON  df = 
   generic `ext1Q` list `extQ` string `extQ` fastString `extQ` srcSpanToJSON 
-          `extQ` name `extQ` occName `extQ` modName `extQ` var `extQ` exprVar `extQ` dataCon
+          `extQ` name `extQ` ocName `extQ` modName `extQ` var `extQ` exprVar `extQ` dataCon
           `extQ` bagName `extQ` bagRdrName `extQ` bagVar `extQ` nameSet
           `extQ` postTcType `extQ` fixity  `extQ` hsBind
   where generic :: Data a => a -> Value
-        generic t =arr $ gmapQ dataToJSON t
+        generic t =arr $ gmapQ (dataToJSON df) t
                 -- object [(T.pack $ showConstr (toConstr t)) .= sub ] 
         string     = Data.Aeson.String . T.pack :: String -> Value
         fastString:: FastString -> Value
         fastString fs= object ["FastString" .= T.pack (show fs)] 
-        list l     = arr $ map dataToJSON l
+        list l     = arr $ map (dataToJSON df) l
         arr a = let
                 sub=filter (/= Null) a
                 in case sub of
@@ -248,11 +258,11 @@ dataToJSON  =
                      _ -> toJSON sub          
         name :: Name -> Value
         name  n     = object (nameAndModule n ++["GType" .= string "Name","HType".= string (if isValOcc (nameOccName n) then "v" else "t")])
-        occName :: OccName -> Value
-        occName o   = name (mkSystemName (getUnique o) o) 
+        ocName :: OccName -> Value
+        ocName o   = name (mkSystemName (getUnique o) o) 
                 --object ["Name" .= string (OccName.occNameString o),"HType" .= string (if isValOcc o then "v" else "t")]
         modName  :: ModuleName -> Value
-        modName m= object [ "Name" .= string (showSDoc $ ppr m),"GType" .= string "ModuleName","HType" .= string "m"]
+        modName m= object [ "Name" .= string (showSD True df $ ppr m),"GType" .= string "ModuleName","HType" .= string "m"]
 
         var :: Var -> Value
         var  v     = typedVar v (varType v)
@@ -296,20 +306,51 @@ dataToJSON  =
                 -- allT=typesInsideType t
                 -- allT2=allT ++ concatMap (\t2->let (a,b)= splitAppTys t2 in (a:b)) allT
                 -- in
-                ["Type" .= string (showSDocUnqual $ pprTypeForUser True t),
-                "QType" .= string (showSDoc $ pprTypeForUser True t)]
+                ["Type" .= string (showSD False df $ pprTypeForUser True t),
+                "QType" .= string (showSD True df $ pprTypeForUser True t)]
               --  ,"AllTypes" .= (map string $ filter ("[]" /=) $ nubOrd $ map (showSDoc . withPprStyle (mkUserStyle ((\_ _ -> NameNotInScope2), const True) AllTheWay) . pprTypeForUser True) allT2)]
         hsBind :: HsBindLR Name Name -> Value
         --(arr [dataToJSON $ getLoc fid,dataToJSON $ unLoc fid]) :
-        hsBind (FunBind fid _ (MatchGroup matches _) _ _ _) =arr $  map (\m->arr [arr [dataToJSON $ getLoc m,dataToJSON $ unLoc fid],dataToJSON m]) matches
+        hsBind (FunBind fid _ (MatchGroup matches _) _ _ _) =arr $  map (\m->arr [arr [dataToJSON df $ getLoc m,dataToJSON df $ unLoc fid],dataToJSON df m]) matches
         hsBind a=generic a
         -- nameAndModule :: Name -> [Pair]
         nameAndModule n=let
                 mm=nameModule_maybe n
-                mn=maybe "" (showSDoc . ppr . moduleName) mm
-                pkg=maybe "" (showSDoc . ppr . modulePackageId) mm
-                na=showSDocUnqual $ ppr n
+                mn=maybe "" (showSD True df . ppr . moduleName) mm
+                pkg=maybe "" (showSD True df . ppr . modulePackageId) mm
+                na=showSD False df $ ppr n
                 in ["Module" .= string mn,"Package" .= string pkg, "Name" .= string na]
+
+showSD :: Bool
+        -> DynFlags
+        -> SDoc
+        -> String
+#if __GLASGOW_HASKELL__ < 706        
+showSD True _ =showSDoc
+showSD False _ =showSDocUnqual
+#else
+showSD True df =showSDoc df
+showSD False df =showSDocUnqual df
+#endif
+
+showSDUser :: PrintUnqualified
+        -> DynFlags
+        -> SDoc
+        -> String
+#if __GLASGOW_HASKELL__ < 706        
+showSDUser unqual _ =showSDocForUser unqual
+#else
+showSDUser unqual df =showSDocForUser df unqual
+#endif
+
+showSDDump :: DynFlags
+        -> SDoc
+        -> String
+#if __GLASGOW_HASKELL__ < 706        
+showSDDump _ =showSDocDump
+#else
+showSDDump df =showSDocDump df
+#endif
 
 srcSpanToJSON :: SrcSpan -> Value
 srcSpanToJSON src 
@@ -332,20 +373,20 @@ typesInsideType t=let
          (f1,f2)=splitFunTys t
          in f2 : concatMap typesInsideType f1
         
--- | debug function: shows on standard output the JSON representation of the given data
-debugToJSON :: Data a =>a -> IO()
-debugToJSON = BSC.putStrLn . encode . dataToJSON
-
--- | debug searching thing at point in given data
-debugFindInJSON :: Data a => Int -> Int -> a -> IO()
-debugFindInJSON l c a= do
-        let v=dataToJSON a
-        let mv=findInJSON (overlap l c) v
-        case mv of
-                Just rv->do
-                        putStrLn "something found!"
-                        BSC.putStrLn $ encode rv
-                Nothing->putStrLn "nothing found!"
+---- | debug function: shows on standard output the JSON representation of the given data
+--debugToJSON :: Data a =>a -> IO()
+--debugToJSON = BSC.putStrLn . encode . dataToJSON
+--
+---- | debug searching thing at point in given data
+--debugFindInJSON :: Data a => Int -> Int -> a -> IO()
+--debugFindInJSON l c a= do
+--        let v=dataToJSON a
+--        let mv=findInJSON (overlap l c) v
+--        case mv of
+--                Just rv->do
+--                        putStrLn "something found!"
+--                        BSC.putStrLn $ encode rv
+--                Nothing->putStrLn "nothing found!"
 
 -- | simple type for search function
 type FindFunc= Value -> Bool
@@ -542,6 +583,9 @@ reduceType = reduce [] []
        reduce stck       env (AppTy typ1 typ2)    = reduce (reduce [] env typ2 : stck) env typ1 -- push argument onto stack
        reduce []         env (ForAllTy var typ)   = ForAllTy var $ reduce [] env typ
        reduce (arg:stck) env (ForAllTy var typ)   = reduce stck ((var,arg) : env) typ           -- bind argument from stack to var
+#if __GLASGOW_HASKELL__ > 704
+       reduce _         _ t@(LitTy _)   =  t
+#endif
        reduce _          env (FunTy typ1 typ2)    = 
          let rtyp1 = reduce [] env typ1
              rtyp2 = reduce [] env typ2

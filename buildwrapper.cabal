@@ -53,6 +53,10 @@ library
                    Language.Haskell.BuildWrapper.GHCStorage,
                    Language.Haskell.BuildWrapper.Packages,
                    Language.Haskell.BuildWrapper.Src
+  if impl(ghc >= 7.6)
+    build-depends: 
+                    time
+
 
 executable buildwrapper
   hs-source-dirs:  src-exe
@@ -82,7 +86,10 @@ executable buildwrapper
                    transformers
   ghc-options:     -Wall -fno-warn-unused-do-bind -optl -s
   other-modules:   Language.Haskell.BuildWrapper.CMD
-  
+  if impl(ghc >= 7.6)
+    build-depends: 
+                    time
+
 test-suite buildwrapper-test
   type:            exitcode-stdio-1.0
   hs-source-dirs:  test
@@ -115,6 +122,9 @@ test-suite buildwrapper-test
                    Language.Haskell.BuildWrapper.CMDTests,
                    Language.Haskell.BuildWrapper.GHCTests,
                    Language.Haskell.BuildWrapper.UsagesTests
+  if impl(ghc >= 7.6)
+    build-depends: 
+                    time
 
 source-repository head
   type:     git
