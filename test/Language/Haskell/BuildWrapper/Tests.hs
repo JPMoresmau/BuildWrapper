@@ -53,7 +53,7 @@ tests=  [
         testOutlineOptions,
         testPreviewTokenTypes,
         testThingAtPoint,
-        testThingAtPointTypeReduction,
+        testThingAtPointTypeReduction, 
         testThingAtPointNotInCabal,
         testThingAtPointMain,
         testThingAtPointMainSubFolder,
@@ -1029,9 +1029,15 @@ testThingAtPointTypeReduction api= TestLabel "testThingAtPointTypeReduction" (Te
         assertBool ("errors or warnings on getThingAtPointM:"++show nsErrorsM) (null nsErrorsM)
         assertBool "not just tapM" (isJust tapM)
         assertEqual "not insert" "insert" (tapName $ fromJust tapM)
+#if __GLASGOW_HASKELL__ >= 706
+        assertEqual "not Data.Map.Base module" (Just "Data.Map.Base") (tapModule $ fromJust tapM)
+        assertEqual "not htypeM"  (Just "v") (tapHType $ fromJust tapM)
+        assertEqual "qtype insert" (Just "GHC.Base.String -> GHC.Types.Int -> Data.Map.Base.Map GHC.Base.String GHC.Types.Int -> Data.Map.Base.Map GHC.Base.String GHC.Types.Int") (tapQType $ fromJust tapM)
+#else
         assertEqual "not Data.Map module" (Just "Data.Map") (tapModule $ fromJust tapM)
         assertEqual "not htypeM"  (Just "v") (tapHType $ fromJust tapM)
         assertEqual "qtype insert" (Just "GHC.Base.String -> GHC.Types.Int -> Data.Map.Map GHC.Base.String GHC.Types.Int -> Data.Map.Map GHC.Base.String GHC.Types.Int") (tapQType $ fromJust tapM)
+#endif
         )) 
 
 testThingAtPointNotInCabal :: (APIFacade a)=> a -> Test

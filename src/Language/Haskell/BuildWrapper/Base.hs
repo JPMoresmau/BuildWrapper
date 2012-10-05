@@ -54,8 +54,14 @@ instance ToJSON BWNoteStatus  where
     toJSON = toJSON . drop 2 . show 
  
 instance FromJSON BWNoteStatus where
-    parseJSON (String t) =return $ read $ T.unpack $ T.append "BW" t
+    parseJSON (String t) =return $ readObj "BWNoteStatus" $ T.unpack $ T.append "BW" t
     parseJSON _= mzero  
+ 
+readObj :: Read a=> String -> String -> a
+readObj msg s=let parses=reads s -- :: [(a,String)]
+        in if null parses 
+                then error (msg ++ ": " ++ s ++ ".")
+                else fst $ head parses 
  
 -- | location of a note/error (lines and columns start at 1)
 data BWLocation=BWLocation {
@@ -158,7 +164,7 @@ instance ToJSON OutlineDefType  where
     toJSON = toJSON . show
  
 instance FromJSON OutlineDefType where
-    parseJSON (String s) =return $ read $ T.unpack s
+    parseJSON (String s) =return $ readObj "OutlineDefType" $ T.unpack s
     parseJSON _= mzero
  
 -- | Location inside a file, the file is known and doesn't need to be repeated 
@@ -313,7 +319,7 @@ instance ToJSON ImportExportType  where
     toJSON = toJSON . show
  
 instance FromJSON ImportExportType where
-    parseJSON (String s) =return $ read $ T.unpack s
+    parseJSON (String s) =return $ readObj "ImportExportType" $ T.unpack s
     parseJSON _= mzero
     
 -- | definition of export

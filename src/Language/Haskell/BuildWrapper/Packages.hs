@@ -13,6 +13,7 @@
 -- Packages from packages databases (global, user).
 module Language.Haskell.BuildWrapper.Packages ( getPkgInfos ) where
 
+import Language.Haskell.BuildWrapper.Base
 
 import Prelude hiding (Maybe)
 import qualified Config
@@ -188,7 +189,7 @@ readContents pkgdb =
 
       (PkgFile dbFile) -> do
         pkgStr <- readUTF8File dbFile
-        let pkgs = map convertPackageInfoIn $ read pkgStr
+        let pkgs = map convertPackageInfoIn $ readObj "InstalledPackageInfo" pkgStr
         pkgInfoList <-
           Exception.evaluate pkgs
             `catchError`

@@ -809,6 +809,13 @@ tokenType ITtildehsh= "S"
 tokenType ITsimpleQuote="SS"
 #endif
 
+-- 7.6 new token types 
+#if __GLASGOW_HASKELL__ >= 706
+tokenType ITctype= "P"
+tokenType ITlcase= "S"
+tokenType (ITqQuasiQuote {}) = "TH" -- [Qual.quoter| quote |]
+#endif
+
 dotFS :: FastString
 dotFS = fsLit "."
 

@@ -22,6 +22,12 @@ import Data.Char
 import Data.Ord (comparing)
 import Data.List
 import Data.Maybe
+
+#if MIN_VERSION_Cabal(1,15,0)   
+import Data.Version (parseVersion)
+import Text.ParserCombinators.ReadP(readP_to_S)
+#endif
+
 import qualified Data.Map as DM
 
 import Exception (ghandle)
@@ -312,7 +318,7 @@ parseBuildMessages cf cabalExe distDir s=let
                 extractLocation el=let
                         (_,_,aft,ls)=el =~ "(.+):([0-9]+):([0-9]+):" :: (String,String,String,[String])   
                         in case ls of
-                                (loc:line:col:[])-> Just $ BWNote BWError (dropWhile isSpace aft) (mkEmptySpan loc (readInt line 1) (read col))
+                                (loc:line:col:[])-> Just $ BWNote BWError (dropWhile isSpace aft) (mkEmptySpan loc (readInt line 1) (readInt col 1))
                                 _ -> let
                                       (_,_,_,ls2)=el =~ "(.+)(\\(.+\\)):(.+):(.+):" :: (String,String,String,[String])
                                       in case ls2 of
@@ -432,7 +438,7 @@ fileGhcOptions (lbi,CabalBuildInfo bi clbi fp isLib _ _)=do
         inplaceExist<-liftIO $ doesFileExist inplace
 #if MIN_VERSION_Cabal(1,15,0)   
         v<-cabalV
-        let opts l b c f=renderGhcOptions (read VERSION_ghc) $ componentGhcOptions v l b c f 
+        let opts l b c f=renderGhcOptions ((fst $ head $ readP_to_S  parseVersion  VERSION_ghc) :: Version) $ componentGhcOptions v l b c f 
 #else
         let opts=ghcOptions
 #endif        

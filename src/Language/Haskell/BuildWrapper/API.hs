@@ -317,7 +317,7 @@ getBuildFlags fp mccn=do
                 Just bf-> return bf
                 Nothing -> do
                         (mcbi,bwns)<-getBuildInfo fp mccn
-                        -- liftIO $ print mcbi
+                        --liftIO $ print mcbi
                         ret<-case mcbi of
                                 Just cbi->do
                                         opts2<-fileGhcOptions cbi
@@ -384,7 +384,7 @@ withGHCAST' ::  FilePath -- ^ the source file
         ->  IO (OpResult (Maybe a))) -> BuildWrapper (OpResult (Maybe a))
 withGHCAST'  fp mccn f= do
         (bf,ns)<-getBuildFlags fp mccn
-        liftIO $ print bf
+        -- liftIO $ print bf
         case bf of 
                 (BuildFlags opts _ (Just modS) _)-> do
                         tgt<-getTargetPath fp
