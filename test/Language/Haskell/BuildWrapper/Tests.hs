@@ -40,6 +40,7 @@ tests=  [
         testBuildErrors,
         testBuildWarnings,
         testBuildOutput,
+        testBuildO2,
         testModuleNotInCabal,
         testOutline,
         testOutlinePreproc,
@@ -405,6 +406,44 @@ testBuildOutput api = TestLabel "testBuildOutput" (TestCase ( do
         exeE3<-doesFileExist exeF
         assertBool ("exe exists after build no output: "++exeF) (not exeE3)
         ))
+        
+-- |  http://hackage.haskell.org/trac/ghc/ticket/7380#comment:1     : -O2 is removed from the options  
+testBuildO2 :: (APIFacade a)=> a -> Test
+testBuildO2 api = TestLabel "testBuildO2" (TestCase ( do       
+        root<-createTestProject
+        write api root (testProjectName <.> ".cabal") $  unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:  base",
+                "",
+                "executable BWTest",
+                "  hs-source-dirs:  src",
+                "  main-is:         Main.hs",
+                "  other-modules:  B.D",
+                "  build-depends:  base",
+                "  ghc-options:    -O2",
+                "",
+                "test-suite BWTest-test",
+                "  type:            exitcode-stdio-1.0",
+                "  hs-source-dirs:  test",
+                "  main-is:         Main.hs",
+                "  other-modules:  TestA",
+                "  build-depends:  base",
+                ""
+                ]
+        configure api root Target
+        let rel="src"</>"Main.hs"
+        writeFile (root </> rel) $ unlines ["module Main where","main :: IO()","main= putStrLn \"Hello World\""] 
+        synchronize api root False
+        (ns, nsErrors2)<-build1 api root rel 
+        assertBool ("returned nothing on ns: " ++ show nsErrors2) (isJust ns)
+        ))        
         
 testModuleNotInCabal :: (APIFacade a)=> a -> Test
 testModuleNotInCabal api = TestLabel "testModuleNotInCabal" (TestCase ( do
