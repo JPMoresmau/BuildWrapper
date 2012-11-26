@@ -1,11 +1,11 @@
 {-# LANGUAGE CPP,OverloadedStrings,PatternGuards #-}
+{-# OPTIONS_GHC -F -pgmF htfpp #-}
 module Language.Haskell.BuildWrapper.UsagesTests where
 
 import Language.Haskell.BuildWrapper.Base hiding (readFile,writeFile)
 
-import Language.Haskell.BuildWrapper.Tests
 import Language.Haskell.BuildWrapper.CMDTests
-import Test.HUnit
+import Test.Framework hiding (Success)
 
 import System.Directory
 import System.FilePath
@@ -24,54 +24,45 @@ import qualified Data.HashMap.Lazy as HM
 import qualified Data.Vector as V
 import qualified Data.Aeson.Types (parse)
 
-usageTests::[Test]
-usageTests= map (\f->f CMDAPI) utests
 
-utests :: (APIFacade a)=> [a -> Test]
-utests= [ testGenerateBWUsage,
-        testGenerateReferencesSimple,
-        testGenerateReferencesImports,
-        testGenerateReferencesExports,
-        testGenerateReferencesExportAlias,
-        testIncorrectModuleFileName
-        ]
-
-testGenerateBWUsage :: (APIFacade a)=> a -> Test
-testGenerateBWUsage api= TestLabel "testGenerateBWUsage" (TestCase ( do
+test_GenerateBWUsage :: Assertion
+test_GenerateBWUsage = do
+        let api=CMDAPI
         root<-createTestProject
         ((fps,dels),_)<-synchronize api root False
-        assertBool "no file path on creation" (not $ null fps)
-        assertBool "deletions" (null dels)  
-        assertEqual "no cabal file" (testProjectName <.> ".cabal") (head fps)
+        assertBool (not $ null fps)
+        assertBool (null dels)  
+        assertEqual (testProjectName <.> ".cabal") (head fps)
         let rel="src" </> "A.hs"
-        assertBool "no A" (rel `elem` fps)
+        assertBoolVerbose "no A" (rel `elem` fps)
         let bwI1=getUsageFile (root </> ".dist-buildwrapper" </>  rel)
         ef1<-doesFileExist bwI1
-        assertBool (bwI1 ++ "  file exists before build") (not ef1)
+        assertBoolVerbose (bwI1 ++ "  file exists before build") (not ef1)
         (BuildResult bool1 fps1,nsErrors1)<-build api root False Source
-        assertBool "returned false on bool1" bool1
-        assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
-        assertBool ("no rel in fps1: " ++ show fps1) (rel `elem` fps1)
-        assertBool (bwI1 ++ "  file exists after build") (not ef1)
+        assertBool bool1
+        assertBool (null nsErrors1)
+        assertBool (rel `elem` fps1)
+        assertBoolVerbose (bwI1 ++ "  file exists after build") (not ef1)
         (comps,_)<-getCabalComponents api root
-        c1<-getClockTime
+        --c1<-getClockTime
         gar<-mapM (generateUsage api root False) comps
         let fs=concat $ mapMaybe fst gar
-        assertBool "fs doesn't contain rel" (rel `elem` fs)
-        c2<-getClockTime
-        putStrLn ("generateUsage: " ++ timeDiffToString (diffClockTimes c2 c1))
+        assertBool (rel `elem` fs)
+        --c2<-getClockTime
+        -- putStrLn ("generateUsage: " ++ timeDiffToString (diffClockTimes c2 c1))
         ef2<-doesFileExist bwI1
-        assertBool (bwI1 ++ " file doesn't exist after generateAST") ef2
+        assertBoolVerbose (bwI1 ++ " file doesn't exist after generateAST") ef2
         gar2<-mapM (generateUsage api root  False) comps
         let fs2=concat $ mapMaybe fst gar2
-        assertBool "fs2  contains rel" (rel `notElem` fs2)
+        assertBool (rel `notElem` fs2)
         gar3<-mapM (generateUsage api root  True) comps
         let fs3=concat $ mapMaybe fst gar3
-        assertBool "fs3 doesn't  contain rel" (rel `elem` fs3)
-        ))
+        assertBool (rel `elem` fs3)
 
-testGenerateReferencesSimple :: (APIFacade a)=> a -> Test
-testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (TestCase ( do
+
+test_GenerateReferencesSimple :: Assertion
+test_GenerateReferencesSimple = do
+        let api=CMDAPI
         root<-createTestProject
         let relMain="src"</>"Main.hs"
         writeFile (root</> relMain) $ unlines [  
@@ -101,17 +92,17 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
                   ]  
         _<-synchronize api root True          
         (BuildResult bool1 _,nsErrors1)<-build api root False Source
-        assertBool ("returned false on bool1:" ++ show nsErrors1)  bool1
-        assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
+        assertBoolVerbose ("returned false on bool1:" ++ show nsErrors1)  bool1
+        assertBool (null nsErrors1)
         (lib:exe:_,_)<-getCabalComponents api root    
         --mapM_ (generateUsage api root False) comps
         generateUsage api root False lib
         let uf=getUsageFile $ root </> ".dist-buildwrapper" </> relMain
         euf1<-doesFileExist uf
-        assertBool "main usage file exists after lib" (not euf1)
+        assertBool (not euf1)
         generateUsage api root False exe
         euf2<-doesFileExist uf
-        assertBool "main usage file does not exist after exe" euf2
+        assertBool euf2
         --sI<-fmap formatJSON (readFile  $ getInfoFile(root </> ".dist-buildwrapper" </>  rel))
         --putStrLn sI
         v<-readStoredUsage (root </> ".dist-buildwrapper" </>  rel)
@@ -150,10 +141,11 @@ testGenerateReferencesSimple api= TestLabel "testGenerateReferencesSimple" (Test
         assertVarUsage "base" "System.IO" "print" [("main",False,[3,6,3,11])] vMain
         assertVarUsage "base" "GHC.Base" "$" [("main",False,[3,12,3,13]),("main",False,[3,20,3,21])] vMain
         return ()
-        ))
 
-testGenerateReferencesImports :: (APIFacade a)=> a -> Test
-testGenerateReferencesImports api= TestLabel "testGenerateReferencesImports" (TestCase ( do
+
+test_GenerateReferencesImports :: Assertion
+test_GenerateReferencesImports = do
+        let api=CMDAPI
         root<-createTestProject
         let relMain="src"</>"Main.hs"
         writeFile (root</> relMain) $ unlines [
@@ -166,8 +158,8 @@ testGenerateReferencesImports api= TestLabel "testGenerateReferencesImports" (Te
                   ] 
         _<-synchronize api root True          
         (BuildResult bool1 _,nsErrors1)<-build api root False Source
-        assertBool ("returned false on bool1:" ++ show nsErrors1)  bool1
-        assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
+        assertBoolVerbose ("returned false on bool1:" ++ show nsErrors1)  bool1
+        assertBool (null nsErrors1)
         (comps,_)<-getCabalComponents api root    
         mapM_ (generateUsage api root False) comps
         vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
@@ -179,10 +171,11 @@ testGenerateReferencesImports api= TestLabel "testGenerateReferencesImports" (Te
         assertTypeUsage "base" "Data.Maybe" "Maybe" [("import",False,[3,20,3,29])] vMain
         assertTypeUsage "base" "Data.Complex" "Complex" [("import",False,[4,22,4,35])] vMain
         assertVarUsage "base" "Data.Complex" ":+" [("import",False,[4,22,4,35])] vMain
-        ))
 
-testGenerateReferencesExports :: (APIFacade a)=> a -> Test
-testGenerateReferencesExports api= TestLabel "testGenerateReferencesExports" (TestCase ( do
+
+test_GenerateReferencesExports :: Assertion
+test_GenerateReferencesExports =  do
+        let api=CMDAPI
         root<-createTestProject
         let rel="src" </> "A.hs"
         writeFile (root</> rel) $ unlines [  
@@ -216,8 +209,8 @@ testGenerateReferencesExports api= TestLabel "testGenerateReferencesExports" (Te
                   ]  
         _<-synchronize api root True          
         (BuildResult bool1 _,nsErrors1)<-build api root False Source
-        assertBool ("returned false on bool1:" ++ show nsErrors1)  bool1
-        assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
+        assertBoolVerbose ("returned false on bool1:" ++ show nsErrors1)  bool1
+        assertBool (null nsErrors1)
         (comps,_)<-getCabalComponents api root    
         mapM_ (generateUsage api root False) comps
         v<-readStoredUsage (root </> ".dist-buildwrapper" </>  rel)
@@ -245,10 +238,11 @@ testGenerateReferencesExports api= TestLabel "testGenerateReferencesExports" (Te
         assertTypeUsage "BWTest-0.1" "A" "MyData2" [("export",False,[3,5,3,16]),("MyData2",True,[20,6,20,13])] v
         assertTypeUsage "BWTest-0.1" "A" "MyData3" [("export",False,[4,5,4,20]),("MyData3",True,[24,6,24,13])] v
         assertTypeUsage "ghc-prim" "GHC.Types" "Int" [("Cons2",False,[11,15,11,18]),("Cons22",False,[22,16,22,19]),("Cons32",False,[26,16,26,19])] v
-        ))        
+
  
-testGenerateReferencesExportAlias :: (APIFacade a)=> a -> Test
-testGenerateReferencesExportAlias api= TestLabel "testGenerateReferencesExportAlias" (TestCase ( do
+test_GenerateReferencesExportAlias :: Assertion
+test_GenerateReferencesExportAlias =  do
+        let api=CMDAPI
         root<-createTestProject
         let relMain="src"</>"Main.hs"
         writeFile (root</> relMain) $ unlines [
@@ -259,18 +253,19 @@ testGenerateReferencesExportAlias api= TestLabel "testGenerateReferencesExportAl
                   ] 
         _<-synchronize api root True          
         (BuildResult bool1 _,nsErrors1)<-build api root False Source
-        assertBool ("returned false on bool1:" ++ show nsErrors1)  bool1
-        assertBool "no errors or warnings on nsErrors1" (null nsErrors1)
+        assertBoolVerbose ("returned false on bool1:" ++ show nsErrors1)  bool1
+        assertBool (null nsErrors1)
         (comps,_)<-getCabalComponents api root    
         mapM_ (generateUsage api root False) comps
         vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
         -- sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
         -- putStrLn sUMain
         assertVarUsage "base" "Data.Ord" "" [("export",False,[1,14,1,22]),("import",False,[2,8,2,16])] vMain
-        )) 
+
     
-testIncorrectModuleFileName :: (APIFacade a)=> a -> Test
-testIncorrectModuleFileName api= TestLabel "testIncorrectModuleFileName" (TestCase ( do
+test_IncorrectModuleFileName :: Assertion
+test_IncorrectModuleFileName = do
+        let api=CMDAPI
         root<-createTestProject
         let relMain="src"</>"Main.hs"
         let relMain2="src"</>"Main-exe.hs"
@@ -306,9 +301,8 @@ testIncorrectModuleFileName api= TestLabel "testIncorrectModuleFileName" (TestCa
         (comps,_)<-getCabalComponents api root    
         gar<-mapM (generateUsage api root False) comps       
         let fs=concat $ mapMaybe fst gar
-        assertBool "fs doesn't contain relMain2" (relMain2 `elem` fs)
-        ))
-        
+        assertBool (relMain2 `elem` fs)
+
 getUsageFile :: FilePath -- ^ the source file
         -> FilePath
 getUsageFile fp= let 
@@ -370,9 +364,9 @@ assertUsage tp pkg modu name lins (Array v) |
                                 let (Success ifl)=fromJSON arr2
                                 return (section,def,ifl::InFileSpan)) v2
                         in r) $ V.toList arr
-                assertEqual (T.unpack modu ++ "." ++ T.unpack name ++ ": " ++ show lins) expected actual  
+                assertEqualVerbose (T.unpack modu ++ "." ++ T.unpack name ++ ": " ++ show lins) expected actual  
         --V.elem (Number (I line)) arr=return ()
-assertUsage _ _ modu name line _=assertBool (T.unpack modu ++ "." ++ T.unpack name ++ ": " ++ show line) False
+assertUsage _ _ modu name line _=assertFailure (T.unpack modu ++ "." ++ T.unpack name ++ ": " ++ show line)
 
 assertPackageModule :: T.Text -> T.Text -> [Int] -> Value -> IO()
 assertPackageModule pkg modu [sl,sc,el,ec] (Array v) |
@@ -380,8 +374,8 @@ assertPackageModule pkg modu [sl,sc,el,ec] (Array v) |
         (String s0) <-v V.! 0,
         (String s1) <-v V.! 1,
         arr<- v V.! 2= do
-                assertEqual (T.unpack pkg) pkg s0
-                assertEqual (T.unpack modu) modu s1  
+                assertEqualVerbose (T.unpack pkg) pkg s0
+                assertEqualVerbose (T.unpack modu) modu s1  
                 let (Success ifs)=fromJSON arr
-                assertEqual (show ifs) (InFileSpan (InFileLoc sl sc) (InFileLoc el ec)) ifs  
-assertPackageModule pkg modu _ _=  assertBool (T.unpack pkg ++ "." ++ T.unpack modu) False
+                assertEqualVerbose (show ifs) (InFileSpan (InFileLoc sl sc) (InFileLoc el ec)) ifs  
+assertPackageModule pkg modu _ _=  assertFailure (T.unpack pkg ++ "." ++ T.unpack modu)

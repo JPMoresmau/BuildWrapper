@@ -107,8 +107,7 @@ test-suite buildwrapper-test
                    process,
                    bytestring,
                    attoparsec,
-                   test-framework,
-                   test-framework-hunit,
+                   HTF > 0.9,
                    transformers,
                    vector,
                    unordered-containers,
@@ -118,7 +117,6 @@ test-suite buildwrapper-test
   x-uses-tf:       true
   other-modules:   
                    Language.Haskell.BuildWrapper.APITest,
-                   Language.Haskell.BuildWrapper.Tests,
                    Language.Haskell.BuildWrapper.CMDTests,
                    Language.Haskell.BuildWrapper.GHCTests,
                    Language.Haskell.BuildWrapper.UsagesTests

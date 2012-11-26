@@ -1,3 +1,4 @@
+{-# OPTIONS_GHC -F -pgmF htfpp #-}
 -- |
 -- Module      : Main
 -- Author      : JP Moresmau
@@ -11,22 +12,12 @@
 -- Testing exe entry point
 module Main where
 
-import Language.Haskell.BuildWrapper.APITest
-import Language.Haskell.BuildWrapper.UsagesTests
-import Language.Haskell.BuildWrapper.CMDTests
-import Language.Haskell.BuildWrapper.GHCTests
+import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.APITest
+import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.CMDTests
+import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.GHCTests
+import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.UsagesTests
 
-import Test.Framework (defaultMain, testGroup,Test)
-import Test.Framework.Providers.HUnit
+import Test.Framework 
 
 main :: IO()
-main = defaultMain tests
-
-tests :: [Test]
-tests = [
-        testGroup "Unit Tests" (concatMap hUnitTestToTests unitTests),
-        testGroup "GHC Tests" (concatMap hUnitTestToTests ghcTests),
-        testGroup "Command Tests" (concatMap hUnitTestToTests cmdTests),
-        testGroup "Usages Tests" (concatMap hUnitTestToTests usageTests)
-        ]
-
+main = htfMain htf_importedTests

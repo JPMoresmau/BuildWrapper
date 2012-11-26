@@ -107,7 +107,7 @@ cabalBuild' reRun output srcOrTgt= do
                         cd<-getCurrentDirectory
                         setCurrentDirectory (takeDirectory cf)
                         (ex,out,err)<-readProcessWithExitCode cp args ""
-                        putStrLn err
+                        -- putStrLn err
                         if isInfixOf "cannot satisfy -package-id" err ||  isInfixOf "re-run the 'configure'" err
                                 then 
                                         return Nothing
