@@ -114,7 +114,6 @@ test-suite buildwrapper-test
                    containers
   main-is:         Main.hs
   ghc-options:     -Wall -fno-warn-unused-do-bind -optl -s
-  x-uses-tf:       true
   other-modules:   
                    Language.Haskell.BuildWrapper.APITest,
                    Language.Haskell.BuildWrapper.CMDTests,
