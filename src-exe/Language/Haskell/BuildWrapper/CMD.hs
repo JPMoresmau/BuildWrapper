@@ -13,6 +13,7 @@
 module Language.Haskell.BuildWrapper.CMD where
 
 import Language.Haskell.BuildWrapper.API
+import Language.Haskell.BuildWrapper.Cabal (getCabalLibraryVersion)
 import Language.Haskell.BuildWrapper.Base hiding (tempFolder,cabalPath, cabalFile, cabalFlags,verbosity)
 import Control.Monad.State
 import System.Console.CmdArgs hiding (Verbosity(..),verbosity)
@@ -122,7 +123,7 @@ cmdMain = cmdArgs
      &= program "buildwrapper"
      &=
      summary
-       ("buildwrapper executable, version " ++ showVersion version))
+       ("buildwrapper executable, version " ++ showVersion version++ "\nusing version "++getCabalLibraryVersion ++" of the Cabal library"))
   >>= handle
         where   handle ::BWCmd -> IO ()
                 handle c@Synchronize{force=f}=runCmd c (synchronize f)

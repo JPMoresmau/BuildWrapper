@@ -57,6 +57,9 @@ import System.FilePath
 import System.Process
 import Data.Functor.Identity (runIdentity)
 
+getCabalLibraryVersion :: String
+getCabalLibraryVersion = VERSION_Cabal
+
 getFilesToCopy :: BuildWrapper(OpResult [FilePath])
 getFilesToCopy =do
        (mfps,bwns)<-withCabal Source getAllFiles
