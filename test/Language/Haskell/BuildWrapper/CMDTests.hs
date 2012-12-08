@@ -38,7 +38,7 @@ import System.Exit
 import System.Process
 
 import Test.Framework
-
+import Test.HUnit (Assertion)
 
 class APIFacade a where
         synchronize :: a -> FilePath -> Bool -> IO (OpResult ([FilePath],[FilePath]))

@@ -6,6 +6,7 @@ import Language.Haskell.BuildWrapper.Base hiding (readFile,writeFile)
 
 import Language.Haskell.BuildWrapper.CMDTests
 import Test.Framework hiding (Success)
+import Test.HUnit (Assertion)
 
 import System.Directory
 import System.FilePath

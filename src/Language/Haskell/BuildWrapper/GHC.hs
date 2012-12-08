@@ -111,7 +111,7 @@ withASTNotes f ff base_dir contents options=do
     -- http://hackage.haskell.org/trac/ghc/ticket/7380#comment:1     : -O2 is removed from the options  
     let cleaned=filter (not . List.isInfixOf "-O") options
     let lflags=map noLoc cleaned
-    print cleaned
+    -- print cleaned
     (_leftovers, _) <- parseStaticFlags lflags
     runGhc (Just libdir) $ do
         flg <- getSessionDynFlags

@@ -17,7 +17,7 @@ import Language.Haskell.BuildWrapper.Base
 import Language.Haskell.BuildWrapper.GHC
 
 import Test.Framework
-
+import Test.HUnit (Assertion)
 
 test_NoPreproc:: Assertion
 test_NoPreproc=

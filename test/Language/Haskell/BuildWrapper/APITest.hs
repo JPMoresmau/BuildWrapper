@@ -17,7 +17,7 @@ import Language.Haskell.BuildWrapper.Base
 import qualified Language.Haskell.BuildWrapper.Cabal as Cabal
 
 import Test.Framework
-
+import Test.HUnit (Assertion)
 --data DirectAPI=DirectAPI
 --
 --instance APIFacade DirectAPI where
