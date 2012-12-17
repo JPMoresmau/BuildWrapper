@@ -1,6 +1,5 @@
 {-# LANGUAGE CPP, OverloadedStrings #-}
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
-{-# LINE 3 "test/Language/Haskell/BuildWrapper/CMDTests.hs" #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.CMDTests
 -- Author      : JP Moresmau
@@ -54,6 +53,7 @@ class APIFacade a where
         getTokenTypes :: a -> FilePath -> FilePath -> IO (OpResult [TokenDef])
         getOccurrences :: a -> FilePath -> FilePath -> String -> IO (OpResult [TokenDef])
         getThingAtPoint :: a -> FilePath -> FilePath -> Int -> Int -> IO (OpResult (Maybe ThingAtPoint))
+        getLocals :: a -> FilePath -> FilePath -> Int -> Int -> Int -> Int -> IO (OpResult [ThingAtPoint])
         getNamesInScope :: a -> FilePath -> FilePath-> IO (OpResult (Maybe [String]))
         getCabalDependencies :: a -> FilePath -> IO (OpResult [(FilePath,[CabalPackage])])
         getCabalComponents :: a -> FilePath -> IO (OpResult [CabalComponent])
@@ -76,6 +76,7 @@ instance APIFacade CMDAPI where
         getTokenTypes _ r fp= runAPI r "tokentypes" ["--file="++fp]
         getOccurrences _ r fp s= runAPI r "occurrences" ["--file="++fp,"--token="++s]
         getThingAtPoint _ r fp l c= fmap removeLayoutTAP $ runAPI r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show c]
+        getLocals _ r fp sl sc el ec= runAPI r "locals" ["--file="++fp,"--sline="++ show sl,"--scolumn="++ show sc,"--eline="++ show el,"--ecolumn="++ show ec]
         getNamesInScope _ r fp= runAPI r "namesinscope" ["--file="++fp]
         getCabalDependencies _ r= runAPI r "dependencies" []
         getCabalComponents _ r= runAPI r "components" []
@@ -1186,6 +1187,47 @@ test_ThingAtPointMainSubFolder = do
         assertEqual (Just "GHC.List") (tapModule $ fromJust tap1)
         assertEqual (Just "[GHC.Integer.Type.Integer] -> GHC.Integer.Type.Integer") (tapQType $ fromJust tap1)
       
+test_Locals :: Assertion
+test_Locals = do
+        let api=CMDAPI
+        root<-createTestProject
+        synchronize api root False
+        configure api root Target        
+        let rel="src"</>"Main.hs"
+        write api root rel $ unlines [  
+                  "module Main where",
+                  "main=return $ map id \"toto\"",
+                  "",
+                  "fun1 l1=let",
+                  "    l2=reverse \"toto\"",
+                  "    in head l2"
+                  ] 
+        (_,nsErrors)<-getBuildFlags api root rel
+        assertBool (null nsErrors)      
+        (loc1,nsErrors1)<-getLocals api root rel 4 1 6 15
+        assertBool (null nsErrors1)
+        assertBool (not $ null loc1)
+        let names=map tapName loc1
+        assertBool (elem "l2" names)
+        assertBool (elem "l1" names)
+        write api root rel $ unlines [  
+                  "module Main where",
+                  "main=return $ map id \"toto\"",
+                  "",
+                  "fun1 l1=do",
+                  "    let l2=reverse \"toto\"",
+                  "    reverse head l2"
+                  ] 
+        (_,nsErrorsM)<-getBuildFlags api root rel
+        assertBool (null nsErrorsM)      
+        (loc2,nsErrors2)<-getLocals api root rel 4 1 6 15
+        assertBool (null nsErrors2)
+        assertBool (not $ null loc2)
+        let namesM=map tapName loc2
+        assertBool (elem "l2" namesM)
+        assertBool (elem "l1" namesM)
+        return ()
+
 
 test_NamesInScope :: Assertion
 test_NamesInScope = do
@@ -1679,7 +1721,8 @@ removeLayoutTAP res = case res of
                         _ -> res
  where removeLayout (Just tp) = Just $ unwords . concatMap words . lines $ tp -- replace sequences of spaces and newlines by single space
        removeLayout Nothing   = Nothing
-                
+
+
 runAPI:: (FromJSON a,Show a) => FilePath -> String -> [String] -> IO a
 runAPI root command args= do
         cd<-getCurrentDirectory

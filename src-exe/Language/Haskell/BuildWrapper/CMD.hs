@@ -41,6 +41,7 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | TokenTypes {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String} 
         | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath,token::String, component:: Maybe String}
         | ThingAtPointCmd {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, line::Int, column::Int, component:: Maybe String}
+        | Locals {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, sline::Int, scolumn::Int,eline::Int, ecolumn::Int, component:: Maybe String}
         | NamesInScope {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String} 
         | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String]}
         | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String]}
@@ -102,6 +103,12 @@ mthingAtPoint :: BWCmd
 mthingAtPoint=ThingAtPointCmd tf cp cf uf co fp 
         (def &= help "line" &= name "line")
         (def &= help "column" &= name "column") mcc
+mlocals :: BWCmd
+mlocals=Locals tf cp cf uf co fp 
+        (def &= help "start line" &= name "start line")
+        (def &= help "start column" &= name "start column")
+        (def &= help "end line" &= name "end line")
+        (def &= help "end column" &= name "end column") mcc
 mnamesInScope :: BWCmd
 mnamesInScope=NamesInScope tf cp cf uf co fp mcc
 mdependencies :: BWCmd
@@ -116,7 +123,7 @@ cmdMain :: IO ()
 cmdMain = cmdArgs
   (modes
      [msynchronize, msynchronize1, mconfigure, mwrite, mbuild, mbuild1,
-      mgetbf, moutline, mtokenTypes, moccurrences, mthingAtPoint,
+      mgetbf, moutline, mtokenTypes, moccurrences, mthingAtPoint, mlocals, 
       mnamesInScope, mdependencies, mcomponents, mgenerateUsage]
      &= helpArg [explicit, name "help", name "h"]
      &= help "buildwrapper executable"
@@ -137,6 +144,7 @@ cmdMain = cmdArgs
                 handle c@TokenTypes{file=fi}=runCmd c (getTokenTypes fi)
                 handle c@Occurrences{file=fi,token=t,component=mcomp}=runCmd c (getOccurrences fi t mcomp)
                 handle c@ThingAtPointCmd{file=fi,line=l,column=col,component=mcomp}=runCmd c (getThingAtPoint fi l col mcomp)
+                handle c@Locals{file=fi,sline=sl,scolumn=scol,eline=el,ecolumn=ecol,component=mcomp}=runCmd c (getLocals fi sl scol el ecol mcomp)
                 handle c@NamesInScope{file=fi,component=mcomp}=runCmd c (getNamesInScope fi mcomp)
                 handle c@Dependencies{}=runCmd c getCabalDependencies
                 handle c@Components{}=runCmd c getCabalComponents

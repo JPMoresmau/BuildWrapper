@@ -465,6 +465,13 @@ findInJSON :: FindFunc -- ^ the evaluation function
 findInJSON f (Array vals)=listToMaybe $ sortBy lastPos $ filter f $ V.toList vals
 findInJSON _ _=Nothing
 
+-- | find in JSON AST
+findAllInJSON :: FindFunc -- ^ the evaluation function  
+        -> Value -- ^ the root object containing the AST 
+        -> [Value]
+findAllInJSON f (Array vals)=filter f $ V.toList vals
+findAllInJSON _ _=[]
+
 -- | sort Value by position, descending        
 lastPos :: Value -> Value -> Ordering
 lastPos (Object m1) (Object m2) |
@@ -486,6 +493,26 @@ overlap l c (Object m) |
         Just pos<-HM.lookup "Pos" m,
         Success ifs <- fromJSON pos=iflOverlap ifs (InFileLoc l c)
 overlap _ _ _=False
+
+-- | contains function: find whatever is contained inside the given span
+contains :: Int  -- ^ start line
+        -> Int -- ^ start column
+        -> Int  -- ^ end line
+        -> Int -- ^ end column
+        -> FindFunc
+contains sl sc el ec (Object m) | 
+        Just pos<-HM.lookup "Pos" m,
+        Success ifs <- fromJSON pos=iflOverlap (InFileSpan (InFileLoc sl sc) (InFileLoc el ec)) (ifsStart ifs)
+contains _ _ _ _ _=False
+
+-- | isGHCType function: find whatever has the proper GHCType
+isGHCType :: String --  ^ the type
+        -> FindFunc
+isGHCType tp (Object m) | 
+        Just pos<-HM.lookup "GType" m,
+        Success ghcType <- fromJSON pos=tp == ghcType
+isGHCType _ _ =False
+
 
 extractUsages :: Value -- ^ the root object containing the AST 
         -> [Value]

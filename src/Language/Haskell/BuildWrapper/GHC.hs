@@ -320,6 +320,26 @@ getThingAtPointJSON line col fp base_dir modul options= do
             ) fp base_dir modul options
         return $ fromMaybe Nothing mmf
    
+-- | get the "thing" at a particular point (line/column) in the source
+-- this is using the saved JSON info if available
+getLocalsJSON ::Int  -- ^ start line
+        -> Int -- ^ start column
+        -> Int  -- ^ end line
+        -> Int -- ^ end column
+        -> FilePath -- ^ source file path
+        -> FilePath -- ^ base directory
+        -> String  -- ^ module name
+        -> [String] -- ^  build flags
+        -> IO ([ThingAtPoint])
+getLocalsJSON sline scol eline ecol fp base_dir modul options= do
+        mmf<-withJSONAST (\v->do
+                let cont=contains sline (scionColToGhcCol scol) eline (scionColToGhcCol ecol)
+                let isVar=isGHCType "Var"
+                let mf=findAllInJSON (\x->cont x && isVar x) v
+                return $ mapMaybe (findInJSONData . Just) mf  
+            ) fp base_dir modul options
+        return $ fromMaybe [] mmf  
+  
   
 -- | convert a GHC SrcSpan to a Span,  ignoring the actual file info
 ghcSpanToLocation ::GHC.SrcSpan

@@ -468,6 +468,20 @@ getThingAtPoint fp line col mccn=do
         return $ case mm of 
                 (Just m,ns)->(m,ns)
                 (Nothing,ns)-> (Nothing,ns)
+
+-- | get locals identifiers
+getLocals :: FilePath -- ^ the source file
+        -> Int -- ^ the start line
+        -> Int -- ^ the start column
+        -> Int -- ^ the end line
+        -> Int -- ^ the end column
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
+        -> BuildWrapper (OpResult ([ThingAtPoint]))
+getLocals fp sline scol eline ecol mccn=do
+        mm<-withGHCAST fp mccn $ BwGHC.getLocalsJSON sline scol eline ecol
+        return $ case mm of 
+                (Just m,ns)->(m,ns)
+                (Nothing,ns)-> ([],ns)
                 
 -- | get all names in scope (GHC API)                
 getNamesInScope :: FilePath
