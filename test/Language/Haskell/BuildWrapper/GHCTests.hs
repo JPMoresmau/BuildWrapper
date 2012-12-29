@@ -61,7 +61,7 @@ test_PreprocPragma=
         assertEqual 3 (length tt)
         let (t1:t2:t3:[])=tt
         assertEqual (TokenDef "PP" (mkLocation 1 1 1 20)) t1
-        assertEqual (TokenDef "D" (mkLocation 2 1 2 35)) t2
+        assertEqual (TokenDef "P" (mkLocation 2 1 2 35)) t2
         assertEqual (TokenDef "PP" (mkLocation 3 1 3 7)) t3
         assertEqual "\n\n\nmodule Main\n" s2
 

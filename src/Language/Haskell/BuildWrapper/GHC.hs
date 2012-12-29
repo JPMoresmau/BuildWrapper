@@ -55,7 +55,7 @@ import qualified MonadUtils as GMU
 import Name (isTyVarName,isDataConName,isVarName,isTyConName)
 import Var (varType)
 import PprTyThing (pprTypeForUser)
-import Control.Monad (when)
+import Control.Monad (when, liftM)
 
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
@@ -419,15 +419,28 @@ ghctokensArbitrary base_dir contents options= do
 #else
                 let dflags1 = List.foldl' dopt_set flg' lexerFlags
 #endif
-                let prTS = lexTokenStream sb lexLoc dflags1
+                let prTS = lexTokenStreamH sb lexLoc dflags1
                 case prTS of
-                        POk _ toks      -> return $ Right $ filter ofInterest toks
+                        POk _ toks      -> do
+                                -- GMU.liftIO $ print $ map (show . unLoc) toks
+                                return $ Right $ filter ofInterest toks
                         PFailed loc msg -> return $ Left $ ghcErrMsgToNote dflags1 base_dir $ 
 #if __GLASGOW_HASKELL__ < 706
                                 mkPlainErrMsg loc msg
 #else
                                 mkPlainErrMsg dflags1 loc msg
 #endif
+
+-- | like lexTokenStream, but keep Haddock flag
+lexTokenStreamH :: StringBuffer -> RealSrcLoc -> DynFlags -> ParseResult [Located Token]
+lexTokenStreamH buf loc dflags = unP go initState
+    where dflags' = dopt_set (dopt_set dflags Opt_KeepRawTokenStream) Opt_Haddock
+          initState = mkPState dflags' buf loc
+          go = do
+            ltok <- lexer return
+            case ltok of
+              L _ ITeof -> return []
+              _ -> liftM (ltok:) go
 
 
 #if __GLASGOW_HASKELL__ < 702
@@ -457,9 +470,6 @@ lexerFlags =
         , Opt_ImplicitParams
         , Opt_BangPatterns
         , Opt_TypeFamilies
-#if __GLASGOW_HASKELL__ < 700
-        , Opt_Haddock
-#endif
         , Opt_MagicHash
         , Opt_KindSignatures
         , Opt_RecursiveDo
@@ -523,6 +533,7 @@ generateTokens :: FilePath                        -- ^ The project's root direct
                -> IO (Either BWNote a)
 generateTokens projectRoot contents literate options  xform filterFunc =do
      let (ppTs, ppC) = preprocessSource contents literate
+     -- putStrLn ppC
      result<-  ghctokensArbitrary projectRoot ppC options
      case result of 
        Right toks ->do
@@ -549,7 +560,7 @@ preprocessSource contents literate=
                 ppSCpp (ts2,l2,f) (l,c) 
                         | (Continue _)<-f = addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f)
                         | ('#':_)<-l =addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f) 
-                        | "{-# " `List.isPrefixOf` l=addPPToken "D" (l,c) (ts2,"":l2,f) 
+                        | "{-# " `List.isPrefixOf` l=addPPToken "P" (l,c) (ts2,"":l2,f) 
                         | (Indent n)<-f=(ts2,l:(replicate n (takeWhile (== ' ') l) ++ l2),Start)
                         | otherwise =(ts2,l:l2,Start)
                 ppSLit :: ([TokenDef],[String],PPBehavior) -> (String,Int) -> ([TokenDef],[String],PPBehavior)
@@ -812,8 +823,8 @@ tokenType  (ITdocCommentNamed {})="D"     -- something beginning '-- $'
 tokenType  (ITdocSection {})="D" -- a section heading
 tokenType  (ITdocOptions {})="D"    -- doc options (prune, ignore-exports, etc)
 tokenType  (ITdocOptionsOld {})="D"     -- doc options declared "-- # ..."-style
-tokenType  (ITlineComment {})="D"     -- comment starting by "--"
-tokenType  (ITblockComment {})="D"     -- comment in {- -}
+tokenType  (ITlineComment {})="C"     -- comment starting by "--"
+tokenType  (ITblockComment {})="C"     -- comment in {- -}
 
   -- 7.2 new token types 
 #if __GLASGOW_HASKELL__ >= 702
