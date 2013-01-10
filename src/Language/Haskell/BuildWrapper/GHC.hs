@@ -26,6 +26,8 @@ import qualified Data.List as List
 import Data.Ord (comparing)
 import qualified Data.Text as T
 import qualified Data.Map as DM
+import qualified Data.Set as DS
+import qualified Data.HashMap.Lazy as HM
 
 import DynFlags
 #if __GLASGOW_HASKELL__ > 704
@@ -56,6 +58,7 @@ import Name (isTyVarName,isDataConName,isVarName,isTyConName)
 import Var (varType)
 import PprTyThing (pprTypeForUser)
 import Control.Monad (when, liftM)
+import qualified Data.Vector as V (foldr)
 
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
@@ -929,7 +932,6 @@ ghcExportToUsage df myPkg myMod moduMap lie@(L _ name)=(do
                         let realModus=fromMaybe [modu] (DM.lookup modu moduMap)
                         mapM (\modu2->do
                                 pkg<-lookupModule modu2 Nothing
-                                df<-getSessionDynFlags
                                 let tpkg=T.pack $ showSD True df $ ppr $ modulePackageId pkg
                                 let tmod=T.pack $ showSD True df $ ppr modu2
                                 return (tpkg,tmod)
@@ -943,6 +945,32 @@ ghcExportToUsage df myPkg myMod moduMap lie@(L _ name)=(do
         
 ghcNameToUsage ::  DynFlags -> Maybe T.Text -> T.Text -> T.Text -> Name -> SrcSpan -> Bool -> Usage 
 ghcNameToUsage df tpkg tmod tsection nm src typ=Usage tpkg tmod (T.pack $ showSD False df $ ppr nm) tsection typ (toJSON $ ghcSpanToLocation src) False
+
+type ImportMap=DM.Map T.Text ((LImportDecl Name),[T.Text])
+
+ghcImportMap :: LImportDecl Name -> Ghc ImportMap
+ghcImportMap l@(L _ imp)=(do
+        let L _ modu=ideclName imp
+        let moduS=T.pack $ moduleNameString modu
+        --GMU.liftIO $ putStrLn $ show moduS
+        let mm=DM.singleton moduS (l,[])
+        m<-lookupModule modu Nothing
+        mmi<-getModuleInfo m
+        df <- getSessionDynFlags
+        return $ case mmi of
+                Nothing -> mm
+                Just mi->let
+                        exps=modInfoExports mi
+                        -- extExps=filter (\x->(nameModule x) /= m) exps
+                        in foldr (\x mmx->let
+                                expM=T.pack $ moduleNameString $ moduleName $ nameModule x
+                                nT=T.pack $ showSD False df $ ppr x
+                                in DM.insertWith (\(_,xs1) (_,xs2)->(l,xs1++xs2)) expM (l,[nT]) mmx
+                                ) mm exps
+        )
+        `gcatch` (\(se :: SourceError) -> do
+                GMU.liftIO $ print se
+                return (DM.empty))  
         
 --getGHCOutline :: ParsedSource
 --        -> [OutlineDef]
@@ -968,5 +996,99 @@ ghcNameToUsage df tpkg tmod tsection nm src typ=Usage tpkg tmod (T.pack $ showSD
 --                commentDecl (Just st)=Just $ T.pack $ showSDoc $ ppr st
 --                commentDecl _=Nothing
                 -- ghcSpanToLocation
-                 
-                
+
+-- | module, function/type, constructors
+type TypeMap=DM.Map T.Text (DM.Map T.Text (DS.Set T.Text))
+type FinalImportValue=((LImportDecl Name),DM.Map T.Text (DS.Set T.Text))
+type FinalImportMap=DM.Map T.Text FinalImportValue
+     
+     
+-- | clean imports 
+ghcCleanImports  :: FilePath -- ^ source path
+        -> FilePath -- ^ base directory
+        -> String -- ^ module name
+        -> [String] -- ^ build options
+        -> IO (OpResult [ImportClean])                 
+ghcCleanImports f base_dir modul options  =  do
+        (m,bwns)<-withASTNotes clean (base_dir </>) base_dir (SingleFile f modul) options
+        return ((if null m then [] else head m),bwns)
+        where
+                -- | main clean method: get the usage, the existing imports, and retrieve only the needed names for each import
+                clean :: GHCApplyFunction [ImportClean]
+                clean _ tm=do
+                        let (_,imps,_,_)=fromJust $ tm_renamed_source tm
+                        df <- getSessionDynFlags
+                        let modu=T.pack $ showSD True df $ ppr $ moduleName $ ms_mod $ pm_mod_summary $ tm_parsed_module tm
+                        let (Array vs)= generateGHCInfo df tm
+                        --GMU.liftIO $ print ast
+                        --let usgs=extractUsages ast
+                        --GMU.liftIO $ print usgs
+                        impMaps<-mapM ghcImportMap imps
+                        -- let impMap=DM.unions impMaps
+                        let allImps=concatMap DM.assocs impMaps
+                        -- GMU.liftIO $ putStrLn $ show $ map (\(n,(_,ns))->(n,ns)) $ DM.assocs impMap
+                        let usgMap=V.foldr ghcValToUsgMap DM.empty vs
+                        let usgMapWithoutMe=DM.delete modu usgMap
+                        -- GMU.liftIO $ putStrLn $ show $ usgMapWithoutMe
+                        --let ics=foldr (buildImportClean usgMapWithoutMe df) [] (DM.assocs impMap)
+                        let ftm=foldr (buildImportCleanMap usgMapWithoutMe) DM.empty allImps
+                        -- GMU.liftIO $ putStrLn $ show $ DM.keys ftm
+                        return $ map (dumpImportMap df) $ DM.elems ftm
+                -- | all used names by module        
+                ghcValToUsgMap :: Value -> TypeMap -> TypeMap
+                ghcValToUsgMap (Object m) um |
+                        Just (String n)<-HM.lookup "Name" m,
+                        Just (String mo)<-HM.lookup "Module" m,
+                        not $ T.null mo, -- ignore local objects
+                        mst<-HM.lookup "Type" m,
+                        Just (String ht)<-HM.lookup "HType" m
+                                =let
+                                        mm=DM.lookup mo um
+                                        isType=ht=="t"
+                                        isConstructor=(not isType) && (isUpper $ T.head n) && isJust mst
+                                        key=if isConstructor
+                                                then let
+                                                        Just (String t)=mst
+                                                     in T.strip $ snd $ T.breakOnEnd "->" t
+                                                else n
+                                        val=if isConstructor
+                                                then DS.singleton n
+                                                else DS.empty
+                                 in case mm of
+                                        Just usgM1->DM.insert mo (DM.insertWith DS.union key val usgM1) um
+                                        Nothing->DM.insert mo (DM.singleton key val) um
+                ghcValToUsgMap _ um=um
+                -- | reconcile the usage map and the import to generate the final import map: module -> names to import
+                buildImportCleanMap :: TypeMap ->(T.Text,(LImportDecl Name,[T.Text])) -> FinalImportMap -> FinalImportMap
+                buildImportCleanMap usgMap (cmod,(l@(L _ imp),ns)) tm |
+                          Just namesMap<-DM.lookup cmod usgMap, -- used names for module
+                          namesMapFiltered<-foldr (keepKeys namesMap) DM.empty ns, -- only names really exported by the import name
+                          not $ DM.null namesMapFiltered,
+                          not $ ideclImplicit imp = let  -- ignore implicit prelude
+                                L _ modu=ideclName imp
+                                moduS=T.pack $ moduleNameString modu
+                                in DM.insertWith mergeTypeMap moduS (l,namesMapFiltered) tm
+                buildImportCleanMap _ _ tm = tm      
+                -- | copy the key and value from one map to the other
+                keepKeys :: Ord k => DM.Map k v -> k -> DM.Map k v -> DM.Map k v
+                keepKeys m1 k m2=case DM.lookup k m1 of
+                        Nothing -> m2
+                        Just v1->DM.insert k v1 m2    
+                -- | merge the map containing the set of names         
+                mergeTypeMap :: FinalImportValue -> FinalImportValue -> FinalImportValue
+                mergeTypeMap (l1,m1) (_,m2)= (l1,DM.unionWith DS.union m1 m2)        
+                -- | generate final import string from names map    
+                dumpImportMap :: DynFlags -> FinalImportValue ->  ImportClean
+                dumpImportMap df (L loc imp,ns)=let
+                         txt= T.pack $ showSDDump df $ ppr $ (imp{ideclHiding=Nothing} :: ImportDecl Name)  -- rely on GHC for the initial bit of the import, without the names
+                         nameList= T.intercalate ", " $ List.sortBy (comparing T.toLower) $ map buildName $ DM.assocs ns -- build explicit import list
+                         full=txt `mappend` " (" `mappend` nameList `mappend` ")"
+                         in ImportClean (ghcSpanToLocation loc) full
+                -- build the name with the constructors list if any
+                buildName :: (T.Text,(DS.Set T.Text))->T.Text
+                buildName (n,cs) 
+                        | DS.null cs=n
+                        | otherwise =let
+                                nameList= T.intercalate ", " $ List.sortBy (comparing T.toLower) $ DS.toList cs
+                                in n `mappend` " (" `mappend` nameList `mappend` ")" 
+               

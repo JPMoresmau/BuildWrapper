@@ -94,6 +94,20 @@ Returns the list of names in scope (GHC API call)
 
 - file: the relative path of the file to update (relative to the project root)
 
+## locals
+Returns the list of names defined locally to a point in the source (inside the function, say)
+
+- file: the relative path of the file to update (relative to the project root)
+- sline: the start line of the defining scope
+- scolumn: the start column of the defining scope
+- eline: the end line of the defining scope
+- ecolumn: the end column of the defining scope
+
+## cleanimports
+Returns the cleaned imports line: the location and import text for the minimal required imports 
+
+- file: the relative path of the file to update (relative to the project root)
+
 ## dependencies
 Returns the list of all package dependencies for all cabal components in the cabal file, with the package database they are registered in
 

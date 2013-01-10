@@ -25,6 +25,7 @@ import Language.Haskell.BuildWrapper.Src
 import qualified Data.Text as T
 import qualified Data.HashMap.Lazy as HM
 import qualified Data.Map as DM
+import qualified Data.Set as DS
 import Data.List (sortBy)
 
 import Prelude hiding (readFile, writeFile)
@@ -40,11 +41,14 @@ import Data.Maybe
 import System.Directory
 import System.FilePath
 import GHC (TypecheckedSource, TypecheckedModule(..), Ghc, ms_mod, pm_mod_summary, moduleName, getSessionDynFlags)
+import HsImpExp
+import qualified Name as N
 import Data.Aeson
 import Outputable (ppr)
 import Data.Foldable (foldrM)
 
---import qualified MonadUtils as GMU
+import qualified MonadUtils as GMU
+import SrcLoc (GenLocated(L))
 
 
 
@@ -496,3 +500,23 @@ getCabalDependencies = cabalDependencies
 -- | get cabal components
 getCabalComponents :: BuildWrapper (OpResult [CabalComponent])
 getCabalComponents = cabalComponents
+
+-- | clean imports in a source file
+cleanImports :: FilePath -- ^ the source file
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
+        -> BuildWrapper (OpResult [ImportClean])
+cleanImports fp mccn=do
+        (bf,ns)<-getBuildFlags fp mccn
+        case bf of 
+                (BuildFlags opts _ (Just modS) _)-> do
+                        tgt<-getTargetPath fp
+                        temp<-getFullTempDir
+                        liftIO $ do
+                                cd<-getCurrentDirectory
+                                setCurrentDirectory temp
+                                (m,bwns2)<-BwGHC.ghcCleanImports tgt temp modS opts    
+                                setCurrentDirectory cd
+                                return (m,ns ++ bwns2)
+                _ -> return ([],ns)
+    
+                

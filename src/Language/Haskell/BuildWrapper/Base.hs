@@ -24,6 +24,7 @@ import qualified Data.Text as T
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Vector as V
 import qualified Data.Set as S
+import qualified Data.Map as DM
 
 import System.Directory
 import System.FilePath
@@ -32,6 +33,8 @@ import Data.Maybe (catMaybes)
 
 import System.IO.UTF8 (hPutStr,hGetContents)
 import System.IO (IOMode, openBinaryFile, IOMode(..), Handle, hClose)
+import Data.Aeson.Types (Parser)
+import Data.Foldable (foldrM)
 
 -- | State type
 type BuildWrapper=StateT BuildWrapperState IO
@@ -580,6 +583,41 @@ instance FromJSON CabalPackage where
                          v .: "d" <*>
                          v .: "m"
     parseJSON _= mzero
+
+--data ImportClean=ImportClean {
+--        imports :: DM.Map Int T.Text 
+--        }
+--        deriving (Show,Read)
+--        
+--instance ToJSON ImportClean where
+--        toJSON (ImportClean i)=object["i" .= (map (\(k,v)->toJSON $ object ["l" .= k,"t" .= v]) $ DM.assocs i)]        
+--        
+--instance FromJSON ImportClean where
+--    parseJSON (Object v)| Just (Array m) <- M.lookup "i" v =do
+--        is<-foldrM f DM.empty m
+--        return $ ImportClean is
+--        where 
+--                f :: Value -> DM.Map Int T.Text -> Parser (DM.Map Int T.Text) 
+--                f (Object v2) m |
+--                        Just l<- M.lookup "l" v2,
+--                        Just t<- M.lookup "t" v2=DM.insert <$> parseJSON l <*> parseJSON t <*> return m
+--                f _ m=return m
+--    parseJSON _= mzero
+
+data ImportClean = ImportClean {
+        icSpan :: InFileSpan,
+        icText :: T.Text
+        }
+        deriving (Show,Read,Eq,Ord)
+
+instance ToJSON ImportClean where
+        toJSON (ImportClean sp txt)=object ["s" .= sp, "t" .= txt]
+        
+instance FromJSON ImportClean where
+        parseJSON (Object v)=ImportClean <$>
+                v .: "s" <*>
+                v .: "t"
+        parseJSON _=mzero
 
 data LoadContents = SingleFile {
                 lmFile :: FilePath

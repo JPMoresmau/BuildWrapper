@@ -58,6 +58,8 @@ class APIFacade a where
         getCabalDependencies :: a -> FilePath -> IO (OpResult [(FilePath,[CabalPackage])])
         getCabalComponents :: a -> FilePath -> IO (OpResult [CabalComponent])
         generateUsage :: a -> FilePath -> Bool -> CabalComponent -> IO (OpResult (Maybe [FilePath]))
+        cleanImports :: a -> FilePath -> FilePath-> IO (OpResult [ImportClean])
+        
 
 
 data CMDAPI=CMDAPI
@@ -81,7 +83,8 @@ instance APIFacade CMDAPI where
         getCabalDependencies _ r= runAPI r "dependencies" []
         getCabalComponents _ r= runAPI r "components" []
         generateUsage _ r retAll cc=runAPI r "generateusage" ["--returnall="++ show retAll,"--cabalcomponent="++ cabalComponentName cc]
-
+        cleanImports _ r fp= runAPI r "cleanimports" ["--file="++fp]
+        
 
 exeExtension :: String
 #ifdef mingw32_HOST_OS

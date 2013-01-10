@@ -47,6 +47,7 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String]}
         | GetBuildFlags {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String}
         | GenerateUsage {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], returnAll:: Bool, cabalComponent::String}
+        | CleanImports {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String}
     deriving (Show,Read,Data,Typeable)    
   
 
@@ -93,6 +94,8 @@ mbuild1 :: BWCmd
 mbuild1 = Build1 tf cp cf uf co fp mcc
 mgetbf :: BWCmd
 mgetbf = GetBuildFlags tf cp cf uf co fp mcc
+mcleanimports :: BWCmd
+mcleanimports = CleanImports tf cp cf uf co fp mcc
 moutline :: BWCmd
 moutline = Outline tf cp cf uf co fp mcc
 mtokenTypes :: BWCmd
@@ -118,12 +121,13 @@ mcomponents=Components tf cp cf uf co
 mgenerateUsage :: BWCmd
 mgenerateUsage=GenerateUsage tf cp cf uf co ra cc
 
+
 -- | main method for command handling
 cmdMain :: IO ()
 cmdMain = cmdArgs
   (modes
      [msynchronize, msynchronize1, mconfigure, mwrite, mbuild, mbuild1,
-      mgetbf, moutline, mtokenTypes, moccurrences, mthingAtPoint, mlocals, 
+      mgetbf,mcleanimports, moutline, mtokenTypes, moccurrences, mthingAtPoint, mlocals, 
       mnamesInScope, mdependencies, mcomponents, mgenerateUsage]
      &= helpArg [explicit, name "help", name "h"]
      &= help "buildwrapper executable"
@@ -140,6 +144,7 @@ cmdMain = cmdArgs
                 handle c@Build{verbosity=ve,output=o,cabalTarget=w}=runCmdV ve c (build o w)
                 handle c@Build1{file=fi,component=mcomp}=runCmd c (build1 fi mcomp)
                 handle c@GetBuildFlags{file=fi,component=mcomp}=runCmd c (getBuildFlags fi mcomp)
+                handle c@CleanImports{file=fi,component=mcomp}=runCmd c (cleanImports fi mcomp)
                 handle c@Outline{file=fi,component=mcomp}=runCmd c (getOutline fi mcomp)
                 handle c@TokenTypes{file=fi}=runCmd c (getTokenTypes fi)
                 handle c@Occurrences{file=fi,token=t,component=mcomp}=runCmd c (getOccurrences fi t mcomp)
