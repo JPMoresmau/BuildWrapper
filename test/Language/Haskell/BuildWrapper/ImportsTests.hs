@@ -56,6 +56,24 @@ test_CleanImportsFunction = do
         assertBool $ null ns
         assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 19)) "import Data.Unique (newUnique)"] ics
 
+test_CleanImportsRemove :: Assertion
+test_CleanImportsRemove = do
+        let api=CMDAPI
+        root<-createTestProject
+        synchronize api root False
+        let rel="src"</>"A.hs"
+        -- use api to write temp file
+        write api root rel $ unlines [
+                "module A where",
+                "",
+                "import Data.Unique",
+                "f = putStrLn \"hello\""
+                ]
+        (ics,ns)<-cleanImports api root rel
+        assertBool $ null ns
+        assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 19)) ""] ics
+
+
 test_CleanImportsFunctionType :: Assertion
 test_CleanImportsFunctionType = do
         let api=CMDAPI

@@ -24,7 +24,6 @@ import qualified Data.Text as T
 import qualified Data.HashMap.Lazy as M
 import qualified Data.Vector as V
 import qualified Data.Set as S
-import qualified Data.Map as DM
 
 import System.Directory
 import System.FilePath
@@ -33,8 +32,6 @@ import Data.Maybe (catMaybes)
 
 import System.IO.UTF8 (hPutStr,hGetContents)
 import System.IO (IOMode, openBinaryFile, IOMode(..), Handle, hClose)
-import Data.Aeson.Types (Parser)
-import Data.Foldable (foldrM)
 
 -- | State type
 type BuildWrapper=StateT BuildWrapperState IO
@@ -611,11 +608,11 @@ data ImportClean = ImportClean {
         deriving (Show,Read,Eq,Ord)
 
 instance ToJSON ImportClean where
-        toJSON (ImportClean sp txt)=object ["s" .= sp, "t" .= txt]
+        toJSON (ImportClean sp txt)=object ["l" .= sp, "t" .= txt]
         
 instance FromJSON ImportClean where
         parseJSON (Object v)=ImportClean <$>
-                v .: "s" <*>
+                v .: "l" <*>
                 v .: "t"
         parseJSON _=mzero
 

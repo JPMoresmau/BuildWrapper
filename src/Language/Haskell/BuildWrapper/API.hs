@@ -25,7 +25,6 @@ import Language.Haskell.BuildWrapper.Src
 import qualified Data.Text as T
 import qualified Data.HashMap.Lazy as HM
 import qualified Data.Map as DM
-import qualified Data.Set as DS
 import Data.List (sortBy)
 
 import Prelude hiding (readFile, writeFile)
@@ -41,17 +40,9 @@ import Data.Maybe
 import System.Directory
 import System.FilePath
 import GHC (TypecheckedSource, TypecheckedModule(..), Ghc, ms_mod, pm_mod_summary, moduleName, getSessionDynFlags)
-import HsImpExp
-import qualified Name as N
 import Data.Aeson
 import Outputable (ppr)
 import Data.Foldable (foldrM)
-
-import qualified MonadUtils as GMU
-import SrcLoc (GenLocated(L))
-
-
-
 
 
 -- | copy all files from the project to the temporary folder

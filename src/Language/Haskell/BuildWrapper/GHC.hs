@@ -1020,9 +1020,6 @@ ghcCleanImports f base_dir modul options  =  do
                         df <- getSessionDynFlags
                         let modu=T.pack $ showSD True df $ ppr $ moduleName $ ms_mod $ pm_mod_summary $ tm_parsed_module tm
                         let (Array vs)= generateGHCInfo df tm
-                        --GMU.liftIO $ print ast
-                        --let usgs=extractUsages ast
-                        --GMU.liftIO $ print usgs
                         impMaps<-mapM ghcImportMap imps
                         -- let impMap=DM.unions impMaps
                         let allImps=concatMap DM.assocs impMaps
@@ -1032,8 +1029,10 @@ ghcCleanImports f base_dir modul options  =  do
                         -- GMU.liftIO $ putStrLn $ show $ usgMapWithoutMe
                         --let ics=foldr (buildImportClean usgMapWithoutMe df) [] (DM.assocs impMap)
                         let ftm=foldr (buildImportCleanMap usgMapWithoutMe) DM.empty allImps
+                        
+                        let missingCleans=getRemovedImports allImps ftm
                         -- GMU.liftIO $ putStrLn $ show $ DM.keys ftm
-                        return $ map (dumpImportMap df) $ DM.elems ftm
+                        return ((map (dumpImportMap df) $ DM.elems ftm) ++ missingCleans)
                 -- | all used names by module        
                 ghcValToUsgMap :: Value -> TypeMap -> TypeMap
                 ghcValToUsgMap (Object m) um |
@@ -1078,7 +1077,7 @@ ghcCleanImports f base_dir modul options  =  do
                 mergeTypeMap :: FinalImportValue -> FinalImportValue -> FinalImportValue
                 mergeTypeMap (l1,m1) (_,m2)= (l1,DM.unionWith DS.union m1 m2)        
                 -- | generate final import string from names map    
-                dumpImportMap :: DynFlags -> FinalImportValue ->  ImportClean
+                dumpImportMap :: DynFlags -> FinalImportValue -> ImportClean
                 dumpImportMap df (L loc imp,ns)=let
                          txt= T.pack $ showSDDump df $ ppr $ (imp{ideclHiding=Nothing} :: ImportDecl Name)  -- rely on GHC for the initial bit of the import, without the names
                          nameList= T.intercalate ", " $ List.sortBy (comparing T.toLower) $ map buildName $ DM.assocs ns -- build explicit import list
@@ -1091,4 +1090,9 @@ ghcCleanImports f base_dir modul options  =  do
                         | otherwise =let
                                 nameList= T.intercalate ", " $ List.sortBy (comparing T.toLower) $ DS.toList cs
                                 in n `mappend` " (" `mappend` nameList `mappend` ")" 
-               
+                getRemovedImports :: [(T.Text,((LImportDecl Name),[T.Text]))] -> FinalImportMap -> [ImportClean]
+                getRemovedImports allImps ftm= let 
+                        cleanedLines=DS.fromList $ map (\(L l _,_)->iflLine $ifsStart $ ghcSpanToLocation l) $ DM.elems ftm
+                        missingImps=filter (\(_,(L l imp,_))->not $ ideclImplicit imp || DS.member (iflLine $ifsStart $ ghcSpanToLocation l) cleanedLines) allImps
+                        in map (\(_,(L l _,_))-> ImportClean (ghcSpanToLocation l) "") missingImps
+                       
