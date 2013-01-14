@@ -58,7 +58,7 @@ class APIFacade a where
         getCabalDependencies :: a -> FilePath -> IO (OpResult [(FilePath,[CabalPackage])])
         getCabalComponents :: a -> FilePath -> IO (OpResult [CabalComponent])
         generateUsage :: a -> FilePath -> Bool -> CabalComponent -> IO (OpResult (Maybe [FilePath]))
-        cleanImports :: a -> FilePath -> FilePath-> IO (OpResult [ImportClean])
+        cleanImports :: a -> FilePath -> FilePath -> Bool -> IO (OpResult [ImportClean])
         
 
 
@@ -83,7 +83,7 @@ instance APIFacade CMDAPI where
         getCabalDependencies _ r= runAPI r "dependencies" []
         getCabalComponents _ r= runAPI r "components" []
         generateUsage _ r retAll cc=runAPI r "generateusage" ["--returnall="++ show retAll,"--cabalcomponent="++ cabalComponentName cc]
-        cleanImports _ r fp= runAPI r "cleanimports" ["--file="++fp]
+        cleanImports _ r fp fo= runAPI r "cleanimports" ["--file="++fp,"--format="++ show fo]
         
 
 exeExtension :: String
@@ -444,7 +444,7 @@ test_BuildO2  = do
         let rel="src"</>"Main.hs"
         writeFile (root </> rel) $ unlines ["module Main where","main :: IO()","main= putStrLn \"Hello World\""] 
         synchronize api root False
-        (ns, nsErrors2)<-build1 api root rel 
+        (ns, _)<-build1 api root rel 
         assertBool (isJust ns)
 
         
@@ -1764,7 +1764,7 @@ assertEqualNotesWithoutSpaces msg n1 n2=do
         let
                 n1'=n1{bwnTitle=removeSpaces $ bwnTitle n1}
                 n2'=n1{bwnTitle=removeSpaces $ bwnTitle n2}
-        assertEqual n1' n2'
+        assertEqualVerbose msg n1' n2'
 
 removeLayoutTAP :: OpResult (Maybe ThingAtPoint) -> OpResult (Maybe ThingAtPoint) 
 removeLayoutTAP res = case res of

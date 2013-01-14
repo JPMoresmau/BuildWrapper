@@ -494,9 +494,10 @@ getCabalComponents = cabalComponents
 
 -- | clean imports in a source file
 cleanImports :: FilePath -- ^ the source file
+        -> Bool -- ^ format?
         -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
         -> BuildWrapper (OpResult [ImportClean])
-cleanImports fp mccn=do
+cleanImports fp doFormat mccn=do
         (bf,ns)<-getBuildFlags fp mccn
         case bf of 
                 (BuildFlags opts _ (Just modS) _)-> do
@@ -505,7 +506,7 @@ cleanImports fp mccn=do
                         liftIO $ do
                                 cd<-getCurrentDirectory
                                 setCurrentDirectory temp
-                                (m,bwns2)<-BwGHC.ghcCleanImports tgt temp modS opts    
+                                (m,bwns2)<-BwGHC.ghcCleanImports tgt temp modS opts doFormat
                                 setCurrentDirectory cd
                                 return (m,ns ++ bwns2)
                 _ -> return ([],ns)

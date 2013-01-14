@@ -18,7 +18,6 @@ import Language.Haskell.BuildWrapper.CMDTests
 
 import System.FilePath
 
-
 import Test.Framework
 import Test.HUnit (Assertion)
 
@@ -35,7 +34,7 @@ test_CleanImportsNothing = do
                 "f :: IO()",
                 "f=putStrLn \"hello\""
                 ]
-        (ics,ns)<-cleanImports api root rel
+        (ics,ns)<-cleanImports api root rel False
         assertBool $ null ns
         assertBool $ null ics
         
@@ -52,7 +51,7 @@ test_CleanImportsFunction = do
                 "import Data.Unique",
                 "f = newUnique"
                 ]
-        (ics,ns)<-cleanImports api root rel
+        (ics,ns)<-cleanImports api root rel False
         assertBool $ null ns
         assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 19)) "import Data.Unique (newUnique)"] ics
 
@@ -69,7 +68,7 @@ test_CleanImportsRemove = do
                 "import Data.Unique",
                 "f = putStrLn \"hello\""
                 ]
-        (ics,ns)<-cleanImports api root rel
+        (ics,ns)<-cleanImports api root rel False
         assertBool $ null ns
         assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 19)) ""] ics
 
@@ -88,7 +87,7 @@ test_CleanImportsFunctionType = do
                 "f :: IO Unique",
                 "f = newUnique"
                 ]
-        (ics,ns)<-cleanImports api root rel
+        (ics,ns)<-cleanImports api root rel False
         assertBool $ null ns
         assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 19)) "import Data.Unique (newUnique, Unique)"] ics
         
@@ -112,7 +111,7 @@ test_CleanImportsConstructor = do
                 "import A",
                 "f = MyCons 2"
                 ]        
-        (ics,ns)<-cleanImports api root rel2
+        (ics,ns)<-cleanImports api root rel2 False
         assertBool $ null ns
         assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 9)) "import A (MyData (MyCons))"] ics
 
@@ -136,7 +135,7 @@ test_CleanImportsFunctionInExport = do
                 "import A",
                 "f = MyCons 2"
                 ]        
-        (ics,ns)<-cleanImports api root rel2
+        (ics,ns)<-cleanImports api root rel2 False
         assertBool $ null ns
         assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 9)) "import A (MyData (MyCons), myUnCons)"] ics
 
@@ -160,7 +159,7 @@ test_CleanImportsConstructorQualified = do
                 "import qualified A as MyA",
                 "f = MyA.MyCons 2"
                 ]        
-        (ics,ns)<-cleanImports api root rel2
+        (ics,ns)<-cleanImports api root rel2 False
         assertBool $ null ns
         assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 26)) "import qualified A as MyA (MyData (MyCons))"] ics
 
@@ -177,7 +176,7 @@ test_CleanImportsFunctionReExported = do
                 "import Data.Char",
                 "f = toUpper"
                 ]    
-        (ics,ns)<-cleanImports api root rel
+        (ics,ns)<-cleanImports api root rel False
         assertBool $ null ns
         assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 17)) "import Data.Char (toUpper)"] ics
 
@@ -194,7 +193,7 @@ test_CleanImportsFunctionReExportedInExport = do
                 "import Data.Char",
                 "f = toUpper"
                 ]    
-        (ics,ns)<-cleanImports api root rel
+        (ics,ns)<-cleanImports api root rel False
         assertBool $ null ns
         assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 17)) "import Data.Char (toLower, toUpper)"] ics
         
@@ -214,7 +213,7 @@ test_CleanImportsFunctionReExportedWithOthers = do
                 "f2 = unzip5",
                 "f3 = isSeparator"
                 ]    
-        (ics,ns)<-cleanImports api root rel
+        (ics,ns)<-cleanImports api root rel False
         assertBool $ null ns
         assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 17)) 
                         "import Data.Char (isSeparator, toUpper)",
@@ -222,5 +221,26 @@ test_CleanImportsFunctionReExportedWithOthers = do
                         "import Data.List (unzip5)"] 
                 ics
 
-               
-             
+test_CleanImportsFormat :: Assertion
+test_CleanImportsFormat = do
+        let api=CMDAPI
+        root<-createTestProject
+        synchronize api root False
+        let rel="src"</>"A.hs"
+        -- use api to write temp file
+        write api root rel $ unlines [
+                "module A where",
+                "",
+                "import Data.Char",
+                "import qualified Data.Unique as U",
+                "f = toUpper",
+                "f2 = U.newUnique",
+                "f3 = isSeparator"
+                ]            
+        (ics,ns)<-cleanImports api root rel True
+        assertBool $ null ns
+        assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 17)) 
+                        "import           Data.Char         (isSeparator, toUpper)",
+                ImportClean (InFileSpan (InFileLoc 4 1) (InFileLoc 4 34)) 
+                        "import qualified Data.Unique as U (newUnique)"] 
+                ics    

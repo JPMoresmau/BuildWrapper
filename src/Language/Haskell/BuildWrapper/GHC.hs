@@ -39,7 +39,7 @@ import GHC
 import GHC.Paths ( libdir )
 import HscTypes ( srcErrorMessages, SourceError, GhcApiError)
 import Outputable
-import FastString (FastString,unpackFS,concatFS,fsLit,mkFastString)
+import FastString (FastString,unpackFS,concatFS,fsLit,mkFastString, lengthFS)
 import Lexer hiding (loc)
 import Bag
 
@@ -59,6 +59,7 @@ import Var (varType)
 import PprTyThing (pprTypeForUser)
 import Control.Monad (when, liftM)
 import qualified Data.Vector as V (foldr)
+import Module (moduleNameFS)
 
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
@@ -1008,8 +1009,9 @@ ghcCleanImports  :: FilePath -- ^ source path
         -> FilePath -- ^ base directory
         -> String -- ^ module name
         -> [String] -- ^ build options
+        -> Bool -- ^ format?
         -> IO (OpResult [ImportClean])                 
-ghcCleanImports f base_dir modul options  =  do
+ghcCleanImports f base_dir modul options doFormat  =  do
         (m,bwns)<-withASTNotes clean (base_dir </>) base_dir (SingleFile f modul) options
         return ((if null m then [] else head m),bwns)
         where
@@ -1031,8 +1033,10 @@ ghcCleanImports f base_dir modul options  =  do
                         let ftm=foldr (buildImportCleanMap usgMapWithoutMe) DM.empty allImps
                         
                         let missingCleans=getRemovedImports allImps ftm
+                        let formatF=if doFormat then formatImports  else map (dumpImportMap df)
                         -- GMU.liftIO $ putStrLn $ show $ DM.keys ftm
-                        return ((map (dumpImportMap df) $ DM.elems ftm) ++ missingCleans)
+                        let allCleans=((formatF $ DM.elems ftm) ++ missingCleans)
+                        return allCleans
                 -- | all used names by module        
                 ghcValToUsgMap :: Value -> TypeMap -> TypeMap
                 ghcValToUsgMap (Object m) um |
@@ -1095,4 +1099,30 @@ ghcCleanImports f base_dir modul options  =  do
                         cleanedLines=DS.fromList $ map (\(L l _,_)->iflLine $ifsStart $ ghcSpanToLocation l) $ DM.elems ftm
                         missingImps=filter (\(_,(L l imp,_))->not $ ideclImplicit imp || DS.member (iflLine $ifsStart $ ghcSpanToLocation l) cleanedLines) allImps
                         in map (\(_,(L l _,_))-> ImportClean (ghcSpanToLocation l) "") missingImps
-                       
+                getFormatInfo :: FinalImportValue -> (Int,Int,Int,Int,Int)->(Int,Int,Int,Int,Int)
+                getFormatInfo (L _ imp,_) (szSafe,szQualified,szPkg,szName,szAs)=let
+                        szSafe2=if ideclSafe imp then 5 else szSafe
+                        szQualified2=if ideclQualified imp then 10 else szQualified
+                        szPkg2=maybe szPkg (\p->max szPkg $ (3 + lengthFS p )) $ ideclPkgQual imp
+                        L _ mo=ideclName imp
+                        szName2=max szName $ (1 + (lengthFS $ moduleNameFS mo))
+                        szAs2=maybe szAs (\m->max szAs $ (3 + (lengthFS $ moduleNameFS  m))) $ ideclAs imp
+                        in (szSafe2,szQualified2,szPkg2,szName2,szAs2)
+                formatImport :: (Int,Int,Int,Int,Int)-> FinalImportValue -> ImportClean
+                formatImport (szSafe,szQualified,szPkg,szName,szAs) (L loc imp,ns) =let
+                        st="import "
+                        saf=if ideclSafe imp then "safe " else T.justifyLeft szSafe ' ' ""
+                        qual=if ideclQualified imp then "qualified " else T.justifyLeft szQualified ' ' ""
+                        pkg=maybe (T.justifyLeft szPkg ' ' "") (\p->"\""  `mappend` (T.pack $ unpackFS p) `mappend` "\" ") $ ideclPkgQual imp
+                        L _ mo=ideclName imp
+                        nm=T.justifyLeft szName ' ' $ T.pack $ moduleNameString mo
+                        ast=maybe (T.justifyLeft szAs ' ' "") (\m->"as "  `mappend` (T.pack $ moduleNameString m)) $ ideclAs imp
+                        nameList= T.intercalate ", " $ List.sortBy (comparing T.toLower) $ map buildName $ DM.assocs ns -- build explicit import list
+                        full=st `mappend` saf `mappend` qual `mappend` pkg `mappend` nm `mappend` ast `mappend` " (" `mappend` nameList `mappend` ")"
+                        in ImportClean (ghcSpanToLocation loc) full
+                formatImports :: [FinalImportValue] -> [ImportClean]
+                formatImports fivs = let
+                        formatInfo=foldr getFormatInfo (0,0,0,0,0) fivs
+                        in map (formatImport formatInfo) fivs
+                        
+                        
