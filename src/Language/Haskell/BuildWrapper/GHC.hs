@@ -29,6 +29,9 @@ import qualified Data.Map as DM
 import qualified Data.Set as DS
 import qualified Data.HashMap.Lazy as HM
 
+import qualified Data.ByteString.Lazy as BS
+import qualified Data.ByteString.Lazy.Char8 as BSC
+
 import DynFlags
 #if __GLASGOW_HASKELL__ > 704
 import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,WarningMessages,MsgDoc)
@@ -60,6 +63,8 @@ import PprTyThing (pprTypeForUser)
 import Control.Monad (when, liftM)
 import qualified Data.Vector as V (foldr)
 import Module (moduleNameFS)
+-- import System.Time (getClockTime, diffClockTimes, timeDiffToString)
+import System.IO (hFlush, stdout)
 
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
@@ -111,7 +116,31 @@ withASTNotes ::  GHCApplyFunction a -- ^ the final action to perform on the resu
         ->  LoadContents -- ^ what to load
         -> [String] -- ^ the GHC options 
         -> IO (OpResult [a])
-withASTNotes f ff base_dir contents options=do
+withASTNotes f ff base_dir contents options=initGHC (ghcWithASTNotes f ff base_dir contents) options
+
+--        do
+--    -- http://hackage.haskell.org/trac/ghc/ticket/7380#comment:1     : -O2 is removed from the options  
+--    let cleaned=filter (not . List.isInfixOf "-O") options
+--    let lflags=map noLoc cleaned
+--    -- print cleaned
+--    (_leftovers, _) <- parseStaticFlags lflags
+--    runGhc (Just libdir) $ do
+--        flg <- getSessionDynFlags
+--        (flg', _, _) <- parseDynamicFlags flg _leftovers
+--        GHC.defaultCleanupHandler flg' $ do
+--                -- our options here
+--                -- if we use OneShot, we need the other modules to be built
+--                -- so we can't use hscTarget = HscNothing
+--                -- and it takes a while to actually generate the o and hi files for big modules
+--                -- if we use CompManager, it's slower for modules with lots of dependencies but we can keep hscTarget= HscNothing which makes it better for bigger modules
+--                -- we use target interpreted so that it works with TemplateHaskell
+--                setSessionDynFlags flg' {hscTarget = HscInterpreted, ghcLink = NoLink , ghcMode = CompManager}  
+--                ghcWithASTNotes f ff base_dir contents
+  
+initGHC ::  Ghc a  
+        -> [String] -- ^ the GHC options
+        -> IO a 
+initGHC f options=  do
     -- http://hackage.haskell.org/trac/ghc/ticket/7380#comment:1     : -O2 is removed from the options  
     let cleaned=filter (not . List.isInfixOf "-O") options
     let lflags=map noLoc cleaned
@@ -121,25 +150,37 @@ withASTNotes f ff base_dir contents options=do
         flg <- getSessionDynFlags
         (flg', _, _) <- parseDynamicFlags flg _leftovers
         GHC.defaultCleanupHandler flg' $ do
-                ref <- GMU.liftIO $ newIORef []
                 -- our options here
                 -- if we use OneShot, we need the other modules to be built
                 -- so we can't use hscTarget = HscNothing
                 -- and it takes a while to actually generate the o and hi files for big modules
                 -- if we use CompManager, it's slower for modules with lots of dependencies but we can keep hscTarget= HscNothing which makes it better for bigger modules
                 -- we use target interpreted so that it works with TemplateHaskell
+                setSessionDynFlags flg' {hscTarget = HscInterpreted, ghcLink = NoLink , ghcMode = CompManager}  
+                f            
+               
+ghcWithASTNotes   ::  
+        GHCApplyFunction a -- ^ the final action to perform on the result
+        -> (FilePath -> FilePath) -- ^ transform given file path to find bwinfo path
+        -> FilePath -- ^ the base directory
+        ->  LoadContents -- ^ what to load
+        -> Ghc (OpResult [a])         
+ghcWithASTNotes  f ff base_dir contents= do            
+                ref <- GMU.liftIO $ newIORef []
+                cflg <- getSessionDynFlags
 #if __GLASGOW_HASKELL__ > 704  
-                setSessionDynFlags flg'  {hscTarget = HscInterpreted, ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref }
+                setSessionDynFlags cflg  {log_action = logAction ref }
 #else                
-                setSessionDynFlags flg'  {hscTarget = HscInterpreted, ghcLink = NoLink , ghcMode = CompManager, log_action = logAction ref flg' }
+                setSessionDynFlags cflg  {log_action = logAction ref cflg }
 #endif
                 --  $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
                 let fps=getLoadFiles contents
                 mapM_ (\(fp,_)-> addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }) fps
                 --c1<-GMU.liftIO getClockTime
-                let howMuch=case contents of
-                        SingleFile{lmModule=m}->LoadUpTo $ mkModuleName m
-                        MultipleFile{}->LoadAllTargets
+--                let howMuch=case contents of
+--                        SingleFile{lmModule=m}->LoadUpTo $ mkModuleName m
+--                        MultipleFile{}->LoadAllTargets
+                let howMuch=LoadAllTargets
                 -- GMU.liftIO $ putStrLn "Loading..."
                 load howMuch
                            `gcatch` (\(e :: SourceError) -> handle_error ref e)
@@ -179,7 +220,7 @@ withASTNotes f ff base_dir contents options=do
             processError MultipleFile{} "Module not part of module graph"=False -- we ignore the error when we process several files and some we can't find
             processError _ _=True
             
-        
+       
             workOnResult :: GHCApplyFunction a -> FilePath -> ModSummary -> Ghc a
             workOnResult f2 fp modSum= do
                 p <- parseModule modSum
@@ -274,36 +315,74 @@ getGhcNameDefsInScope  :: FilePath -- ^ source path
         -> [String] -- ^ build options
         -> IO (OpResult (Maybe [NameDef]))
 getGhcNameDefsInScope fp base_dir modul options=do
+        -- c0<-getClockTime
         (nns,ns)<-withASTNotes (\_ _->do
-                --c1<-GMU.liftIO getClockTime
-                --GMU.liftIO $ putStrLn "getGhcNameDefsInScope"
+                -- c1<-GMU.liftIO getClockTime
+                -- GMU.liftIO $ putStrLn "getGhcNameDefsInScope"
                 names<-getNamesInScope
-                --c2<-GMU.liftIO getClockTime
-                --GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
-                mapM name2nd names) id base_dir (SingleFile fp modul) options
+                df<-getSessionDynFlags
+                -- c2<-GMU.liftIO getClockTime
+                -- GMU.liftIO $ putStrLn ("getNamesInScope: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
+                mapM (name2nd df) names) id base_dir (SingleFile fp modul) options
+        -- c4<-getClockTime
+        -- putStrLn ("getNamesInScopeAll: " ++ (timeDiffToString  $ diffClockTimes c4 c0))
         return $ case nns of
                 (x:_)->(Just x,ns)
                 _->(Nothing, ns)
                 
-        where name2nd :: GhcMonad m=> Name -> m NameDef
-              name2nd n=do
-                m<- getInfo n
-                df<-getSessionDynFlags
-                let ty=case m of
-                        Just (tyt,_,_)->ty2t df tyt
-                        Nothing->Nothing
-                return $ NameDef (T.pack $ showSDDump df $ ppr n) (name2t n) ty
+-- | get all names in scope, packaged in NameDefs
+getGhcNameDefsInScopeLongRunning  :: FilePath -- ^ source path
+        -> FilePath -- ^ base directory
+        -> String -- ^ module name
+        -> [String] -- ^ build options
+        -> IO ()
+getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
+        initGHC (go False) options
+        where 
+                go :: Bool -> Ghc ()
+                go r= do
+                        ns1<-if r then
+                                (do 
+                                        removeTarget (TargetFile fp Nothing)      
+                                        load LoadAllTargets
+                                        return []
+                                ) `gcatch` (\(e :: SourceError) -> do
+                                        let errs = srcErrorMessages e
+                                        df <- getSessionDynFlags
+                                        return $ ghcMessagesToNotes df base_dir (emptyBag, errs)
+                                        )
+                             else return []
+                        (nns,ns)<- ghcWithASTNotes (\_ _->do
+                                names<-getNamesInScope
+                                df<-getSessionDynFlags
+                                mapM (name2nd df) names) id base_dir (SingleFile fp modul)       
+                        let res=case nns of
+                                (x:_) -> (Just x,ns1 ++ ns)
+                                _ -> (Nothing, ns1 ++ ns)
+                        GMU.liftIO $ BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode res
+                        GMU.liftIO $ hFlush $ stdout
+                        l<- GMU.liftIO $ getLine 
+                        if "q" == l then return() else go True    
+                
+name2nd :: GhcMonad m=> DynFlags -> Name -> m NameDef
+name2nd df n=do
+        m<- getInfo n
+        let ty=case m of
+                Just (tyt,_,_)->ty2t tyt
+                Nothing->Nothing
+        return $ NameDef (T.pack $ showSDDump df $ ppr n) (name2t n) ty
+        where         
               name2t :: Name -> [OutlineDefType]
-              name2t n 
-                        | isTyVarName n=[Type]
-                        | isTyConName n=[Type]
-                        | isDataConName n = [Constructor]
-                        | isVarName n = [Function]
+              name2t n2 
+                        | isTyVarName n2=[Type]
+                        | isTyConName n2=[Type]
+                        | isDataConName n2 = [Constructor]
+                        | isVarName n2 = [Function]
                         | otherwise =[]
-              ty2t :: DynFlags -> TyThing -> Maybe T.Text
-              ty2t df (AnId aid)=Just $ T.pack $ showSD False df $ pprTypeForUser True $ varType aid
-              ty2t df (ADataCon dc)=Just $ T.pack $ showSD False df $ pprTypeForUser True $ dataConUserType dc
-              ty2t _ _ = Nothing
+              ty2t :: TyThing -> Maybe T.Text
+              ty2t (AnId aid)=Just $ T.pack $ showSD False df $ pprTypeForUser True $ varType aid
+              ty2t (ADataCon dc)=Just $ T.pack $ showSD False df $ pprTypeForUser True $ dataConUserType dc
+              ty2t _ = Nothing
 
 -- | get the "thing" at a particular point (line/column) in the source
 -- this is using the saved JSON info if available

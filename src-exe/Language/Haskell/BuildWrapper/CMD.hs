@@ -36,7 +36,7 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | Write {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, contents::String}  
         | Configure {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], verbosity::Verbosity,cabalTarget::WhichCabal}
         | Build {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], verbosity::Verbosity,output::Bool,cabalTarget::WhichCabal}
-        | Build1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String}
+        | Build1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String, longRunning :: Bool}
         | Outline {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String} 
         | TokenTypes {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String} 
         | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath,token::String, component:: Maybe String}
@@ -69,6 +69,9 @@ co=def &= help "cabal extra parameters"
 formatF :: Bool
 formatF=def &= help "format imports"
 
+longRunningF :: Bool
+longRunningF=def &= help "long running process"
+
 v :: Verbosity
 v=Normal &= help "verbosity"
 wc :: WhichCabal
@@ -94,7 +97,7 @@ mwrite= Write tf cp cf uf co fp (def &= help "file contents")
 mbuild :: BWCmd
 mbuild = Build tf cp cf uf co v (def &= help "output compilation and linking result") wc
 mbuild1 :: BWCmd
-mbuild1 = Build1 tf cp cf uf co fp mcc
+mbuild1 = Build1 tf cp cf uf co fp mcc longRunningF
 mgetbf :: BWCmd
 mgetbf = GetBuildFlags tf cp cf uf co fp mcc
 mcleanimports :: BWCmd
@@ -145,7 +148,9 @@ cmdMain = cmdArgs
                 handle c@Write{file=fi,contents=s}=runCmd c (write fi s)
                 handle c@Configure{cabalTarget=w}=runCmd c (configure w)
                 handle c@Build{verbosity=ve,output=o,cabalTarget=w}=runCmdV ve c (build o w)
-                handle c@Build1{file=fi,component=mcomp}=runCmd c (build1 fi mcomp)
+                handle c@Build1{file=fi,component=mcomp}=if longRunning c
+                        then runCmd c (build1LongRunning fi mcomp)
+                        else runCmd c (build1 fi mcomp)
                 handle c@GetBuildFlags{file=fi,component=mcomp}=runCmd c (getBuildFlags fi mcomp)
                 handle c@CleanImports{file=fi,format=fo,component=mcomp}=runCmd c (cleanImports fi fo mcomp)
                 handle c@Outline{file=fi,component=mcomp}=runCmd c (getOutline fi mcomp)

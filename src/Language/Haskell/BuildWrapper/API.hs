@@ -284,9 +284,14 @@ generateUsage returnAll ccn=
 -- | build one source file in GHC
 build1 :: FilePath -- ^ the source file
         -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
-        -> BuildWrapper (OpResult (Maybe [NameDef])) -- ^ True if build is successful
+        -> BuildWrapper (OpResult (Maybe [NameDef])) -- ^ Just names in scope if build is successful
 build1 fp mccn=withGHCAST' fp mccn BwGHC.getGhcNameDefsInScope
 
+-- | build one source file in GHC
+build1LongRunning :: FilePath -- ^ the source file
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
+        -> BuildWrapper (OpResult (Maybe ())) -- ^ True if build is successful
+build1LongRunning fp mccn=withGHCAST fp mccn BwGHC.getGhcNameDefsInScopeLongRunning
 
 -- | preprocess a file
 preproc :: BuildFlags  -- ^ the build flags       
