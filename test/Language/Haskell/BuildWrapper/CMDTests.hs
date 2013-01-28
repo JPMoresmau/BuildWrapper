@@ -39,6 +39,7 @@ import System.Process
 import Test.Framework
 import Test.HUnit (Assertion)
 import System.IO (Handle, hPutStrLn, hFlush)
+import Control.Concurrent (threadDelay)
 
 class APIFacade a where
         synchronize :: a -> FilePath -> Bool -> IO (OpResult ([FilePath],[FilePath]))
@@ -1362,6 +1363,7 @@ test_NameDefsInScopeLongRunning = do
         assertBool (NameDef "Main.MkType1_1" [Constructor] (Just "Int -> Type1") `elem` tts)
         assertBool (NameDef "GHC.Types.Char" [Type] Nothing `elem` tts)          
         assertBool (NameDef "Main.Type2" [Type] Nothing `notElem` tts)
+        threadDelay 1000000
         write api root rel $ unlines [  
                   "module Main where",
                   "import B.D",
@@ -1370,7 +1372,7 @@ test_NameDefsInScopeLongRunning = do
                   "data Type2=MkType2_1 Int"
                   ]
         continue inp
-        (mtts2,ns2)<-(readResult out) :: IO (OpResult (Maybe [NameDef]))  
+        (mtts2,ns2)<-readResult out :: IO (OpResult (Maybe [NameDef]))  
         assertBool (not $ notesInError ns2)
         assertBool (isJust mtts2)
         let tts2=fromJust mtts2
@@ -1384,8 +1386,9 @@ test_NameDefsInScopeLongRunning = do
                   "data Type2=MkType2_1 Int2"
                   ]
         continue inp
-        (_,ns3)<-(readResult out) :: IO (OpResult (Maybe [NameDef]))  
+        (_,ns3)<-readResult out :: IO (OpResult (Maybe [NameDef]))  
         assertBool (notesInError ns3)
+        threadDelay 1000000
         write api root rel $ unlines [  
                   "module Main where",
                   "import B.D",
@@ -1394,7 +1397,7 @@ test_NameDefsInScopeLongRunning = do
                   "data Type2=MkType2_1 Int"
                   ]
         continue inp
-        (mtts4,ns4)<-(readResult out) :: IO (OpResult (Maybe [NameDef]))  
+        (mtts4,ns4)<-readResult out :: IO (OpResult (Maybe [NameDef]))  
         assertBool (not $ notesInError ns4)
         assertBool (isJust mtts4)
         let tts4=fromJust mtts4
@@ -1902,6 +1905,7 @@ continue :: Handle -> IO ()
 continue h=do
         hPutStrLn h "."
         hFlush h
+
 
 end :: Handle -> IO ()
 end h =do

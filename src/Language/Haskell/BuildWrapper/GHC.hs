@@ -60,11 +60,13 @@ import qualified MonadUtils as GMU
 import Name (isTyVarName,isDataConName,isVarName,isTyConName)
 import Var (varType)
 import PprTyThing (pprTypeForUser)
-import Control.Monad (when, liftM)
+import Control.Monad (when, liftM, unless)
 import qualified Data.Vector as V (foldr)
 import Module (moduleNameFS)
 -- import System.Time (getClockTime, diffClockTimes, timeDiffToString)
 import System.IO (hFlush, stdout)
+import System.Directory (getModificationTime)
+import System.Time (ClockTime(TOD))
 
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
@@ -116,7 +118,7 @@ withASTNotes ::  GHCApplyFunction a -- ^ the final action to perform on the resu
         ->  LoadContents -- ^ what to load
         -> [String] -- ^ the GHC options 
         -> IO (OpResult [a])
-withASTNotes f ff base_dir contents options=initGHC (ghcWithASTNotes f ff base_dir contents) options
+withASTNotes f ff base_dir contents options=initGHC (ghcWithASTNotes f ff base_dir contents True) options
 
 --        do
 --    -- http://hackage.haskell.org/trac/ghc/ticket/7380#comment:1     : -O2 is removed from the options  
@@ -163,9 +165,10 @@ ghcWithASTNotes   ::
         GHCApplyFunction a -- ^ the final action to perform on the result
         -> (FilePath -> FilePath) -- ^ transform given file path to find bwinfo path
         -> FilePath -- ^ the base directory
-        ->  LoadContents -- ^ what to load
+        -> LoadContents -- ^ what to load
+        -> Bool -- ^ add the target?
         -> Ghc (OpResult [a])         
-ghcWithASTNotes  f ff base_dir contents= do            
+ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do            
                 ref <- GMU.liftIO $ newIORef []
                 cflg <- getSessionDynFlags
 #if __GLASGOW_HASKELL__ > 704  
@@ -175,7 +178,8 @@ ghcWithASTNotes  f ff base_dir contents= do
 #endif
                 --  $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
                 let fps=getLoadFiles contents
-                mapM_ (\(fp,_)-> addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = True, targetContents = Nothing }) fps
+                when shouldAddTargets
+                        (mapM_ (\(fp,_)-> addTarget Target { targetId = TargetFile fp Nothing, targetAllowObjCode = False, targetContents = Nothing }) fps)
                 --c1<-GMU.liftIO getClockTime
 --                let howMuch=case contents of
 --                        SingleFile{lmModule=m}->LoadUpTo $ mkModuleName m
@@ -337,32 +341,36 @@ getGhcNameDefsInScopeLongRunning  :: FilePath -- ^ source path
         -> [String] -- ^ build options
         -> IO ()
 getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
-        initGHC (go False) options
+        initGHC (go (TOD 0 0)) options
         where 
-                go :: Bool -> Ghc ()
-                go r= do
-                        ns1<-if r then
+                go :: ClockTime -> Ghc ()
+                go t1 = do
+                        t2<- GMU.liftIO $ getModificationTime fp
+                        let hasLoaded=case t1 of
+                                TOD 0 _ -> False
+                                _ -> True
+                        (ns1,add2)<-if hasLoaded && t2==t1 then -- modification time is only precise to the second in GHC 7.6 or above, see http://hackage.haskell.org/trac/ghc/ticket/7473
                                 (do 
                                         removeTarget (TargetFile fp Nothing)      
                                         load LoadAllTargets
-                                        return []
+                                        return ([],True)
                                 ) `gcatch` (\(e :: SourceError) -> do
                                         let errs = srcErrorMessages e
                                         df <- getSessionDynFlags
-                                        return $ ghcMessagesToNotes df base_dir (emptyBag, errs)
+                                        return (ghcMessagesToNotes df base_dir (emptyBag, errs),True)
                                         )
-                             else return []
+                             else return ([],not hasLoaded)
                         (nns,ns)<- ghcWithASTNotes (\_ _->do
                                 names<-getNamesInScope
                                 df<-getSessionDynFlags
-                                mapM (name2nd df) names) id base_dir (SingleFile fp modul)       
+                                mapM (name2nd df) names) id base_dir (SingleFile fp modul) add2    
                         let res=case nns of
                                 (x:_) -> (Just x,ns1 ++ ns)
-                                _ -> (Nothing, ns1 ++ ns)
+                                _ -> (Nothing,ns1 ++ ns)
                         GMU.liftIO $ BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode res
-                        GMU.liftIO $ hFlush $ stdout
-                        l<- GMU.liftIO $ getLine 
-                        if "q" == l then return() else go True    
+                        GMU.liftIO $ hFlush stdout
+                        l<- GMU.liftIO getLine 
+                        unless ("q" == l) (go t2)  
                 
 name2nd :: GhcMonad m=> DynFlags -> Name -> m NameDef
 name2nd df n=do
@@ -413,7 +421,7 @@ getLocalsJSON ::Int  -- ^ start line
         -> FilePath -- ^ base directory
         -> String  -- ^ module name
         -> [String] -- ^  build flags
-        -> IO ([ThingAtPoint])
+        -> IO [ThingAtPoint]
 getLocalsJSON sline scol eline ecol fp base_dir modul options= do
         mmf<-withJSONAST (\v->do
                 let cont=contains sline (scionColToGhcCol scol) eline (scionColToGhcCol ecol)
@@ -1026,7 +1034,7 @@ ghcExportToUsage df myPkg myMod moduMap lie@(L _ name)=(do
 ghcNameToUsage ::  DynFlags -> Maybe T.Text -> T.Text -> T.Text -> Name -> SrcSpan -> Bool -> Usage 
 ghcNameToUsage df tpkg tmod tsection nm src typ=Usage tpkg tmod (T.pack $ showSD False df $ ppr nm) tsection typ (toJSON $ ghcSpanToLocation src) False
 
-type ImportMap=DM.Map T.Text ((LImportDecl Name),[T.Text])
+type ImportMap=DM.Map T.Text (LImportDecl Name,[T.Text])
 
 ghcImportMap :: LImportDecl Name -> Ghc ImportMap
 ghcImportMap l@(L _ imp)=(do
@@ -1050,7 +1058,7 @@ ghcImportMap l@(L _ imp)=(do
         )
         `gcatch` (\(se :: SourceError) -> do
                 GMU.liftIO $ print se
-                return (DM.empty))  
+                return DM.empty)  
         
 --getGHCOutline :: ParsedSource
 --        -> [OutlineDef]
@@ -1079,7 +1087,7 @@ ghcImportMap l@(L _ imp)=(do
 
 -- | module, function/type, constructors
 type TypeMap=DM.Map T.Text (DM.Map T.Text (DS.Set T.Text))
-type FinalImportValue=((LImportDecl Name),DM.Map T.Text (DS.Set T.Text))
+type FinalImportValue=(LImportDecl Name,DM.Map T.Text (DS.Set T.Text))
 type FinalImportMap=DM.Map T.Text FinalImportValue
      
      
@@ -1092,7 +1100,7 @@ ghcCleanImports  :: FilePath -- ^ source path
         -> IO (OpResult [ImportClean])                 
 ghcCleanImports f base_dir modul options doFormat  =  do
         (m,bwns)<-withASTNotes clean (base_dir </>) base_dir (SingleFile f modul) options
-        return ((if null m then [] else head m),bwns)
+        return (if null m then [] else head m,bwns)
         where
                 -- | main clean method: get the usage, the existing imports, and retrieve only the needed names for each import
                 clean :: GHCApplyFunction [ImportClean]
@@ -1114,7 +1122,7 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                         let missingCleans=getRemovedImports allImps ftm
                         let formatF=if doFormat then formatImports  else map (dumpImportMap df)
                         -- GMU.liftIO $ putStrLn $ show $ DM.keys ftm
-                        let allCleans=((formatF $ DM.elems ftm) ++ missingCleans)
+                        let allCleans=formatF (DM.elems ftm) ++ missingCleans
                         return allCleans
                 -- | all used names by module        
                 ghcValToUsgMap :: Value -> TypeMap -> TypeMap
@@ -1127,7 +1135,7 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                                 =let
                                         mm=DM.lookup mo um
                                         isType=ht=="t"
-                                        isConstructor=(not isType) && (isUpper $ T.head n) && isJust mst
+                                        isConstructor=not isType && isUpper (T.head n) && isJust mst
                                         key=if isConstructor
                                                 then let
                                                         Just (String t)=mst
@@ -1162,18 +1170,18 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                 -- | generate final import string from names map    
                 dumpImportMap :: DynFlags -> FinalImportValue -> ImportClean
                 dumpImportMap df (L loc imp,ns)=let
-                         txt= T.pack $ showSDDump df $ ppr $ (imp{ideclHiding=Nothing} :: ImportDecl Name)  -- rely on GHC for the initial bit of the import, without the names
+                         txt= T.pack $ showSDDump df $ ppr (imp{ideclHiding=Nothing} :: ImportDecl Name)  -- rely on GHC for the initial bit of the import, without the names
                          nameList= T.intercalate ", " $ List.sortBy (comparing T.toLower) $ map buildName $ DM.assocs ns -- build explicit import list
                          full=txt `mappend` " (" `mappend` nameList `mappend` ")"
                          in ImportClean (ghcSpanToLocation loc) full
                 -- build the name with the constructors list if any
-                buildName :: (T.Text,(DS.Set T.Text))->T.Text
+                buildName :: (T.Text,DS.Set T.Text)->T.Text
                 buildName (n,cs) 
                         | DS.null cs=n
                         | otherwise =let
                                 nameList= T.intercalate ", " $ List.sortBy (comparing T.toLower) $ DS.toList cs
                                 in n `mappend` " (" `mappend` nameList `mappend` ")" 
-                getRemovedImports :: [(T.Text,((LImportDecl Name),[T.Text]))] -> FinalImportMap -> [ImportClean]
+                getRemovedImports :: [(T.Text,(LImportDecl Name,[T.Text]))] -> FinalImportMap -> [ImportClean]
                 getRemovedImports allImps ftm= let 
                         cleanedLines=DS.fromList $ map (\(L l _,_)->iflLine $ifsStart $ ghcSpanToLocation l) $ DM.elems ftm
                         missingImps=filter (\(_,(L l imp,_))->not $ ideclImplicit imp || DS.member (iflLine $ifsStart $ ghcSpanToLocation l) cleanedLines) allImps
@@ -1182,20 +1190,20 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                 getFormatInfo (L _ imp,_) (szSafe,szQualified,szPkg,szName,szAs)=let
                         szSafe2=if ideclSafe imp then 5 else szSafe
                         szQualified2=if ideclQualified imp then 10 else szQualified
-                        szPkg2=maybe szPkg (\p->max szPkg $ (3 + lengthFS p )) $ ideclPkgQual imp
+                        szPkg2=maybe szPkg (\p->max szPkg (3 + lengthFS p)) $ ideclPkgQual imp
                         L _ mo=ideclName imp
-                        szName2=max szName $ (1 + (lengthFS $ moduleNameFS mo))
-                        szAs2=maybe szAs (\m->max szAs $ (3 + (lengthFS $ moduleNameFS  m))) $ ideclAs imp
+                        szName2=max szName (1 + lengthFS (moduleNameFS mo))
+                        szAs2=maybe szAs (\m->max szAs (3 + lengthFS (moduleNameFS m))) $ ideclAs imp
                         in (szSafe2,szQualified2,szPkg2,szName2,szAs2)
                 formatImport :: (Int,Int,Int,Int,Int)-> FinalImportValue -> ImportClean
                 formatImport (szSafe,szQualified,szPkg,szName,szAs) (L loc imp,ns) =let
                         st="import "
                         saf=if ideclSafe imp then "safe " else T.justifyLeft szSafe ' ' ""
                         qual=if ideclQualified imp then "qualified " else T.justifyLeft szQualified ' ' ""
-                        pkg=maybe (T.justifyLeft szPkg ' ' "") (\p->"\""  `mappend` (T.pack $ unpackFS p) `mappend` "\" ") $ ideclPkgQual imp
+                        pkg=maybe (T.justifyLeft szPkg ' ' "") (\p->"\"" `mappend` T.pack (unpackFS p) `mappend` "\" ") $ ideclPkgQual imp
                         L _ mo=ideclName imp
                         nm=T.justifyLeft szName ' ' $ T.pack $ moduleNameString mo
-                        ast=maybe (T.justifyLeft szAs ' ' "") (\m->"as "  `mappend` (T.pack $ moduleNameString m)) $ ideclAs imp
+                        ast=maybe (T.justifyLeft szAs ' ' "") (\m->"as " `mappend` T.pack (moduleNameString m)) $ ideclAs imp
                         nameList= T.intercalate ", " $ List.sortBy (comparing T.toLower) $ map buildName $ DM.assocs ns -- build explicit import list
                         full=st `mappend` saf `mappend` qual `mappend` pkg `mappend` nm `mappend` ast `mappend` " (" `mappend` nameList `mappend` ")"
                         in ImportClean (ghcSpanToLocation loc) full
