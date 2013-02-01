@@ -852,13 +852,13 @@ tokenType  ITbackquote="SS"
 
 tokenType  (ITvarid {})="IV"        -- identifiers
 tokenType  (ITconid {})="IC"
-tokenType  (ITvarsym {})="IV"
+tokenType  (ITvarsym {})="VS"
 tokenType  (ITconsym {})="IC"
 tokenType  (ITqvarid {})="IV"
 tokenType  (ITqconid {})="IC"
-tokenType  (ITqvarsym {})="IV"
+tokenType  (ITqvarsym {})="VS"
 tokenType  (ITqconsym {})="IC"
-tokenType  (ITprefixqvarsym {})="IV"
+tokenType  (ITprefixqvarsym {})="VS"
 tokenType  (ITprefixqconsym {})="IC"
 
 tokenType  (ITdupipvarid {})="EI"   -- GHC extension: implicit param: ?x
