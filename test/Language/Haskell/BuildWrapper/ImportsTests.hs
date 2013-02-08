@@ -23,7 +23,7 @@ import Test.HUnit (Assertion)
 
 test_CleanImportsNothing :: Assertion
 test_CleanImportsNothing = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -40,7 +40,7 @@ test_CleanImportsNothing = do
         
 test_CleanImportsFunction :: Assertion
 test_CleanImportsFunction = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -57,7 +57,7 @@ test_CleanImportsFunction = do
 
 test_CleanImportsRemove :: Assertion
 test_CleanImportsRemove = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -75,7 +75,7 @@ test_CleanImportsRemove = do
 
 test_CleanImportsFunctionType :: Assertion
 test_CleanImportsFunctionType = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -94,7 +94,7 @@ test_CleanImportsFunctionType = do
         
 test_CleanImportsConstructor :: Assertion
 test_CleanImportsConstructor = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -117,7 +117,7 @@ test_CleanImportsConstructor = do
 
 test_CleanImportsFunctionInExport :: Assertion
 test_CleanImportsFunctionInExport = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -142,7 +142,7 @@ test_CleanImportsFunctionInExport = do
         
 test_CleanImportsConstructorQualified :: Assertion
 test_CleanImportsConstructorQualified = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -165,7 +165,7 @@ test_CleanImportsConstructorQualified = do
 
 test_CleanImportsFunctionReExported :: Assertion
 test_CleanImportsFunctionReExported = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -182,7 +182,7 @@ test_CleanImportsFunctionReExported = do
 
 test_CleanImportsFunctionReExportedInExport :: Assertion
 test_CleanImportsFunctionReExportedInExport = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -199,7 +199,7 @@ test_CleanImportsFunctionReExportedInExport = do
         
 test_CleanImportsFunctionReExportedWithOthers :: Assertion
 test_CleanImportsFunctionReExportedWithOthers = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -223,7 +223,7 @@ test_CleanImportsFunctionReExportedWithOthers = do
 
 test_CleanImportsFormat :: Assertion
 test_CleanImportsFormat = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"

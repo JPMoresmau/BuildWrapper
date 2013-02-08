@@ -64,33 +64,36 @@ class APIFacade a where
         
 
 
-data CMDAPI=CMDAPI
+data CMDAPI=CMDAPI {
+        cabalExe :: String
+        }
 
 instance APIFacade CMDAPI where
-        synchronize _ r ff= runAPI r "synchronize" ["--force="++ show ff ]
-        synchronize1 _ r ff fp= runAPI r "synchronize1" ["--force="++show ff,"--file="++fp]
-        write _ r fp s= runAPI r "write" ["--file="++fp,"--contents="++s]
-        configure _ r t= runAPI r "configure" ["--cabaltarget="++ show t]
-        configureWithFlags _ r t fgs= runAPI r "configure" ["--cabaltarget="++ show t,"--cabalflags="++ fgs]
-        build _ r b wc= runAPI r "build" ["--output="++ show b,"--cabaltarget="++ show wc]
-        build1 _ r fp= runAPI r "build1" ["--file="++fp]
-        build1c _ r fp ccn= runAPI r "build1" ["--file="++fp,"--component="++ccn]
-        getBuildFlags _ r fp= runAPI r "getbuildflags" ["--file="++fp]
-        getOutline _ r fp= runAPI r "outline" ["--file="++fp]
-        getTokenTypes _ r fp= runAPI r "tokentypes" ["--file="++fp]
-        getOccurrences _ r fp s= runAPI r "occurrences" ["--file="++fp,"--token="++s]
-        getThingAtPoint _ r fp l c= fmap removeLayoutTAP $ runAPI r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show c]
-        getLocals _ r fp sl sc el ec= runAPI r "locals" ["--file="++fp,"--sline="++ show sl,"--scolumn="++ show sc,"--eline="++ show el,"--ecolumn="++ show ec]
-        getNamesInScope _ r fp= runAPI r "namesinscope" ["--file="++fp]
-        getCabalDependencies _ r= runAPI r "dependencies" []
-        getCabalComponents _ r= runAPI r "components" []
-        generateUsage _ r retAll cc=runAPI r "generateusage" ["--returnall="++ show retAll,"--cabalcomponent="++ cabalComponentName cc]
-        cleanImports _ r fp fo= runAPI r "cleanimports" ["--file="++fp,"--format="++ show fo]
+        synchronize (CMDAPI c) r ff= runAPI c r "synchronize" ["--force="++ show ff ]
+        synchronize1 (CMDAPI c) r ff fp= runAPI c r "synchronize1" ["--force="++show ff,"--file="++fp]
+        write (CMDAPI c) r fp s= runAPI c r "write" ["--file="++fp,"--contents="++s]
+        configure (CMDAPI c) r t= runAPI c r "configure" ["--cabaltarget="++ show t]
+        configureWithFlags (CMDAPI c) r t fgs= runAPI c r "configure" ["--cabaltarget="++ show t,"--cabalflags="++ fgs]
+        build (CMDAPI c) r b wc= runAPI c r "build" ["--output="++ show b,"--cabaltarget="++ show wc]
+        build1 (CMDAPI c) r fp= runAPI c r "build1" ["--file="++fp]
+        build1c (CMDAPI c) r fp ccn= runAPI c r "build1" ["--file="++fp,"--component="++ccn]
+        getBuildFlags (CMDAPI c) r fp= runAPI c r "getbuildflags" ["--file="++fp]
+        getOutline (CMDAPI c) r fp= runAPI c r "outline" ["--file="++fp]
+        getTokenTypes (CMDAPI c) r fp= runAPI c r "tokentypes" ["--file="++fp]
+        getOccurrences (CMDAPI c) r fp s= runAPI c r "occurrences" ["--file="++fp,"--token="++s]
+        getThingAtPoint (CMDAPI c) r fp l cl= fmap removeLayoutTAP $ runAPI c r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show cl]
+        getLocals (CMDAPI c) r fp sl sc el ec= runAPI c r "locals" ["--file="++fp,"--sline="++ show sl,"--scolumn="++ show sc,"--eline="++ show el,"--ecolumn="++ show ec]
+        getNamesInScope (CMDAPI c) r fp= runAPI c r "namesinscope" ["--file="++fp]
+        getCabalDependencies (CMDAPI c) r= runAPI c r "dependencies" []
+        getCabalComponents (CMDAPI c) r= runAPI c r "components" []
+        generateUsage (CMDAPI c) r retAll cc=runAPI c r "generateusage" ["--returnall="++ show retAll,"--cabalcomponent="++ cabalComponentName cc]
+        cleanImports (CMDAPI c) r fp fo= runAPI c r "cleanimports" ["--file="++fp,"--format="++ show fo]
         
 build1lr :: FilePath
                        -> [Char] -> IO (Handle, Handle, Handle, ProcessHandle)
 build1lr r fp= startAPIProcess r "build1" ["--file="++fp,"--longrunning=true"]
-       
+   
+cabalAPI= CMDAPI "cabal"      
 
 exeExtension :: String
 #ifdef mingw32_HOST_OS
@@ -101,7 +104,7 @@ exeExtension = ""
 
 test_SynchronizeAll :: Assertion
 test_SynchronizeAll = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         ((fps,dels),_)<-synchronize api root False
         assertBool (not $ null fps) 
@@ -116,7 +119,7 @@ test_SynchronizeAll = do
         
 test_SynchronizeDelete :: Assertion
 test_SynchronizeDelete = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         ((fps0,dels0),_)<-synchronize api root False
         assertBool (not $ null fps0) 
@@ -134,7 +137,7 @@ test_SynchronizeDelete = do
 
 test_SynchronizeExtraFiles :: Assertion
 test_SynchronizeExtraFiles = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let extra=root </> "src" -- need to be in hs-source-dirs
         writeFile (extra </> "a.txt") "contents"
@@ -149,7 +152,7 @@ test_SynchronizeExtraFiles = do
 
 test_ConfigureErrors :: Assertion
 test_ConfigureErrors = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         (boolNoCabal,nsNoCabal)<- configure api root Target
         assertBool (not boolNoCabal)
@@ -239,7 +242,7 @@ test_ConfigureErrors = do
         
 test_ConfigureWarnings :: Assertion
 test_ConfigureWarnings  = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let cf=testCabalFile root
@@ -297,7 +300,7 @@ test_ConfigureWarnings  = do
         
 test_BuildErrors :: Assertion
 test_BuildErrors  = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         (boolOKc,nsOKc)<-configure api root Target
@@ -349,7 +352,7 @@ test_BuildErrors  = do
         
 test_BuildWarnings :: Assertion
 test_BuildWarnings  = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         --let cf=testCabalFile root      
@@ -398,7 +401,7 @@ test_BuildWarnings  = do
         
 test_BuildOutput :: Assertion
 test_BuildOutput  = do      
-        let api=CMDAPI 
+        let api=cabalAPI 
         root<-createTestProject
         synchronize api root False
         build api root True Source
@@ -418,7 +421,7 @@ test_BuildOutput  = do
 -- |  http://hackage.haskell.org/trac/ghc/ticket/7380#comment:1     : -O2 is removed from the options  
 test_BuildO2 :: Assertion
 test_BuildO2  = do   
-        let api=CMDAPI    
+        let api=cabalAPI    
         root<-createTestProject
         write api root (testProjectName <.> ".cabal") $  unlines ["name: "++testProjectName,
                 "version:0.1",
@@ -456,7 +459,7 @@ test_BuildO2  = do
         
 test_ModuleNotInCabal :: Assertion
 test_ModuleNotInCabal  = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -478,7 +481,7 @@ test_ModuleNotInCabal  = do
       
 test_Outline :: Assertion
 test_Outline = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -565,7 +568,7 @@ test_Outline = do
         
 test_OutlineComments :: Assertion
 test_OutlineComments= do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -635,7 +638,7 @@ test_OutlineComments= do
         
 test_OutlinePreproc :: Assertion
 test_OutlinePreproc =  do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -721,7 +724,7 @@ test_OutlinePreproc =  do
        
 test_OutlineLiterate :: Assertion
 test_OutlineLiterate = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.lhs"
@@ -749,7 +752,7 @@ test_OutlineLiterate = do
        
 test_OutlineImportExport :: Assertion
 test_OutlineImportExport = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -784,7 +787,7 @@ test_OutlineImportExport = do
             
 test_OutlineMultiParam  :: Assertion
 test_OutlineMultiParam = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"      
@@ -816,7 +819,7 @@ test_OutlineMultiParam = do
     
 test_OutlineOperator  :: Assertion
 test_OutlineOperator = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"      
@@ -838,7 +841,7 @@ test_OutlineOperator = do
 
 test_OutlinePatternGuards  :: Assertion
 test_OutlinePatternGuards = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"      
@@ -860,7 +863,7 @@ test_OutlinePatternGuards = do
                 
 test_OutlineExtension     :: Assertion
 test_OutlineExtension = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let cf=testCabalFile root
         writeFile cf $ unlines ["name: "++testProjectName,
@@ -894,7 +897,7 @@ test_OutlineExtension = do
               
 test_OutlineOptions :: Assertion
 test_OutlineOptions = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"      
@@ -926,7 +929,7 @@ test_OutlineOptions = do
                 
 test_PreviewTokenTypes :: Assertion
 test_PreviewTokenTypes = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         configure api root Target        
@@ -953,7 +956,7 @@ test_PreviewTokenTypes = do
 
 test_PreviewTokenTypesLine :: Assertion
 test_PreviewTokenTypesLine = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         configure api root Target        
@@ -980,7 +983,7 @@ test_PreviewTokenTypesLine = do
    
 test_PreviewTokenTypesHaddock :: Assertion
 test_PreviewTokenTypesHaddock = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         configure api root Target        
@@ -1003,7 +1006,7 @@ test_PreviewTokenTypesHaddock = do
         
 test_ThingAtPoint :: Assertion
 test_ThingAtPoint = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         configure api root Target        
@@ -1109,7 +1112,7 @@ test_ThingAtPoint = do
 
 test_ThingAtPointTypeReduction :: Assertion
 test_ThingAtPointTypeReduction = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let cf=testCabalFile root
         writeFile cf $ unlines ["name: "++testProjectName,
@@ -1151,7 +1154,7 @@ test_ThingAtPointTypeReduction = do
 
 test_ThingAtPointNotInCabal :: Assertion
 test_ThingAtPointNotInCabal = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         configure api root Target        
@@ -1170,7 +1173,7 @@ test_ThingAtPointNotInCabal = do
 
 test_ThingAtPointMain :: Assertion
 test_ThingAtPointMain = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let cf=testCabalFile root
         writeFile cf $ unlines ["name: "++testProjectName,
@@ -1212,7 +1215,7 @@ test_ThingAtPointMain = do
         
 test_ThingAtPointMainSubFolder :: Assertion
 test_ThingAtPointMainSubFolder = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let cf=testCabalFile root
         writeFile cf $ unlines ["name: "++testProjectName,
@@ -1247,7 +1250,7 @@ test_ThingAtPointMainSubFolder = do
       
 test_Locals :: Assertion
 test_Locals = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         configure api root Target        
@@ -1289,7 +1292,7 @@ test_Locals = do
 
 test_NamesInScope :: Assertion
 test_NamesInScope = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         configure api root Source        
@@ -1315,7 +1318,7 @@ test_NamesInScope = do
      
 test_NameDefsInScope :: Assertion
 test_NameDefsInScope = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         configure api root Source        
@@ -1339,7 +1342,7 @@ test_NameDefsInScope = do
 
 test_NameDefsInScopeLongRunning :: Assertion
 test_NameDefsInScopeLongRunning = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         configure api root Source        
@@ -1407,7 +1410,7 @@ test_NameDefsInScopeLongRunning = do
                 
 test_InPlaceReference  :: Assertion
 test_InPlaceReference = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         writeFile (root </> (testProjectName <.> ".cabal")) $ unlines ["name: "++testProjectName,
@@ -1481,7 +1484,7 @@ test_InPlaceReference = do
 
 test_CabalComponents  :: Assertion
 test_CabalComponents= do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         (cps,nsOK)<-getCabalComponents api root
@@ -1532,7 +1535,7 @@ test_CabalComponents= do
 
 test_CabalDependencies  :: Assertion
 test_CabalDependencies = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         synchronize api root False
         (cps,nsOK)<-getCabalDependencies api root
@@ -1551,7 +1554,7 @@ test_CabalDependencies = do
 
 test_NoSourceDir :: Assertion
 test_NoSourceDir = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let cf=testCabalFile root
         writeFile cf $ unlines ["name: "++testProjectName,
@@ -1591,7 +1594,7 @@ test_NoSourceDir = do
 
 test_Flags  :: Assertion
 test_Flags = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let cf=testCabalFile root
         writeFile cf $ unlines ["name: "++testProjectName,
@@ -1633,7 +1636,7 @@ test_Flags = do
 
 test_BuildFlags :: Assertion
 test_BuildFlags =do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let cf=testCabalFile root
         writeFile cf $ unlines ["name: "++testProjectName,
@@ -1651,7 +1654,7 @@ test_BuildFlags =do
         configure api root Source 
         let rel="src"</>"A.hs"  
         (flgs,nsErrors3f)<-getBuildFlags api root rel
-        print flgs
+        -- print flgs
         assertBool (null nsErrors3f)
         let ast=bfAst flgs   
         assertBool ("-package-name" `elem` ast)
@@ -1662,7 +1665,7 @@ test_BuildFlags =do
         
 test_ExplicitComponent :: Assertion
 test_ExplicitComponent =do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let cf=testCabalFile root
         writeFile cf $ unlines ["name: "++testProjectName,
@@ -1710,7 +1713,7 @@ test_ExplicitComponent =do
    
 test_ExplicitComponentUnRef :: Assertion
 test_ExplicitComponentUnRef =do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let cf=testCabalFile root
         writeFile cf $ unlines ["name: "++testProjectName,
@@ -1784,7 +1787,7 @@ testCabalContents = unlines ["name: "++testProjectName,
         ]        
      
 testCabalFile :: FilePath -> FilePath
-testCabalFile root =root </> (testProjectName <.> ".cabal") 
+testCabalFile root =root </> ((last $ splitDirectories root) <.> ".cabal") 
      
 testAContents :: String     
 testAContents=unlines ["module A where","fA=undefined"]
@@ -1846,11 +1849,11 @@ removeLayoutTAP res = case res of
  where removeLayout (Just tp) = Just $ unwords . concatMap words . lines $ tp -- replace sequences of spaces and newlines by single space
        removeLayout Nothing   = Nothing
 
-
-runAPI:: (FromJSON a,Show a) => FilePath -> String -> [String] -> IO a
-runAPI root command args= do
+  
+runAPI:: (FromJSON a,Show a) => FilePath ->  FilePath -> String -> [String] -> IO a
+runAPI cabal root command args= do
         cd<-getCurrentDirectory
-        let fullargs=[command,"--tempfolder=.dist-buildwrapper","--cabalpath=cabal","--cabalfile="++ testCabalFile root] ++ args
+        let fullargs=[command,"--tempfolder=.dist-buildwrapper","--cabalpath="++cabal,"--cabalfile="++ testCabalFile root] ++ args
         exePath<-filterM doesFileExist [".dist-buildwrapper/dist/build/buildwrapper/buildwrapper" <.> exeExtension,"dist/build/buildwrapper/buildwrapper" <.> exeExtension]
         assertBool (0<length exePath)
         setCurrentDirectory root
@@ -1871,7 +1874,7 @@ runAPI root command args= do
                                         assertFailure (show a) 
                                         error ""
                 a->do
-                        assertFailure (show a) 
+                        assertFailure (show a)  
                         
 startAPIProcess :: FilePath -> String -> [String] -> IO (Handle, Handle, Handle, ProcessHandle)
 startAPIProcess  root command args= do

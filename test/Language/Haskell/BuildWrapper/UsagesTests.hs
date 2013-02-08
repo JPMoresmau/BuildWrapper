@@ -28,7 +28,7 @@ import qualified Data.Aeson.Types (parse)
 
 test_GenerateBWUsage :: Assertion
 test_GenerateBWUsage = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         ((fps,dels),_)<-synchronize api root False
         assertBool (not $ null fps)
@@ -63,7 +63,7 @@ test_GenerateBWUsage = do
 
 test_GenerateReferencesSimple :: Assertion
 test_GenerateReferencesSimple = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let relMain="src"</>"Main.hs"
         writeFile (root</> relMain) $ unlines [  
@@ -146,7 +146,7 @@ test_GenerateReferencesSimple = do
 
 test_GenerateReferencesImports :: Assertion
 test_GenerateReferencesImports = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let relMain="src"</>"Main.hs"
         writeFile (root</> relMain) $ unlines [
@@ -176,7 +176,7 @@ test_GenerateReferencesImports = do
 
 test_GenerateReferencesExports :: Assertion
 test_GenerateReferencesExports =  do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let rel="src" </> "A.hs"
         writeFile (root</> rel) $ unlines [  
@@ -243,7 +243,7 @@ test_GenerateReferencesExports =  do
  
 test_GenerateReferencesExportAlias :: Assertion
 test_GenerateReferencesExportAlias =  do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let relMain="src"</>"Main.hs"
         writeFile (root</> relMain) $ unlines [
@@ -266,7 +266,7 @@ test_GenerateReferencesExportAlias =  do
     
 test_IncorrectModuleFileName :: Assertion
 test_IncorrectModuleFileName = do
-        let api=CMDAPI
+        let api=cabalAPI
         root<-createTestProject
         let relMain="src"</>"Main.hs"
         let relMain2="src"</>"Main-exe.hs"

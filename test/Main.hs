@@ -17,6 +17,7 @@ import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.CMDTests
 import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.GHCTests
 import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.UsagesTests
 import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.ImportsTests
+import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.CabalDevTests
 
 import Test.Framework 
 
