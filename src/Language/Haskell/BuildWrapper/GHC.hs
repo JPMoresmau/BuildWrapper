@@ -1045,21 +1045,32 @@ ghcImportMap l@(L _ imp)=(do
         m<-lookupModule modu Nothing
         mmi<-getModuleInfo m
         df <- getSessionDynFlags
-        return $ case mmi of
+        let maybeHiding=ideclHiding imp
+        let hidden=case maybeHiding of
+                Just(True,ns)->map (T.pack . showSD False df . ppr . unLoc) ns
+                _ ->[]
+        let fullM =case mmi of
                 Nothing -> mm
                 Just mi->let
                         exps=modInfoExports mi
                         -- extExps=filter (\x->(nameModule x) /= m) exps
-                        in foldr (\x mmx->let
-                                expM=T.pack $ moduleNameString $ moduleName $ nameModule x
-                                nT=T.pack $ showSD False df $ ppr x
-                                in DM.insertWith (\(_,xs1) (_,xs2)->(l,xs1++xs2)) expM (l,[nT]) mmx
-                                ) mm exps
+                        in foldr insertImport mm exps
+                        where   insertImport :: Name -> ImportMap -> ImportMap
+                                insertImport x mmx=
+                                        let
+                                                expM=T.pack $ moduleNameString $ moduleName $ nameModule x
+                                                nT=T.pack $ showSD False df $ ppr x
+                                        in if nT `elem` hidden 
+                                                then  mmx 
+                                                else DM.insertWith (\(_,xs1) (_,xs2)->(l,xs1++xs2)) expM (l,[nT]) mmx
+        return $ if ideclImplicit imp
+                then DM.insert "" (l,(concatMap snd $ DM.elems fullM)) fullM
+                else fullM
         )
         `gcatch` (\(se :: SourceError) -> do
                 GMU.liftIO $ print se
                 return DM.empty)  
-        
+       
 --getGHCOutline :: ParsedSource
 --        -> [OutlineDef]
 --getGHCOutline (L src mod)=concatMap ldeclOutline (hsmodDecls mod)
@@ -1111,13 +1122,16 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                         let (Array vs)= generateGHCInfo df tm
                         impMaps<-mapM ghcImportMap imps
                         -- let impMap=DM.unions impMaps
+                        let implicit=DS.fromList $ concatMap (maybe [] snd . (DM.lookup "")) impMaps
                         let allImps=concatMap DM.assocs impMaps
-                        -- GMU.liftIO $ putStrLn $ show $ map (\(n,(_,ns))->(n,ns)) $ DM.assocs impMap
+                        -- GMU.liftIO $ putStrLn $ show $ map (\(n,(_,ns))->(n,ns)) allImps
+                        -- GMU.liftIO $ print implicit
                         let usgMap=V.foldr ghcValToUsgMap DM.empty vs
                         let usgMapWithoutMe=DM.delete modu usgMap
+                        -- GMU.liftIO $ print usgMapWithoutMe
                         -- GMU.liftIO $ putStrLn $ show $ usgMapWithoutMe
                         --let ics=foldr (buildImportClean usgMapWithoutMe df) [] (DM.assocs impMap)
-                        let ftm=foldr (buildImportCleanMap usgMapWithoutMe) DM.empty allImps
+                        let ftm=foldr (buildImportCleanMap usgMapWithoutMe implicit) DM.empty allImps
                         
                         let missingCleans=getRemovedImports allImps ftm
                         let formatF=if doFormat then formatImports  else map (dumpImportMap df)
@@ -1139,7 +1153,7 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                                         key=if isConstructor
                                                 then let
                                                         Just (String t)=mst
-                                                     in T.strip $ snd $ T.breakOnEnd "->" t
+                                                     in fst $ T.breakOn " " $ T.strip $ snd $ T.breakOnEnd "->" t
                                                 else n
                                         val=if isConstructor
                                                 then DS.singleton n
@@ -1149,16 +1163,19 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                                         Nothing->DM.insert mo (DM.singleton key val) um
                 ghcValToUsgMap _ um=um
                 -- | reconcile the usage map and the import to generate the final import map: module -> names to import
-                buildImportCleanMap :: TypeMap ->(T.Text,(LImportDecl Name,[T.Text])) -> FinalImportMap -> FinalImportMap
-                buildImportCleanMap usgMap (cmod,(l@(L _ imp),ns)) tm |
+                buildImportCleanMap :: TypeMap -> DS.Set T.Text ->(T.Text,(LImportDecl Name,[T.Text])) -> FinalImportMap -> FinalImportMap
+                buildImportCleanMap usgMap implicit (cmod,(l@(L _ imp),ns)) tm |
                           Just namesMap<-DM.lookup cmod usgMap, -- used names for module
                           namesMapFiltered<-foldr (keepKeys namesMap) DM.empty ns, -- only names really exported by the import name
-                          not $ DM.null namesMapFiltered,
+                          namesWithoutImplicit<-if ideclQualified imp 
+                                then namesMapFiltered
+                                else DM.map (`DS.difference` implicit) $ foldr DM.delete namesMapFiltered $ DS.elems implicit,
+                          not $ DM.null namesWithoutImplicit,
                           not $ ideclImplicit imp = let  -- ignore implicit prelude
                                 L _ modu=ideclName imp
                                 moduS=T.pack $ moduleNameString modu
-                                in DM.insertWith mergeTypeMap moduS (l,namesMapFiltered) tm
-                buildImportCleanMap _ _ tm = tm      
+                                in DM.insertWith mergeTypeMap moduS (l,namesWithoutImplicit) tm
+                buildImportCleanMap _ _ _ tm = tm      
                 -- | copy the key and value from one map to the other
                 keepKeys :: Ord k => DM.Map k v -> k -> DM.Map k v -> DM.Map k v
                 keepKeys m1 k m2=case DM.lookup k m1 of
@@ -1174,18 +1191,22 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                          nameList= T.intercalate ", " $ List.sortBy (comparing T.toLower) $ map buildName $ DM.assocs ns -- build explicit import list
                          full=txt `mappend` " (" `mappend` nameList `mappend` ")"
                          in ImportClean (ghcSpanToLocation loc) full
+                pprName :: T.Text -> T.Text
+                pprName n | T.null n =n
+                          | isAlpha $ T.head n=n
+                          | otherwise=T.concat ["(",n,")"]
                 -- build the name with the constructors list if any
                 buildName :: (T.Text,DS.Set T.Text)->T.Text
                 buildName (n,cs) 
-                        | DS.null cs=n
+                        | DS.null cs=pprName n
                         | otherwise =let
-                                nameList= T.intercalate ", " $ List.sortBy (comparing T.toLower) $ DS.toList cs
-                                in n `mappend` " (" `mappend` nameList `mappend` ")" 
+                                nameList= T.intercalate ", " $ List.sortBy (comparing T.toLower) $ map pprName $ DS.toList cs
+                                in (pprName n) `mappend` " (" `mappend` nameList `mappend` ")" 
                 getRemovedImports :: [(T.Text,(LImportDecl Name,[T.Text]))] -> FinalImportMap -> [ImportClean]
                 getRemovedImports allImps ftm= let 
                         cleanedLines=DS.fromList $ map (\(L l _,_)->iflLine $ifsStart $ ghcSpanToLocation l) $ DM.elems ftm
                         missingImps=filter (\(_,(L l imp,_))->not $ ideclImplicit imp || DS.member (iflLine $ifsStart $ ghcSpanToLocation l) cleanedLines) allImps
-                        in map (\(_,(L l _,_))-> ImportClean (ghcSpanToLocation l) "") missingImps
+                        in nubOrd $ map (\(_,(L l _,_))-> ImportClean (ghcSpanToLocation l) "") missingImps
                 getFormatInfo :: FinalImportValue -> (Int,Int,Int,Int,Int)->(Int,Int,Int,Int,Int)
                 getFormatInfo (L _ imp,_) (szSafe,szQualified,szPkg,szName,szAs)=let
                         szSafe2=if ideclSafe imp then 5 else szSafe
@@ -1212,4 +1233,4 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                         formatInfo=foldr getFormatInfo (0,0,0,0,0) fivs
                         in map (formatImport formatInfo) fivs
                         
-                        
+                       

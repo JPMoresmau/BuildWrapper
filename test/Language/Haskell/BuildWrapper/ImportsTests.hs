@@ -13,7 +13,7 @@
 -- Test import cleaning and such
 module Language.Haskell.BuildWrapper.ImportsTests where
 
-import Language.Haskell.BuildWrapper.Base
+import Language.Haskell.BuildWrapper.Base hiding (writeFile)
 import Language.Haskell.BuildWrapper.CMDTests
 
 import System.FilePath
@@ -114,6 +114,36 @@ test_CleanImportsConstructor = do
         (ics,ns)<-cleanImports api root rel2 False
         assertBool $ null ns
         assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 9)) "import A (MyData (MyCons))"] ics
+
+test_CleanImportsConstructorTyped :: Assertion
+test_CleanImportsConstructorTyped = do
+        let api=cabalAPI
+        root<-createTestProject
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:   base, attoparsec"]
+        synchronize api root False
+        configure api root Target
+        let rel2="src"</>"B"</>"C.hs"      
+        write api root rel2 $ unlines [
+                "module B.C where",
+                "",
+                "import Data.Attoparsec",
+                "f r= case r of",
+                "  Done _ js->True",
+                "  _->False"
+                ]        
+        (ics,ns)<-cleanImports api root rel2 False
+        assertBool $ null ns
+        assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 23)) "import Data.Attoparsec (IResult (Done))"] ics
 
 test_CleanImportsFunctionInExport :: Assertion
 test_CleanImportsFunctionInExport = do
@@ -240,7 +270,93 @@ test_CleanImportsFormat = do
         (ics,ns)<-cleanImports api root rel True
         assertBool $ null ns
         assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 17)) 
-                        "import           Data.Char         (isSeparator, toUpper)",
+                        "import           Data.Char        (isSeparator, toUpper)",
                 ImportClean (InFileSpan (InFileLoc 4 1) (InFileLoc 4 34)) 
                         "import qualified Data.Unique as U (newUnique)"] 
                 ics    
+                
+test_CleanImportsInfix :: Assertion
+test_CleanImportsInfix = do
+        let api=cabalAPI
+        root<-createTestProject
+        synchronize api root False
+        let rel="src"</>"A.hs"
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:   base, filepath"]
+        synchronize api root False
+        configure api root Target
+        -- use api to write temp file
+        write api root rel $ unlines [
+                "module A where",
+                "",
+                "import System.FilePath",
+                "f = \"dir\" </> \"file\""
+                ]            
+        (ics,ns)<-cleanImports api root rel True
+        assertBool $ null ns
+        assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 23)) 
+                        "import System.FilePath  ((</>))"
+                ] 
+                ics   
+                
+test_CleanImportsHiding :: Assertion
+test_CleanImportsHiding = do
+        let api=cabalAPI
+        root<-createTestProject
+        synchronize api root False
+        let rel="src"</>"A.hs"
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:   base, bytestring"]
+        synchronize api root False
+        configure api root Target
+        -- use api to write temp file
+        write api root rel $ unlines [
+                "module A where",
+                "",
+                "import Data.ByteString.Lazy.Char8 hiding (writeFile)",
+                "f s= writeFile \"file\" s"
+                ]            
+        (ics,ns)<-cleanImports api root rel True
+        assertBool $ null ns
+        assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 53)) 
+                        ""
+                ] 
+                ics  
+                
+test_CleanImportsPrelude :: Assertion
+test_CleanImportsPrelude = do
+        let api=cabalAPI
+        root<-createTestProject
+        synchronize api root False
+        let rel="src"</>"A.hs"
+        -- use api to write temp file
+        write api root rel $ unlines [
+                "module A where",
+                "",
+                "import Data.List",
+                "f = map id"
+                ]            
+        (ics,ns)<-cleanImports api root rel True
+        assertBool $ null ns
+        assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 17)) 
+                        ""]
+                ics    
+                                

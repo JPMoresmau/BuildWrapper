@@ -263,6 +263,31 @@ test_GenerateReferencesExportAlias =  do
         -- putStrLn sUMain
         assertVarUsage "base" "Data.Ord" "" [("export",False,[1,14,1,22]),("import",False,[2,8,2,16])] vMain
 
+test_GenerateReferencesPattern :: Assertion
+test_GenerateReferencesPattern =  do
+        let api=cabalAPI
+        root<-createTestProject
+        let relMain="src"</>"Main.hs"
+        writeFile (root</> relMain) $ unlines [
+                  "module Main where",
+                  "",
+                  "main=undefined",
+                  "f :: Maybe String -> String",
+                  "f mf=case mf of",
+                  "  Just x->x",
+                  "  _->\"\"" 
+                  ] 
+        _<-synchronize api root True          
+        (BuildResult bool1 _,nsErrors1)<-build api root False Source
+        assertBoolVerbose ("returned false on bool1:" ++ show nsErrors1)  bool1
+        assertBool (null nsErrors1)
+        (comps,_)<-getCabalComponents api root    
+        mapM_ (generateUsage api root False) comps
+        vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
+        -- sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
+        -- putStrLn sUMain
+        assertVarUsage "base" "Data.Maybe" "Just" [("f",False,[6,3,6,7])] vMain
+       
     
 test_IncorrectModuleFileName :: Assertion
 test_IncorrectModuleFileName = do
