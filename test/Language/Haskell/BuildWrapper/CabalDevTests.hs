@@ -21,14 +21,17 @@ test_CabalDev2Projects :: Assertion
 test_CabalDev2Projects= do
         let api=cabalDevAPI
         (root1,root2)<-createTestProjects
-        runCabalDev root1 ["install"]
-        runCabalDev root2 ["add-source",root1]
-        runCabalDev root2 ["install"]
+        --runCabalDev root1 ["install"]
+        --runCabalDev root2 ["add-source",root1]
+        runCabalDev root2 ["install",root1] --,"-s","cabal-dev"
+        runCabalDev root2 ["install-deps"]
         ((fps,dels),_)<-synchronize api root2 False
         assertBool (not $ null fps) 
         assertBool (null dels) 
         configure api root2 Source
-        build api root2 True Source     
+        (BuildResult bool1b _,nsErrors1b)<-build api root2 True Source
+        assertBool (bool1b)
+        assertEqual 0 (length nsErrors1b)
         let relB="src"</>"B.hs"
         (mtts1,nsErrors1)<-getNamesInScope api root2 relB
         assertBool (null nsErrors1)
@@ -44,15 +47,18 @@ test_CabalDev2Projects= do
                 ]
         synchronize api root1 False
        -- runCabalDev root2 ["ghc-pkg","unregister","--force",testProject1Name]
-        runCabalDev root2 ["add-source",root1]
-        runCabalDev root2 ["install" ,"--reinstall",testProject1Name,"--force-reinstalls"]
+        --runCabalDev root2 ["add-source",root1]
+        --runCabalDev root2 ["install" ,"--reinstall",testProject1Name,"--force-reinstalls"]
+        runCabalDev root2 ["install",root1,"--force-reinstalls"] -- ,"-s","cabal-dev"
         removeDirectoryRecursive (root2 </> ".dist-buildwrapper")
 --        writeFile (root2 </> relB) $ unlines [
 --                "module B where","import A","fB=fA2"
 --                ]
         synchronize api root2 False
         configure api root2 Source    
-        build api root2 True Source       
+        (BuildResult bool2b _,nsErrors2b)<-build api root2 True Source
+        assertBool (bool2b)
+        assertEqual 0 (length nsErrors2b)
         (mtts2,nsErrors2)<-getNamesInScope api root2 relB
         assertBool (null nsErrors2)
         assertBool (isJust mtts2)
@@ -63,7 +69,7 @@ test_CabalDev2Projects= do
         return ()
 
 cabalDevAPI :: CMDAPI
-cabalDevAPI= CMDAPI "cabal-dev"
+cabalDevAPI= CMDAPI "cabal-dev" ["--sandbox=./dist-buildwrapper/cabal-dev"]
 
 testProject1Name :: String
 testProject1Name="BWTest1"         
@@ -141,9 +147,20 @@ runCabalDev:: FilePath ->  [String] -> IO ()
 runCabalDev root args= do
         cd<-getCurrentDirectory
         setCurrentDirectory root
-        (ex,out,err)<-readProcessWithExitCode "cabal-dev" args ""
+        (ex,out,err)<-readProcessWithExitCode "cabal-dev" ("--sandbox=./dist-buildwrapper/cabal-dev":args) ""
         setCurrentDirectory cd
         putStrLn ("cabal-dev out:"++out)
         putStrLn ("cabal-dev err:"++err)
         assertEqual ExitSuccess ex         
         
+        
+{--
+$ cabal-dev install <packagePath> --sandbox=<sandbox> 
+
+should do what you're accomplishing with:
+
+$ cabal-dev add-source <packagePath>
+$ cabal-dev install --reinstall <thePackage> --force-reinstalls
+
+With the added benefit that you don't need the --force to install direct to a sandbox :)
+--}

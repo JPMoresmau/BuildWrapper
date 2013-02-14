@@ -48,6 +48,7 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | GetBuildFlags {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String}
         | GenerateUsage {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], returnAll:: Bool, cabalComponent::String}
         | CleanImports {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, format :: Bool, component:: Maybe String}
+        | Clean {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], everything:: Bool}
     deriving (Show,Read,Data,Typeable)    
   
 
@@ -126,7 +127,8 @@ mcomponents :: BWCmd
 mcomponents=Components tf cp cf uf co
 mgenerateUsage :: BWCmd
 mgenerateUsage=GenerateUsage tf cp cf uf co ra cc
-
+mclean :: BWCmd
+mclean=Clean tf cp cf uf co (def &= help "delete everything or only generated files" &= name "everything")
 
 -- | main method for command handling
 cmdMain :: IO ()
@@ -134,7 +136,7 @@ cmdMain = cmdArgs
   (modes
      [msynchronize, msynchronize1, mconfigure, mwrite, mbuild, mbuild1,
       mgetbf,mcleanimports, moutline, mtokenTypes, moccurrences, mthingAtPoint, mlocals, 
-      mnamesInScope, mdependencies, mcomponents, mgenerateUsage]
+      mnamesInScope, mdependencies, mcomponents, mgenerateUsage,mclean]
      &= helpArg [explicit, name "help", name "h"]
      &= help "buildwrapper executable"
      &= program "buildwrapper"
@@ -149,8 +151,8 @@ cmdMain = cmdArgs
                 handle c@Configure{cabalTarget=w}=runCmd c (configure w)
                 handle c@Build{verbosity=ve,output=o,cabalTarget=w}=runCmdV ve c (build o w)
                 handle c@Build1{file=fi,component=mcomp}=if longRunning c
-                        then runCmd c (build1LongRunning fi mcomp)
-                        else runCmd c (build1 fi mcomp)
+                                then runCmd c $ build1LongRunning fi mcomp 
+                                else runCmd c $ build1 fi mcomp
                 handle c@GetBuildFlags{file=fi,component=mcomp}=runCmd c (getBuildFlags fi mcomp)
                 handle c@CleanImports{file=fi,format=fo,component=mcomp}=runCmd c (cleanImports fi fo mcomp)
                 handle c@Outline{file=fi,component=mcomp}=runCmd c (getOutline fi mcomp)
@@ -162,6 +164,7 @@ cmdMain = cmdArgs
                 handle c@Dependencies{}=runCmd c getCabalDependencies
                 handle c@Components{}=runCmd c getCabalComponents
                 handle c@GenerateUsage{returnAll=reta,cabalComponent=comp}=runCmd c (generateUsage reta comp)
+                handle c@Clean{everything=e}=runCmd c (clean e)
                 runCmd :: (ToJSON a) => BWCmd -> StateT BuildWrapperState IO a -> IO ()
                 runCmd=runCmdV Normal
                 runCmdV:: (ToJSON a) => Verbosity -> BWCmd -> StateT BuildWrapperState IO a -> IO ()

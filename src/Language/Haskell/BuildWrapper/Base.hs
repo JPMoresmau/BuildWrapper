@@ -645,6 +645,23 @@ getRecursiveContents topdir = do
           return (concat paths) 
         else return []      
 
+-- |  http://book.realworldhaskell.org/read/io-case-study-a-library-for-searching-the-filesystem.html
+getRecursiveContentsHidden :: FilePath -> IO [FilePath]
+getRecursiveContentsHidden topdir = do
+  ex<-doesDirectoryExist topdir
+  if ex 
+        then do
+          names <- getDirectoryContents topdir
+          let properNames = filter (not . flip elem [".",".."]) names
+          paths <- forM properNames $ \name -> do
+            let path = topdir </> name
+            isDirectory <- doesDirectoryExist path
+            if isDirectory
+              then getRecursiveContentsHidden path
+              else return [path]
+          return (concat paths) 
+        else return [] 
+
 -- | delete files in temp folder but not in real folder anymore
 deleteGhosts :: [FilePath] -> BuildWrapper [FilePath]
 deleteGhosts copied=do
@@ -658,7 +675,9 @@ deleteGhosts copied=do
                 deleteIfGhost :: FilePath -> FilePath -> S.Set FilePath -> FilePath -> IO (Maybe FilePath)
                 deleteIfGhost rt tmp cs f=do
                         let rel=makeRelative tmp f
-                        if "dist" `isPrefixOf` rel || S.member rel cs
+                        let cabalDist="dist"
+                        let cabalDevDist="cabal-dev"
+                        if cabalDist `isPrefixOf` rel || cabalDevDist `isPrefixOf` rel || S.member rel cs
                                 then return Nothing
                                 else do
                                         let fullSrc=rt </> rel
@@ -668,6 +687,25 @@ deleteGhosts copied=do
                                                 else do
                                                         removeFile (tmp </> f)
                                                         return $ Just rel
+ 
+deleteTemp ::  BuildWrapper()
+deleteTemp = do
+        temp<-getFullTempDir
+        liftIO $ removeDirectoryRecursive temp
+  
+deleteGenerated ::  BuildWrapper()
+deleteGenerated = do
+        temp<-getFullTempDir  
+        fs<-liftIO $ getRecursiveContentsHidden temp
+        liftIO $ mapM_ deleteIfGenerated fs
+        where
+                deleteIfGenerated :: FilePath -> IO()
+                deleteIfGenerated f=do
+                        let del=case takeExtension f of
+                                ".bwinfo"->True
+                                ".bwusage"->True
+                                _->False
+                        when del (removeFile f)
   
 -- | debug method: fromJust with a message to display when we get Nothing 
 fromJustDebug :: String -> Maybe a -> a

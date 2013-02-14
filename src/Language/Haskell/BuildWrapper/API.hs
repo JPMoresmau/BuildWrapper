@@ -516,4 +516,11 @@ cleanImports fp doFormat mccn=do
                                 return (m,ns ++ bwns2)
                 _ -> return ([],ns)
     
-                
+clean :: Bool -- ^ everything?
+        -> BuildWrapper Bool
+clean everything=do
+        if everything
+                then deleteTemp
+                else deleteGenerated
+        return everything
+                       

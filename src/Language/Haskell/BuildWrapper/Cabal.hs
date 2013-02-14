@@ -96,7 +96,7 @@ cabalBuild' reRun output srcOrTgt= do
                 cf<-getCabalFile srcOrTgt
                 cp<-gets cabalPath
                 v<-cabalV
-                
+                copts<-gets cabalOpts
                 let args=[
                         "build",
                         "--verbose=" ++ show (fromEnum v),
@@ -105,8 +105,9 @@ cabalBuild' reRun output srcOrTgt= do
                         ] ++ (if output 
                                 then []
                                 else ["--ghc-option=-c"])
-                        
+                        ++ copts
                 liftIO $ do
+                        print args
                         cd<-getCurrentDirectory
                         setCurrentDirectory (takeDirectory cf)
                         (ex,out,err)<-readProcessWithExitCode cp args ""
@@ -155,6 +156,7 @@ cabalConfigure srcOrTgt= do
                         ++ (if null uf then [] else ["--flags="++uf])
                         ++ copts
                 liftIO $ do
+                        print args
                         cd<-getCurrentDirectory
                         setCurrentDirectory (takeDirectory cf)
                         (ex,_,err)<-readProcessWithExitCode cp args ""
@@ -518,9 +520,10 @@ getAllFiles lbi= do
                 allF<-liftIO $ getRecursiveContents fullFP
                 tf<-gets tempFolder
                 let cabalDist=takeDirectory tf </> "dist"
+                let cabalDevDist=takeDirectory tf </> "cabal-dev"
                 -- exclude every file containing the temp folder name (".buildwrapper" by default)
                 -- which may happen if . is a source path
-                let notMyself=filter (not . isInfixOf cabalDist) $ filter (not . isInfixOf tf) allF
+                let notMyself=filter (\x->not $ any (`isInfixOf` x) [cabalDevDist, cabalDist, tf]) allF
                 return $ map (\f->(simpleParse $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) notMyself
                 -- return $ map (\(x,y)->(fromJust x,y)) $ filter (isJust . fst) $ map (\f->(simpleParse $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) notMyself
  

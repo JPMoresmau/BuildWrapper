@@ -61,39 +61,43 @@ class APIFacade a where
         getCabalComponents :: a -> FilePath -> IO (OpResult [CabalComponent])
         generateUsage :: a -> FilePath -> Bool -> CabalComponent -> IO (OpResult (Maybe [FilePath]))
         cleanImports :: a -> FilePath -> FilePath -> Bool -> IO (OpResult [ImportClean])
-        
+        clean :: a -> FilePath -> Bool -> IO(Bool)
 
 
 data CMDAPI=CMDAPI {
-        cabalExe :: String
+        cabalExe :: String,
+        cabalOpts :: [String]
         }
 
+
+
 instance APIFacade CMDAPI where
-        synchronize (CMDAPI c) r ff= runAPI c r "synchronize" ["--force="++ show ff ]
-        synchronize1 (CMDAPI c) r ff fp= runAPI c r "synchronize1" ["--force="++show ff,"--file="++fp]
-        write (CMDAPI c) r fp s= runAPI c r "write" ["--file="++fp,"--contents="++s]
-        configure (CMDAPI c) r t= runAPI c r "configure" ["--cabaltarget="++ show t]
-        configureWithFlags (CMDAPI c) r t fgs= runAPI c r "configure" ["--cabaltarget="++ show t,"--cabalflags="++ fgs]
-        build (CMDAPI c) r b wc= runAPI c r "build" ["--output="++ show b,"--cabaltarget="++ show wc]
-        build1 (CMDAPI c) r fp= runAPI c r "build1" ["--file="++fp]
-        build1c (CMDAPI c) r fp ccn= runAPI c r "build1" ["--file="++fp,"--component="++ccn]
-        getBuildFlags (CMDAPI c) r fp= runAPI c r "getbuildflags" ["--file="++fp]
-        getOutline (CMDAPI c) r fp= runAPI c r "outline" ["--file="++fp]
-        getTokenTypes (CMDAPI c) r fp= runAPI c r "tokentypes" ["--file="++fp]
-        getOccurrences (CMDAPI c) r fp s= runAPI c r "occurrences" ["--file="++fp,"--token="++s]
-        getThingAtPoint (CMDAPI c) r fp l cl= fmap removeLayoutTAP $ runAPI c r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show cl]
-        getLocals (CMDAPI c) r fp sl sc el ec= runAPI c r "locals" ["--file="++fp,"--sline="++ show sl,"--scolumn="++ show sc,"--eline="++ show el,"--ecolumn="++ show ec]
-        getNamesInScope (CMDAPI c) r fp= runAPI c r "namesinscope" ["--file="++fp]
-        getCabalDependencies (CMDAPI c) r= runAPI c r "dependencies" []
-        getCabalComponents (CMDAPI c) r= runAPI c r "components" []
-        generateUsage (CMDAPI c) r retAll cc=runAPI c r "generateusage" ["--returnall="++ show retAll,"--cabalcomponent="++ cabalComponentName cc]
-        cleanImports (CMDAPI c) r fp fo= runAPI c r "cleanimports" ["--file="++fp,"--format="++ show fo]
+        synchronize (CMDAPI c o) r ff= runAPI c r "synchronize" (["--force="++ show ff ] ++ cmdOpts o)
+        synchronize1 (CMDAPI c o) r ff fp= runAPI c r "synchronize1" (["--force="++show ff,"--file="++fp]++ cmdOpts o)
+        write (CMDAPI c _) r fp s= runAPI c r "write" ["--file="++fp,"--contents="++s]
+        configure (CMDAPI c o) r t= runAPI c r "configure" (["--cabaltarget="++ show t]++ cmdOpts o)
+        configureWithFlags (CMDAPI c o) r t fgs= runAPI c r "configure" (["--cabaltarget="++ show t,"--cabalflags="++ fgs]++ cmdOpts o)
+        build (CMDAPI c _) r b wc= runAPI c r "build" ["--output="++ show b,"--cabaltarget="++ show wc]
+        build1 (CMDAPI c _) r fp= runAPI c r "build1" ["--file="++fp]
+        build1c (CMDAPI c _) r fp ccn= runAPI c r "build1" ["--file="++fp,"--component="++ccn]
+        getBuildFlags (CMDAPI c _) r fp= runAPI c r "getbuildflags" ["--file="++fp]
+        getOutline (CMDAPI c _) r fp= runAPI c r "outline" ["--file="++fp]
+        getTokenTypes (CMDAPI c _) r fp= runAPI c r "tokentypes" ["--file="++fp]
+        getOccurrences (CMDAPI c _) r fp s= runAPI c r "occurrences" ["--file="++fp,"--token="++s]
+        getThingAtPoint (CMDAPI c _) r fp l cl= fmap removeLayoutTAP $ runAPI c r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show cl]
+        getLocals (CMDAPI c _) r fp sl sc el ec= runAPI c r "locals" ["--file="++fp,"--sline="++ show sl,"--scolumn="++ show sc,"--eline="++ show el,"--ecolumn="++ show ec]
+        getNamesInScope (CMDAPI c _) r fp= runAPI c r "namesinscope" ["--file="++fp]
+        getCabalDependencies (CMDAPI c _) r= runAPI c r "dependencies" []
+        getCabalComponents (CMDAPI c _) r= runAPI c r "components" []
+        generateUsage (CMDAPI c _) r retAll cc=runAPI c r "generateusage" ["--returnall="++ show retAll,"--cabalcomponent="++ cabalComponentName cc]
+        cleanImports (CMDAPI c _) r fp fo= runAPI c r "cleanimports" ["--file="++fp,"--format="++ show fo]
+        clean (CMDAPI c _) r e=runAPI c r "clean" ["--everything="++show e]
         
 build1lr :: FilePath
                        -> [Char] -> IO (Handle, Handle, Handle, ProcessHandle)
 build1lr r fp= startAPIProcess r "build1" ["--file="++fp,"--longrunning=true"]
    
-cabalAPI= CMDAPI "cabal"      
+cabalAPI= CMDAPI "cabal" []     
 
 exeExtension :: String
 #ifdef mingw32_HOST_OS
@@ -1755,6 +1759,36 @@ test_ExplicitComponentUnRef =do
         assertBool (isNothing names3)
         assertBool (not $ null nsErrors3)
  
+test_CleanFiles :: Assertion
+test_CleanFiles =do
+        let api=cabalAPI
+        root<-createTestProject
+        synchronize api root False
+        let fldr=root </> ".dist-buildwrapper"
+        let file=fldr </> "src" </> ".A.hs.bwinfo"
+        exf1<-doesFileExist file
+        assertBool $ not exf1
+        exd1<-doesDirectoryExist fldr
+        assertBool exd1
+        let rel="src"</> "A.hs"
+        build1 api root rel
+        getThingAtPoint api root rel 1 1
+        exf2<-doesFileExist file
+        assertBool exf2
+        clean api root False
+        exf3<-doesFileExist file
+        assertBool $ not exf3
+        exd2<-doesDirectoryExist fldr
+        assertBool exd2
+        build1 api root rel
+        getThingAtPoint api root rel 1 1
+        exf4<-doesFileExist file
+        assertBool exf4
+        clean api root True
+        exf5<-doesFileExist file
+        assertBool $ not exf5
+        exd3<-doesDirectoryExist fldr
+        assertBool $ not exd3
         
 testProjectName :: String
 testProjectName="BWTest"         
@@ -1914,6 +1948,9 @@ end :: Handle -> IO ()
 end h =do
         hPutStrLn h "q"  
         hFlush h    
+  
+cmdOpts :: [String] -> [String] 
+cmdOpts =map ("--cabaloption=" ++)   
    
 notesInError :: [BWNote] -> Bool
 notesInError ns=not $ null $ filter (\x->BWError == bwnStatus x) ns
