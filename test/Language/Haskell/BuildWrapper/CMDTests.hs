@@ -1541,6 +1541,31 @@ test_CabalDependencies  :: Assertion
 test_CabalDependencies = do
         let api=cabalAPI
         root<-createTestProject
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+                        "version:0.1",
+                        "cabal-version:  >= 1.8",
+                        "build-type:     Simple",
+                        "",
+                        "library",
+                        "  hs-source-dirs:  src",
+                        "  exposed-modules: A",
+                        "  other-modules:  B.C",
+                        "  build-depends:  base",
+                        "",
+                        "executable BWTest",
+                        "  hs-source-dirs:  src",
+                        "  main-is:         Main.hs",
+                        "  other-modules:  B.D",
+                        "  build-depends:  base",
+                        "",
+                        "test-suite BWTest-test",
+                        "  type:            exitcode-stdio-1.0",
+                        "  hs-source-dirs:  test",
+                        "  main-is:         Main.hs",
+                        "  other-modules:  TestA",
+                        "  build-depends:  base,filepath",
+                        ""]
         synchronize api root False
         (cps,nsOK)<-getCabalDependencies api root
         assertBool (null nsOK)
@@ -1553,7 +1578,10 @@ test_CabalDependencies = do
         assertEqual (CCLibrary True) l
         assertEqual (CCExecutable "BWTest" True) ex
         assertEqual (CCTestSuite "BWTest-test" True) ts
-
+        let fp=filter (\pkg->cpName pkg == "filepath") pkgs
+        assertEqual 1 (length fp)
+        let (lfp:[])=cpDependent $ head fp
+        assertEqual (CCTestSuite "BWTest-test" True) lfp
 
 
 test_NoSourceDir :: Assertion

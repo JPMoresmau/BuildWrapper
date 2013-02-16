@@ -29,6 +29,7 @@ import Text.ParserCombinators.ReadP(readP_to_S)
 #endif
 
 import qualified Data.Map as DM
+import qualified Data.Set as DS
 
 import Exception (ghandle)
 
@@ -600,6 +601,11 @@ cabalDependencies = do
                   return [])
             $
             do pkgs <- liftIO getPkgInfos
+               --let m=cabalComponentsDependencies (localPkgDescr lbi)
+               --print m
+               --let deps=PD.buildDepends (localPkgDescr lbi)
+               --print deps
+               --liftIO $ mapM_ (\d->print $ (show d) ++ (show $ DM.lookup (show $ simplifyDependency d) m)) deps
                return $ dependencies (localPkgDescr lbi) pkgs
             )
      return (fromMaybe [] rs,ns)
@@ -610,9 +616,10 @@ dependencies :: PD.PackageDescription -- ^ the cabal description
         -> [(FilePath,[CabalPackage])] -- ^ the referenced packages, by package database location
 dependencies pd pkgs=let
         pkgsMap=foldr buildPkgMap DM.empty pkgs -- build the map of package by name with ordered version (more recent first)
-        allC= cabalComponentsFromDescription pd
+        -- allC= cabalComponentsFromDescription pd
+        compDeps=cabalComponentsDependencies pd
         gdeps=PD.buildDepends pd
-        cpkgs=concat $ DM.elems $ DM.map (\ipis->getDep allC ipis gdeps []) pkgsMap
+        cpkgs=concat $ DM.elems $ DM.map (\ipis->getDep compDeps ipis []) pkgsMap
         in DM.assocs $ DM.fromListWith (++)
                 (map (\ (a, b) -> (a, [b])) cpkgs ++
                 map (\ (a, _) -> (a, [])) pkgs)
@@ -626,14 +633,23 @@ dependencies pd pkgs=let
                                 Just l->sortBy (flip (comparing (pkgVersion . sourcePackageId . snd))) ((fp,i):l)
                         in DM.insert key newvals dm
                         ) m ipis
-                getDep :: [CabalComponent] -> [(FilePath,InstalledPackageInfo)] -> [Dependency]-> [(FilePath,CabalPackage)] -> [(FilePath,CabalPackage)]
-                getDep _ [] _ acc= acc
-                getDep allC ((fp,InstalledPackageInfo{sourcePackageId=i,exposed=e,IPI.exposedModules=ems,IPI.hiddenModules=hms}):xs) deps acc= let
-                        (ds,deps2)=partition (\(Dependency n v)->(pkgName i == n) && withinRange (pkgVersion i) v) deps -- find if version is referenced, remove the referencing component so that it doesn't match an older version
-                        cps=if null ds then [] else allC
+                getDep :: DM.Map CabalComponent [Dependency] -> [(FilePath,InstalledPackageInfo)] -> [(FilePath,CabalPackage)] -> [(FilePath,CabalPackage)]
+                getDep _ [] acc= acc
+                getDep allC ((fp,InstalledPackageInfo{sourcePackageId=i,exposed=e,IPI.exposedModules=ems,IPI.hiddenModules=hms}):xs) acc= let
+                        (s,m)=DM.foldrWithKey (splitMatching i) (DS.empty,DM.empty) allC
+                        --(ds,deps2)=partition (\(Dependency n v)->(pkgName i == n) && withinRange (pkgVersion i) v) deps -- find if version is referenced, remove the referencing component so that it doesn't match an older version
+                        cps=DS.elems s
+                        --if null ds then [] else allC
+                        --filter (\c->not $ null ((PD.targetBuildDepends c) `intersect` ds)) allC
                         mns=map display (ems++hms)
-                        in getDep allC xs deps2 ((fp,CabalPackage (display $ pkgName i) (display $ pkgVersion i) e cps mns): acc) -- build CabalPackage structure
-                
+                        in getDep m xs ((fp,CabalPackage (display $ pkgName i) (display $ pkgVersion i) e cps mns): acc) -- build CabalPackage structure
+                splitMatching pkgId comp deps (s,m)=let
+                         (ds,deps2)=partition (\(Dependency n v)->(pkgName pkgId == n) && withinRange (pkgVersion pkgId) v) deps
+                         s'=if null ds 
+                                then s
+                                else DS.insert comp s
+                         m'=DM.insertWith (++) comp deps m
+                         in (s',m')        
               
 -- | get all components from the package description        
 cabalComponentsFromDescription :: PD.PackageDescription -- ^ the package description
@@ -643,6 +659,18 @@ cabalComponentsFromDescription pd= [cabalComponentFromLibrary $ fromJust (PD.lib
               map cabalComponentFromExecutable (PD.executables pd) ++
                 map cabalComponentFromTestSuite (PD.testSuites pd)
              
+cabalComponentsDependencies :: PD.PackageDescription -- ^ the package description
+        -> DM.Map CabalComponent [Dependency]
+cabalComponentsDependencies pd=let
+        mLib=case  PD.library pd of
+                Nothing -> DM.empty
+                Just lib->DM.singleton (cabalComponentFromLibrary lib) (PD.targetBuildDepends $ PD.libBuildInfo lib)
+        mExe=DM.fromList $ map (\e->((cabalComponentFromExecutable e),(PD.targetBuildDepends $ PD.buildInfo e))) (PD.executables pd)
+        mTs=DM.fromList $ map (\ts->((cabalComponentFromTestSuite ts),(PD.targetBuildDepends $ PD.testBuildInfo ts))) (PD.testSuites pd)
+        in DM.unionWith (++) mTs $ DM.unionWith (++) mLib mExe
+        where mapDep cc bi=DM.fromList $ map (\x->(cc)) (PD.targetBuildDepends bi)
+
+
 
 cabalComponentFromLibrary :: Library -> CabalComponent
 cabalComponentFromLibrary =CCLibrary . PD.buildable . PD.libBuildInfo
