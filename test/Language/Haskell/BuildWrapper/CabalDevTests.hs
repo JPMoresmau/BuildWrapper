@@ -16,6 +16,7 @@ import Test.Framework                          (assertBool_, assertEqual_, makeL
 import Test.HUnit                              (Assertion)                    
 import System.Exit                             (ExitCode (ExitSuccess))
 import System.Process                          (readProcessWithExitCode) 
+import Data.List (isInfixOf)
 
 test_CabalDev2Projects :: Assertion
 test_CabalDev2Projects= do
@@ -68,8 +69,32 @@ test_CabalDev2Projects= do
         assertBool ("A.fA2" `elem` tts2)
         return ()
 
+test_CabalDevDependencies :: Assertion
+test_CabalDevDependencies= do
+        let api=cabalDevAPI
+        (root1,root2)<-createTestProjects
+        runCabalDev root2 ["install",root1] --,"-s","cabal-dev"
+        runCabalDev root2 ["install-deps"]
+        ((fps,dels),_)<-synchronize api root2 False
+        assertBool (not $ null fps) 
+        assertBool (null dels) 
+        configure api root2 Source
+        (BuildResult bool1b _,nsErrors1b)<-build api root2 True Source
+        assertBool (bool1b)
+        assertEqual 0 (length nsErrors1b)
+        (cps,nsOK)<-getCabalDependencies api root2 (Just "./.dist-buildwrapper/cabal-dev")
+        assertBool (null nsOK)
+        assertEqual 2 (length cps)
+        let sbs=filter (\(f,_)->"dist-buildwrapper/cabal-dev" `isInfixOf` f) cps
+        assertEqual 1 (length sbs)
+        let bwt1=filter (\pkg->cpName pkg == testProject1Name) $ concatMap snd sbs
+        assertEqual 1 (length bwt1)
+        let deps=cpDependent $ head bwt1
+        assertEqual [CCLibrary True] deps
+        return ()
+
 cabalDevAPI :: CMDAPI
-cabalDevAPI= CMDAPI "cabal-dev" ["--sandbox=./dist-buildwrapper/cabal-dev"]
+cabalDevAPI= CMDAPI "cabal-dev" ["--sandbox=./.dist-buildwrapper/cabal-dev"]
 
 testProject1Name :: String
 testProject1Name="BWTest1"         
@@ -147,7 +172,7 @@ runCabalDev:: FilePath ->  [String] -> IO ()
 runCabalDev root args= do
         cd<-getCurrentDirectory
         setCurrentDirectory root
-        (ex,out,err)<-readProcessWithExitCode "cabal-dev" ("--sandbox=./dist-buildwrapper/cabal-dev":args) ""
+        (ex,out,err)<-readProcessWithExitCode "cabal-dev" ("--sandbox=./.dist-buildwrapper/cabal-dev":args) ""
         setCurrentDirectory cd
         putStrLn ("cabal-dev out:"++out)
         putStrLn ("cabal-dev err:"++err)

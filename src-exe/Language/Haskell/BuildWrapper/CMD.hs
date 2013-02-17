@@ -43,7 +43,7 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | ThingAtPointCmd {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, line::Int, column::Int, component:: Maybe String}
         | Locals {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, sline::Int, scolumn::Int,eline::Int, ecolumn::Int, component:: Maybe String}
         | NamesInScope {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String} 
-        | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String]}
+        | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], sandbox::FilePath}
         | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String]}
         | GetBuildFlags {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String}
         | GenerateUsage {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], returnAll:: Bool, cabalComponent::String}
@@ -60,6 +60,8 @@ cf :: CabalFile
 cf=def &= typFile &= help "cabal file" 
 fp :: FilePath
 fp=def &= typFile &= help "relative path of file to process"
+sd :: FilePath
+sd=def &= typDir &= help "path of the sandbox"
 ff :: Bool
 ff=def &= help "overwrite newer file"
 uf :: String
@@ -122,7 +124,7 @@ mlocals=Locals tf cp cf uf co fp
 mnamesInScope :: BWCmd
 mnamesInScope=NamesInScope tf cp cf uf co fp mcc
 mdependencies :: BWCmd
-mdependencies=Dependencies tf cp cf uf co
+mdependencies=Dependencies tf cp cf uf co sd
 mcomponents :: BWCmd
 mcomponents=Components tf cp cf uf co
 mgenerateUsage :: BWCmd
@@ -161,7 +163,7 @@ cmdMain = cmdArgs
                 handle c@ThingAtPointCmd{file=fi,line=l,column=col,component=mcomp}=runCmd c (getThingAtPoint fi l col mcomp)
                 handle c@Locals{file=fi,sline=sl,scolumn=scol,eline=el,ecolumn=ecol,component=mcomp}=runCmd c (getLocals fi sl scol el ecol mcomp)
                 handle c@NamesInScope{file=fi,component=mcomp}=runCmd c (getNamesInScope fi mcomp)
-                handle c@Dependencies{}=runCmd c getCabalDependencies
+                handle c@Dependencies{sandbox=sd}=runCmd c (getCabalDependencies sd)
                 handle c@Components{}=runCmd c getCabalComponents
                 handle c@GenerateUsage{returnAll=reta,cabalComponent=comp}=runCmd c (generateUsage reta comp)
                 handle c@Clean{everything=e}=runCmd c (clean e)

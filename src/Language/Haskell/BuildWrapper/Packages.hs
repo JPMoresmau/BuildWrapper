@@ -46,8 +46,9 @@ type InstalledPackagesList = [(FilePath, [InstalledPackageInfo])]
 -- | Fetch the installed package info from the global and user package.conf
 -- databases, mimicking the functionality of ghc-pkg.
 
-getPkgInfos :: IO InstalledPackagesList
-getPkgInfos = 
+getPkgInfos :: Maybe FilePath   -- ^ the path to the cabal-dev sandbox if any
+        -> IO InstalledPackagesList
+getPkgInfos msandbox= 
   let
     -- | Test for package database's presence in a given directory
     -- NB: The directory is returned for later scanning by listConf,
@@ -57,6 +58,7 @@ getPkgInfos =
       let
         path_dir = dir </> "package.conf.d"
         path_file = dir </> "package.conf"
+        path_sd_dir= dir </> ("packages-" ++ ghcVersion ++ ".conf")
       in do
         exists_dir <- doesDirectoryExist path_dir
         if exists_dir
@@ -69,7 +71,13 @@ getPkgInfos =
               then do
                 pkgs <- readContents (PkgFile path_file)
                 return $ Just pkgs 
-              else return Nothing
+              else  do
+                exists_dirSd <- doesDirectoryExist path_sd_dir
+                if exists_dirSd
+                  then do
+                    pkgs <- readContents (PkgDirectory path_sd_dir)
+                    return $ Just pkgs
+                  else return Nothing
 
     currentArch :: String
     currentArch = System.Info.arch
@@ -88,8 +96,10 @@ getPkgInfos =
         Just pkgs -> return pkgs
 
     -- Get the user package configuration database
-    e_appdir <- Exc.try $ getAppUserDataDirectory "ghc"
-    user_conf <- case e_appdir of
+    user_conf <- case msandbox of
+        Nothing -> do
+            e_appdir <- Exc.try $ getAppUserDataDirectory "ghc"
+            case e_appdir of
                     Left (_::Exc.IOException) -> return []
                     Right appdir -> do 
                        let subdir
@@ -99,7 +109,11 @@ getPkgInfos =
                        case r of
                            Nothing -> return []
                            Just pkgs -> return pkgs
-
+        Just sd->do
+                r <- lookForPackageDBIn sd
+                case r of
+                           Nothing -> return []
+                           Just pkgs -> return pkgs
     -- Process GHC_PACKAGE_PATH, if present:
     e_pkg_path <- Exc.try (getEnv "GHC_PACKAGE_PATH")
     env_stack <- case e_pkg_path of

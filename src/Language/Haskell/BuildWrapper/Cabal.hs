@@ -592,15 +592,16 @@ cabalComponents = do
      return (fromMaybe [] rs,ns)   
 
 -- | get all the dependencies in the cabal file
-cabalDependencies :: BuildWrapper (OpResult [(FilePath,[CabalPackage])]) -- ^ the result is an array of tuples: the path to the package database, the list of packages in that db that the Cabal file references
-cabalDependencies = do
+cabalDependencies :: Maybe FilePath   -- ^ the path to the cabal-dev sandbox if any
+        -> BuildWrapper (OpResult [(FilePath,[CabalPackage])]) -- ^ the result is an array of tuples: the path to the package database, the list of packages in that db that the Cabal file references
+cabalDependencies msandbox= do
      (rs,ns)<-withCabal Source (\lbi-> liftIO $
           ghandle
             (\ (e :: IOError) ->
                do print e
                   return [])
             $
-            do pkgs <- liftIO getPkgInfos
+            do pkgs <- liftIO $ getPkgInfos msandbox
                --let m=cabalComponentsDependencies (localPkgDescr lbi)
                --print m
                --let deps=PD.buildDepends (localPkgDescr lbi)

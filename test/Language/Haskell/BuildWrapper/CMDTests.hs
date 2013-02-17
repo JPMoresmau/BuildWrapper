@@ -57,7 +57,7 @@ class APIFacade a where
         getThingAtPoint :: a -> FilePath -> FilePath -> Int -> Int -> IO (OpResult (Maybe ThingAtPoint))
         getLocals :: a -> FilePath -> FilePath -> Int -> Int -> Int -> Int -> IO (OpResult [ThingAtPoint])
         getNamesInScope :: a -> FilePath -> FilePath-> IO (OpResult (Maybe [String]))
-        getCabalDependencies :: a -> FilePath -> IO (OpResult [(FilePath,[CabalPackage])])
+        getCabalDependencies :: a -> FilePath -> Maybe FilePath -> IO (OpResult [(FilePath,[CabalPackage])])
         getCabalComponents :: a -> FilePath -> IO (OpResult [CabalComponent])
         generateUsage :: a -> FilePath -> Bool -> CabalComponent -> IO (OpResult (Maybe [FilePath]))
         cleanImports :: a -> FilePath -> FilePath -> Bool -> IO (OpResult [ImportClean])
@@ -77,7 +77,7 @@ instance APIFacade CMDAPI where
         write (CMDAPI c _) r fp s= runAPI c r "write" ["--file="++fp,"--contents="++s]
         configure (CMDAPI c o) r t= runAPI c r "configure" (["--cabaltarget="++ show t]++ cmdOpts o)
         configureWithFlags (CMDAPI c o) r t fgs= runAPI c r "configure" (["--cabaltarget="++ show t,"--cabalflags="++ fgs]++ cmdOpts o)
-        build (CMDAPI c _) r b wc= runAPI c r "build" ["--output="++ show b,"--cabaltarget="++ show wc]
+        build (CMDAPI c o) r b wc= runAPI c r "build" (["--output="++ show b,"--cabaltarget="++ show wc]++ cmdOpts o)
         build1 (CMDAPI c _) r fp= runAPI c r "build1" ["--file="++fp]
         build1c (CMDAPI c _) r fp ccn= runAPI c r "build1" ["--file="++fp,"--component="++ccn]
         getBuildFlags (CMDAPI c _) r fp= runAPI c r "getbuildflags" ["--file="++fp]
@@ -87,7 +87,7 @@ instance APIFacade CMDAPI where
         getThingAtPoint (CMDAPI c _) r fp l cl= fmap removeLayoutTAP $ runAPI c r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show cl]
         getLocals (CMDAPI c _) r fp sl sc el ec= runAPI c r "locals" ["--file="++fp,"--sline="++ show sl,"--scolumn="++ show sc,"--eline="++ show el,"--ecolumn="++ show ec]
         getNamesInScope (CMDAPI c _) r fp= runAPI c r "namesinscope" ["--file="++fp]
-        getCabalDependencies (CMDAPI c _) r= runAPI c r "dependencies" []
+        getCabalDependencies (CMDAPI c o) r mfp= runAPI c r "dependencies" ((maybe [] (\x->["--sandbox="++x]) mfp)++ cmdOpts o)
         getCabalComponents (CMDAPI c _) r= runAPI c r "components" []
         generateUsage (CMDAPI c _) r retAll cc=runAPI c r "generateusage" ["--returnall="++ show retAll,"--cabalcomponent="++ cabalComponentName cc]
         cleanImports (CMDAPI c _) r fp fo= runAPI c r "cleanimports" ["--file="++fp,"--format="++ show fo]
@@ -1567,7 +1567,7 @@ test_CabalDependencies = do
                         "  build-depends:  base,filepath",
                         ""]
         synchronize api root False
-        (cps,nsOK)<-getCabalDependencies api root
+        (cps,nsOK)<-getCabalDependencies api root Nothing
         assertBool (null nsOK)
         assertEqual 2 (length cps)
         let [(_,pkgs1),(_,pkgs2)] = cps -- One is global and one is local, but the order depends on the paths, 

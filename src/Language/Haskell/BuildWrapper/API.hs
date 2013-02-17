@@ -490,8 +490,12 @@ getNamesInScope :: FilePath
 getNamesInScope fp mccn=withGHCAST fp mccn BwGHC.getGhcNamesInScope
 
 -- | get cabal dependencies
-getCabalDependencies :: BuildWrapper (OpResult [(FilePath,[CabalPackage])])
-getCabalDependencies = cabalDependencies
+getCabalDependencies :: FilePath -> BuildWrapper (OpResult [(FilePath,[CabalPackage])])
+getCabalDependencies fp=do
+        msd<-case fp of
+                ""-> return Nothing
+                _-> liftM Just $ getFullSrc fp
+        cabalDependencies msd
 
 -- | get cabal components
 getCabalComponents :: BuildWrapper (OpResult [CabalComponent])
