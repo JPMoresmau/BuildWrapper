@@ -108,7 +108,7 @@ cabalBuild' reRun output srcOrTgt= do
                                 else ["--ghc-option=-c"])
                         ++ copts
                 liftIO $ do
-                        print args
+                        -- print args
                         cd<-getCurrentDirectory
                         setCurrentDirectory (takeDirectory cf)
                         (ex,out,err)<-readProcessWithExitCode cp args ""
@@ -157,7 +157,7 @@ cabalConfigure srcOrTgt= do
                         ++ (if null uf then [] else ["--flags="++uf])
                         ++ copts
                 liftIO $ do
-                        print args
+                        -- print args
                         cd<-getCurrentDirectory
                         setCurrentDirectory (takeDirectory cf)
                         (ex,_,err)<-readProcessWithExitCode cp args ""
@@ -601,7 +601,8 @@ cabalDependencies msandbox= do
                do print e
                   return [])
             $
-            do pkgs <- liftIO $ getPkgInfos msandbox
+            do 
+               pkgs <- liftIO $ getPkgInfos msandbox
                --let m=cabalComponentsDependencies (localPkgDescr lbi)
                --print m
                --let deps=PD.buildDepends (localPkgDescr lbi)
@@ -619,7 +620,7 @@ dependencies pd pkgs=let
         pkgsMap=foldr buildPkgMap DM.empty pkgs -- build the map of package by name with ordered version (more recent first)
         -- allC= cabalComponentsFromDescription pd
         compDeps=cabalComponentsDependencies pd
-        gdeps=PD.buildDepends pd
+        -- gdeps=PD.buildDepends pd
         cpkgs=concat $ DM.elems $ DM.map (\ipis->getDep compDeps ipis []) pkgsMap
         in DM.assocs $ DM.fromListWith (++)
                 (map (\ (a, b) -> (a, [b])) cpkgs ++
