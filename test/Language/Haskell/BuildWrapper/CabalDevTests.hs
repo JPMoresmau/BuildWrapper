@@ -22,9 +22,7 @@ test_CabalDev2Projects :: Assertion
 test_CabalDev2Projects= do
         let api=cabalDevAPI
         (root1,root2)<-createTestProjects
-        --runCabalDev root1 ["install"]
-        --runCabalDev root2 ["add-source",root1]
-        runCabalDev root2 ["install",root1] --,"-s","cabal-dev"
+        runCabalDev root2 ["install",root1]
         runCabalDev root2 ["install-deps"]
         ((fps,dels),_)<-synchronize api root2 False
         assertBool (not $ null fps) 
@@ -47,14 +45,7 @@ test_CabalDev2Projects= do
                 "fA2=head"
                 ]
         synchronize api root1 False
-       -- runCabalDev root2 ["ghc-pkg","unregister","--force",testProject1Name]
-        --runCabalDev root2 ["add-source",root1]
-        --runCabalDev root2 ["install" ,"--reinstall",testProject1Name,"--force-reinstalls"]
-        runCabalDev root2 ["install",root1,"--force-reinstalls"] -- ,"-s","cabal-dev"
-        removeDirectoryRecursive (root2 </> ".dist-buildwrapper")
---        writeFile (root2 </> relB) $ unlines [
---                "module B where","import A","fB=fA2"
---                ]
+        runCabalDev root2 ["install",root1,"--force-reinstalls"] 
         synchronize api root2 False
         configure api root2 Source    
         (BuildResult bool2b _,nsErrors2b)<-build api root2 True Source
