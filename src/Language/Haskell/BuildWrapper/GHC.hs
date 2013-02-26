@@ -66,7 +66,13 @@ import Module (moduleNameFS)
 -- import System.Time (getClockTime, diffClockTimes, timeDiffToString)
 import System.IO (hFlush, stdout)
 import System.Directory (getModificationTime)
+#if __GLASGOW_HASKELL__ < 706
 import System.Time (ClockTime(TOD))
+#else
+import Data.Time.Clock (UTCTime(UTCTime))
+import Data.Time.Calendar (Day(ModifiedJulianDay))
+#endif
+
 
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
@@ -341,14 +347,31 @@ getGhcNameDefsInScopeLongRunning  :: FilePath -- ^ source path
         -> [String] -- ^ build options
         -> IO ()
 getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
+
+#if __GLASGOW_HASKELL__ < 706
         initGHC (go (TOD 0 0)) options
         where 
-                go :: ClockTime -> Ghc ()
+                go :: 
+                        ClockTime
+                        -> Ghc ()
                 go t1 = do
                         t2<- GMU.liftIO $ getModificationTime fp
                         let hasLoaded=case t1 of
                                 TOD 0 _ -> False
                                 _ -> True
+#else
+        initGHC (go (UTCTime (ModifiedJulianDay 0) 0)) options
+        where 
+                go :: 
+                        UTCTime
+                        -> Ghc ()
+                go t1 = do
+                        t2<- GMU.liftIO $ getModificationTime fp
+                        let hasLoaded=case t1 of
+                                UTCTime (ModifiedJulianDay 0) _ -> False
+                                _ -> True
+#endif
+
                         (ns1,add2)<-if hasLoaded && t2==t1 then -- modification time is only precise to the second in GHC 7.6 or above, see http://hackage.haskell.org/trac/ghc/ticket/7473
                                 (do 
                                         removeTarget (TargetFile fp Nothing)      
