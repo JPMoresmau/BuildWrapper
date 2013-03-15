@@ -120,7 +120,8 @@ test-suite buildwrapper-test
                    Language.Haskell.BuildWrapper.GHCTests,
                    Language.Haskell.BuildWrapper.UsagesTests,
                    Language.Haskell.BuildWrapper.ImportsTests,
-                   Language.Haskell.BuildWrapper.CabalDevTests
+                   Language.Haskell.BuildWrapper.CabalDevTests,
+                   Language.Haskell.BuildWrapper.CMDLongRunningTests
   if impl(ghc >= 7.6)
     build-depends: 
                     time

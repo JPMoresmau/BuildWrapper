@@ -16,7 +16,7 @@ import Language.Haskell.BuildWrapper.Base hiding (Target,ImportExportType(..))
 import Language.Haskell.BuildWrapper.GHCStorage
 
 import Data.Char
-import Data.Generics hiding (Fixity, typeOf)
+import Data.Generics hiding (Fixity, typeOf, empty)
 import Data.Maybe
 import Data.Monoid
 import Data.Aeson
@@ -68,11 +68,15 @@ import System.IO (hFlush, stdout)
 import System.Directory (getModificationTime)
 #if __GLASGOW_HASKELL__ < 706
 import System.Time (ClockTime(TOD))
+import Unsafe.Coerce (unsafeCoerce)
+
 #else
 import Data.Time.Clock (UTCTime(UTCTime))
 import Data.Time.Calendar (Day(ModifiedJulianDay))
 #endif
-
+import Control.Exception (SomeException)
+import Debugger (showTerm)
+import Exception (gtry)
 
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
@@ -392,9 +396,38 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
                                 _ -> (Nothing,ns1 ++ ns)
                         GMU.liftIO $ BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode res
                         GMU.liftIO $ hFlush stdout
+                        r1 t2
+                r1 t2=do
                         l<- GMU.liftIO getLine 
-                        unless ("q" == l) (go t2)  
-                
+                        case l of
+                                "q"->return ()
+                                -- | eval an expression
+                                'e':' ':expr->do
+                                        s<-handleSourceError (return . show)
+                                               (do
+                                                rr<- runStmt expr RunToCompletion
+                                                case rr of
+                                                        RunOk ns->do
+                                                                df<-getSessionDynFlags
+                                                                ls<-mapM (\n->do
+                                                                        mty<-lookupName n
+                                                                        case mty of
+                                                                                Just (AnId aid)->do
+                                                                                        t<-gtry $ GHC.obtainTermFromId 100 False aid
+                                                                                        case t of
+                                                                                            Right term -> showTerm term
+                                                                                            Left  exn  -> return (text "*** Exception:" <+>
+                                                                                                                    text (show (exn :: SomeException)))
+                                                                                _->return empty
+                                                                        ) ns
+                                                                return $ showSDDump df $ vcat ls
+                                                        RunException e ->return $ show e
+                                                        _->return "")
+                                        GMU.liftIO $ BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode s
+                                        GMU.liftIO $ hFlush stdout
+                                        r1 t2
+                                _ ->go t2
+                       
 name2nd :: GhcMonad m=> DynFlags -> Name -> m NameDef
 name2nd df n=do
         m<- getInfo n

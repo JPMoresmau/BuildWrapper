@@ -14,6 +14,7 @@ module Main where
 
 import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.APITest
 import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.CMDTests
+import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.CMDLongRunningTests
 import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.GHCTests
 import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.UsagesTests
 import {-@ HTF_TESTS @-} Language.Haskell.BuildWrapper.ImportsTests
