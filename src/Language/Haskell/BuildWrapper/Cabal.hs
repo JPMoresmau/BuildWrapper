@@ -97,6 +97,7 @@ cabalBuild' reRun output srcOrTgt= do
                 cf<-getCabalFile srcOrTgt
                 cp<-gets cabalPath
                 v<-cabalV
+                logC<-gets logCabalArgs
                 copts<-gets cabalOpts
                 let args=[
                         "build",
@@ -108,7 +109,7 @@ cabalBuild' reRun output srcOrTgt= do
                                 else ["--ghc-option=-c"])
                         ++ copts
                 liftIO $ do
-                        -- print args
+                        when logC (putStrLn $ showCommandForUser cp args)
                         cd<-getCurrentDirectory
                         setCurrentDirectory (takeDirectory cf)
                         (ex,out,err)<-readProcessWithExitCode cp args ""
@@ -146,6 +147,7 @@ cabalConfigure srcOrTgt= do
                 v<-cabalV
                 dist_dir<-getDistDir
                 uf<-gets cabalFlags
+                logC<-gets logCabalArgs
                 copts<-gets cabalOpts
                 let args=[
                         "configure",
@@ -157,7 +159,7 @@ cabalConfigure srcOrTgt= do
                         ++ (if null uf then [] else ["--flags="++uf])
                         ++ copts
                 liftIO $ do
-                        -- print args
+                        when logC (putStrLn $ showCommandForUser cp args)
                         cd<-getCurrentDirectory
                         setCurrentDirectory (takeDirectory cf)
                         (ex,_,err)<-readProcessWithExitCode cp args ""
@@ -646,7 +648,7 @@ dependencies pd pkgs=let
                         mns=map display (ems++hms)
                         in getDep m xs ((fp,CabalPackage (display $ pkgName i) (display $ pkgVersion i) e cps mns): acc) -- build CabalPackage structure
                 splitMatching pkgId comp deps (s,m)=let
-                         (ds,deps2)=partition (\(Dependency n v)->(pkgName pkgId == n) && withinRange (pkgVersion pkgId) v) deps
+                         (ds,_)=partition (\(Dependency n v)->(pkgName pkgId == n) && withinRange (pkgVersion pkgId) v) deps
                          s'=if null ds 
                                 then s
                                 else DS.insert comp s
@@ -670,7 +672,7 @@ cabalComponentsDependencies pd=let
         mExe=DM.fromList $ map (\e->((cabalComponentFromExecutable e),(PD.targetBuildDepends $ PD.buildInfo e))) (PD.executables pd)
         mTs=DM.fromList $ map (\ts->((cabalComponentFromTestSuite ts),(PD.targetBuildDepends $ PD.testBuildInfo ts))) (PD.testSuites pd)
         in DM.unionWith (++) mTs $ DM.unionWith (++) mLib mExe
-        where mapDep cc bi=DM.fromList $ map (\x->(cc)) (PD.targetBuildDepends bi)
+        -- where mapDep cc bi=DM.fromList $ map (\x->(cc)) (PD.targetBuildDepends bi)
 
 
 

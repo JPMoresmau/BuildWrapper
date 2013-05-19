@@ -44,6 +44,7 @@ data BuildWrapperState=BuildWrapperState{
         ,verbosity::Verbosity -- ^ verbosity of logging
         ,cabalFlags::String -- ^ flags to pass cabal
         ,cabalOpts::[String] -- ^ extra arguments to cabal configure
+        ,logCabalArgs :: Bool -- ^ log call to cabal
         }
 
 -- | status of notes: error or warning

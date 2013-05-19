@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable,OverloadedStrings #-}
+{-# LANGUAGE DeriveDataTypeable,OverloadedStrings, NamedFieldPuns #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.CMD
 -- Author      : JP Moresmau
@@ -31,24 +31,24 @@ type CabalPath = FilePath
 type TempFolder = FilePath
 
 -- | all the different actions and their parameters
-data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], force::Bool}
-        | Synchronize1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], force::Bool, file:: FilePath}
-        | Write {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, contents::String}  
-        | Configure {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], verbosity::Verbosity,cabalTarget::WhichCabal}
-        | Build {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], verbosity::Verbosity,output::Bool,cabalTarget::WhichCabal}
-        | Build1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String, longRunning :: Bool}
-        | Outline {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String} 
-        | TokenTypes {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String} 
-        | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath,token::String, component:: Maybe String}
-        | ThingAtPointCmd {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, line::Int, column::Int, component:: Maybe String}
-        | Locals {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, sline::Int, scolumn::Int,eline::Int, ecolumn::Int, component:: Maybe String}
-        | NamesInScope {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String} 
-        | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], sandbox::FilePath}
-        | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String]}
-        | GetBuildFlags {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String}
-        | GenerateUsage {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], returnAll:: Bool, cabalComponent::String}
-        | CleanImports {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, format :: Bool, component:: Maybe String}
-        | Clean {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], everything:: Bool}
+data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], force::Bool, logCabal::Bool}
+        | Synchronize1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], force::Bool, file:: FilePath, logCabal::Bool}
+        | Write {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, contents::String, logCabal::Bool}  
+        | Configure {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], verbosity::Verbosity,cabalTarget::WhichCabal, logCabal::Bool}
+        | Build {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], verbosity::Verbosity,output::Bool,cabalTarget::WhichCabal, logCabal::Bool}
+        | Build1 {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String, longRunning :: Bool, logCabal::Bool}
+        | Outline {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String, logCabal::Bool} 
+        | TokenTypes {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String, logCabal::Bool} 
+        | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath,token::String, component:: Maybe String, logCabal::Bool}
+        | ThingAtPointCmd {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, line::Int, column::Int, component:: Maybe String, logCabal::Bool}
+        | Locals {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, sline::Int, scolumn::Int,eline::Int, ecolumn::Int, component:: Maybe String, logCabal::Bool}
+        | NamesInScope {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String, logCabal::Bool} 
+        | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], sandbox::FilePath, logCabal::Bool}
+        | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], logCabal::Bool}
+        | GetBuildFlags {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String, logCabal::Bool}
+        | GenerateUsage {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], returnAll:: Bool, cabalComponent::String, logCabal::Bool}
+        | CleanImports {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, format :: Bool, component:: Maybe String, logCabal::Bool}
+        | Clean {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], everything:: Bool, logCabal::Bool}
     deriving (Show,Read,Data,Typeable)    
   
 
@@ -68,6 +68,9 @@ uf :: String
 uf=def &= help "user cabal flags"
 co :: [String]
 co=def &= help "cabal extra parameters"
+
+lc :: Bool
+lc=def &= help "log calls to cabal?"
 
 formatF :: Bool
 formatF=def &= help "format imports"
@@ -90,47 +93,47 @@ ra :: Bool
 ra=def &= help "return all source paths"
 
 msynchronize :: BWCmd
-msynchronize = Synchronize tf cp cf uf co ff
+msynchronize = Synchronize tf cp cf uf co ff lc
 msynchronize1 :: BWCmd
-msynchronize1 = Synchronize1 tf cp cf uf co ff fp
+msynchronize1 = Synchronize1 tf cp cf uf co ff fp lc
 mconfigure :: BWCmd
-mconfigure = Configure tf cp cf uf co v wc
+mconfigure = Configure tf cp cf uf co v wc lc
 mwrite :: BWCmd
-mwrite= Write tf cp cf uf co fp (def &= help "file contents")
+mwrite= Write tf cp cf uf co fp (def &= help "file contents") lc
 mbuild :: BWCmd
-mbuild = Build tf cp cf uf co v (def &= help "output compilation and linking result") wc
+mbuild = Build tf cp cf uf co v (def &= help "output compilation and linking result") wc lc
 mbuild1 :: BWCmd
-mbuild1 = Build1 tf cp cf uf co fp mcc longRunningF
+mbuild1 = Build1 tf cp cf uf co fp mcc longRunningF lc
 mgetbf :: BWCmd
-mgetbf = GetBuildFlags tf cp cf uf co fp mcc
+mgetbf = GetBuildFlags tf cp cf uf co fp mcc lc
 mcleanimports :: BWCmd
-mcleanimports = CleanImports tf cp cf uf co fp formatF mcc
+mcleanimports = CleanImports tf cp cf uf co fp formatF mcc lc
 moutline :: BWCmd
-moutline = Outline tf cp cf uf co fp mcc
+moutline = Outline tf cp cf uf co fp mcc lc
 mtokenTypes :: BWCmd
-mtokenTypes= TokenTypes tf cp cf uf co fp mcc
+mtokenTypes= TokenTypes tf cp cf uf co fp mcc lc
 moccurrences :: BWCmd
-moccurrences=Occurrences tf cp cf uf co fp (def &= help "text to search occurrences of" &= name "token") mcc
+moccurrences=Occurrences tf cp cf uf co fp (def &= help "text to search occurrences of" &= name "token") mcc lc
 mthingAtPoint :: BWCmd
 mthingAtPoint=ThingAtPointCmd tf cp cf uf co fp 
         (def &= help "line" &= name "line")
-        (def &= help "column" &= name "column") mcc
+        (def &= help "column" &= name "column") mcc lc
 mlocals :: BWCmd
 mlocals=Locals tf cp cf uf co fp 
         (def &= help "start line" &= name "start line")
         (def &= help "start column" &= name "start column")
         (def &= help "end line" &= name "end line")
-        (def &= help "end column" &= name "end column") mcc
+        (def &= help "end column" &= name "end column") mcc lc
 mnamesInScope :: BWCmd
-mnamesInScope=NamesInScope tf cp cf uf co fp mcc
+mnamesInScope=NamesInScope tf cp cf uf co fp mcc lc
 mdependencies :: BWCmd
-mdependencies=Dependencies tf cp cf uf co sd
+mdependencies=Dependencies tf cp cf uf co sd lc
 mcomponents :: BWCmd
-mcomponents=Components tf cp cf uf co
+mcomponents=Components tf cp cf uf co lc
 mgenerateUsage :: BWCmd
-mgenerateUsage=GenerateUsage tf cp cf uf co ra cc
+mgenerateUsage=GenerateUsage tf cp cf uf co ra cc lc
 mclean :: BWCmd
-mclean=Clean tf cp cf uf co (def &= help "delete everything or only generated files" &= name "everything")
+mclean=Clean tf cp cf uf co (def &= help "delete everything or only generated files" &= name "everything") lc
 
 -- | main method for command handling
 cmdMain :: IO ()
@@ -170,8 +173,8 @@ cmdMain = cmdArgs
                 runCmd :: (ToJSON a) => BWCmd -> StateT BuildWrapperState IO a -> IO ()
                 runCmd=runCmdV Normal
                 runCmdV:: (ToJSON a) => Verbosity -> BWCmd -> StateT BuildWrapperState IO a -> IO ()
-                runCmdV vb cmd f=
+                runCmdV vb  cmd f=
                  do { cabalFile' <- canonicalizePath $ cabalFile cmd -- canonicalize cabal-file path because Eclipse does not correctly keep track of case changes on the project path
-                    ; resultJson <- evalStateT f (BuildWrapperState (tempFolder cmd) (cabalPath cmd) cabalFile' vb (cabalFlags cmd) (cabalOption cmd))
+                    ; resultJson <- evalStateT f (BuildWrapperState (tempFolder cmd) (cabalPath cmd) cabalFile' vb (cabalFlags cmd) (cabalOption cmd) (logCabal cmd))
                     ; BSC.putStrLn . BS.append "build-wrapper-json:" . encode $ resultJson
                     }
