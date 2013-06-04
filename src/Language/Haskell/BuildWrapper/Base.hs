@@ -32,6 +32,7 @@ import Data.Maybe (catMaybes)
 
 import System.IO.UTF8 (hPutStr,hGetContents)
 import System.IO (IOMode, openBinaryFile, IOMode(..), Handle, hClose)
+import Control.DeepSeq (rnf)
 
 -- | State type
 type BuildWrapper=StateT BuildWrapperState IO
@@ -753,7 +754,13 @@ data Usage = Usage {
         deriving (Show,Eq)
  
 readFile :: FilePath -> IO String
-readFile n = hGetContents =<< openBinaryFile n ReadMode
+-- readFile n=hGetContents =<< openBinaryFile n ReadMode
+readFile n =  do
+        inFile<- openBinaryFile n ReadMode
+        contents <- hGetContents inFile
+        rnf contents `seq` hClose inFile -- force the whole file to be read, then close http://stackoverflow.com/a/297630/827593
+        return contents
+
 
 writeFile :: FilePath -> String -> IO ()
 writeFile n s = withBinaryFile n WriteMode (\ h -> hPutStr h s)      

@@ -29,7 +29,6 @@ library
                    ghc,
                    ghc-paths,
                    syb,
-                   -- ghc-syb-utils,
                    text,
                    containers,
                    vector >= 0.8,
@@ -41,7 +40,8 @@ library
                    utf8-string,
                    bytestring,
                    attoparsec,
-                   transformers
+                   transformers,
+                   deepseq
   ghc-options:     -Wall -fno-warn-unused-do-bind
   exposed-modules: 
                    Language.Haskell.BuildWrapper.API,
