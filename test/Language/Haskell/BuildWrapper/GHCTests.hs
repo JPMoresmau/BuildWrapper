@@ -65,6 +65,19 @@ test_PreprocPragma=
         assertEqual (TokenDef "PP" (mkLocation 3 1 3 7)) t3
         assertEqual "\n\n\nmodule Main\n" s2
 
+test_PreprocPragma2Lines:: Assertion
+test_PreprocPragma2Lines=
+        do
+        let s="#if GHC_VERSION=612\n{-# LANGUAGE OverloadedStrings,\n  RankNTypes,\n  MultiParamTypeClasses #-}\n#endif\nmodule Main\n"
+        let (tt,s2)=preprocessSource s False
+        assertEqual 5 (length tt)
+        let (t1:t2:t3:t4:t5:[])=tt
+        assertEqual (TokenDef "PP" (mkLocation 1 1 1 20)) t1
+        assertEqual (TokenDef "P" (mkLocation 2 1 2 32)) t2
+        assertEqual (TokenDef "P" (mkLocation 3 1 3 14)) t3
+        assertEqual (TokenDef "P" (mkLocation 4 1 4 28)) t4
+        assertEqual (TokenDef "PP" (mkLocation 5 1 5 7)) t5
+        assertEqual "\n\n\n\n\nmodule Main\n" s2
 
 test_Preproc2Lines:: Assertion
 test_Preproc2Lines=

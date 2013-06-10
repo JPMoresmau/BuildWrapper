@@ -706,8 +706,9 @@ preprocessSource contents literate=
                 ppSCpp :: ([TokenDef],[String],PPBehavior) -> (String,Int) -> ([TokenDef],[String],PPBehavior)
                 ppSCpp (ts2,l2,f) (l,c) 
                         | (Continue _)<-f = addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f)
+                        | (ContinuePragma f2) <-f= addPPToken "P" (l,c) (ts2,"":l2,pragmaBehavior l f2)
                         | ('#':_)<-l =addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f) 
-                        | "{-# " `List.isPrefixOf` l=addPPToken "P" (l,c) (ts2,"":l2,f) 
+                        | "{-# " `List.isPrefixOf` l=addPPToken "P" (l,c) (ts2,"":l2,pragmaBehavior l f) 
                         | (Indent n)<-f=(ts2,l:(replicate n (takeWhile (== ' ') l) ++ l2),Start)
                         | otherwise =(ts2,l:l2,Start)
                 ppSLit :: ([TokenDef],[String],PPBehavior) -> (String,Int) -> ([TokenDef],[String],PPBehavior)
@@ -725,10 +726,14 @@ preprocessSource contents literate=
                                 _ -> Continue 1
                         | otherwise = case f of
                                 Continue n->Indent (n+1)
+                                ContinuePragma p->p
                                 Indent n->Indent (n+1)
                                 _ -> Indent 1
+                pragmaBehavior l f
+                        | "-}" `List.isInfixOf` l = f
+                        | otherwise = ContinuePragma f
 
-data PPBehavior=Continue Int | Indent Int | Start
+data PPBehavior=Continue Int | Indent Int | Start | ContinuePragma PPBehavior
         deriving Eq
 
 -- | convert a GHC error message to our note type
