@@ -73,7 +73,6 @@ executable buildwrapper
                    cpphs,
                    haskell-src-exts,
                    old-time,
-                   -- ghc-syb-utils,
                    ghc-paths,
                    vector >= 0.8,
                    containers,
