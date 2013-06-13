@@ -85,3 +85,15 @@ test_ParseConfigureMessages = do
         let notes=Cabal.parseCabalMessages "test.cabal" "cabal.exe" s
         assertEqual 1 (length notes)   
         assertEqual (BWNote BWError "Missing dependencies on foreign libraries:\n* Missing C libraries: tinfo, tinfo\n" (mkEmptySpan "test.cabal" 1 1)) (head notes)
+        let sx="cabal.exe: Missing dependencies on foreign libraries:\n* Missing C libraries: tinfo, tinfo\n"
+        let notesx=Cabal.parseCabalMessages "test.cabal" "cabal-dev.exe" sx
+        assertEqual 1 (length notesx)   
+        assertEqual (BWNote BWError "Missing dependencies on foreign libraries:\n* Missing C libraries: tinfo, tinfo\n" (mkEmptySpan "test.cabal" 1 1)) (head notesx)
+        let s1="cabal: At least the following dependencies are missing:\npgsql -any, pgsql-simple -any, psql-simple -any\n"
+        let notes1=Cabal.parseCabalMessages "test.cabal" "cabal" s1
+        assertEqual 1 (length notes1)   
+        assertEqual (BWNote BWError "At least the following dependencies are missing:\npgsql -any, pgsql-simple -any, psql-simple -any\n" (mkEmptySpan "test.cabal" 1 1)) (head notes1)
+        let notes2=Cabal.parseCabalMessages "test.cabal" "cabal-dev" s1
+        assertEqual 1 (length notes2)   
+        assertEqual (BWNote BWError "At least the following dependencies are missing:\npgsql -any, pgsql-simple -any, psql-simple -any\n" (mkEmptySpan "test.cabal" 1 1)) (head notes2)
+        

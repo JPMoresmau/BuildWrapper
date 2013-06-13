@@ -172,7 +172,7 @@ cabalConfigure srcOrTgt= do
                                                 lbi<-DSC.getPersistBuildConfig dist_dir
                                                 return (Just lbi,msgs)
                                 ExitFailure ec -> if null msgs
-                                                then return (Nothing,[BWNote BWError ("Cabal configure returned error code " ++ show ec) (mkEmptySpan cf 0 1)])   
+                                                then return (Nothing,[BWNote BWError ("Cabal configure returned error code " ++ show ec) (mkEmptySpan cf 1 1)])   
                                                 else return (Nothing, msgs)
                         setCurrentDirectory cd
                         return ret
@@ -263,6 +263,11 @@ setupExe :: FilePath -- ^ path to cabal executable
         -> FilePath
 setupExe cabalExe=addExtension "setup" $ takeExtension cabalExe 
 
+fromCabalDevExe :: FilePath -- ^ path to cabal executable
+        -> FilePath
+fromCabalDevExe cabalExe | "cabal-dev"<-dropExtension cabalExe=addExtension "cabal" $ takeExtension cabalExe 
+fromCabalDevExe cabalExe=cabalExe
+
 dropPrefixes :: [String] -> String -> Maybe String
 dropPrefixes prfxs s2=foldr (stripPrefixIfNeeded s2) Nothing prfxs
 
@@ -279,7 +284,7 @@ cabalErrorLine :: FilePath -- ^ cabal file
         -> String -- ^ line
         -> Maybe (BWNote,[String])
 cabalErrorLine cf cabalExe l 
-        | Just s4 <- dropPrefixes [cabalExe,setupExe cabalExe] l=
+        | Just s4 <- dropPrefixes [cabalExe,setupExe cabalExe,fromCabalDevExe cabalExe] l=
                                 let 
                                         s2=dropWhile isSpace $ drop 1 s4 -- drop 1 for ":" that follows file name
                                 in if "At least the following" `isPrefixOf` s2
