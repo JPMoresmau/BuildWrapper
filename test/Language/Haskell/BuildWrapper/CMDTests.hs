@@ -1914,6 +1914,16 @@ end h =do
         hPutStrLn h "q"  
         hFlush h    
   
+tokenTypesLR :: Handle -> IO ()
+tokenTypesLR h =do
+        hPutStrLn h "t"  
+        hFlush h     
+  
+tapLR :: Handle -> Int -> Int -> IO()
+tapLR h l c=do
+        hPutStrLn h ('p':show (l,c))  
+        hFlush h    
+  
 cmdOpts :: [String] -> [String] 
 cmdOpts =map ("--cabaloption=" ++)   
    

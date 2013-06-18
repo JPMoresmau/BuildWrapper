@@ -135,5 +135,71 @@ test_EvalLongRunning = do
         assertEqual "\"otot\"" s1
         eval inp "main" 
         s2<- readResult out :: IO (String)
-        assertEqual "\"toto\"" s2        
+        assertEqual "\"toto\"" s2     
+        eval inp "MkType1_1"
+        s3<- readResult out :: IO (String)
+        assertBool $ "No instance for" `isPrefixOf` s3     
         end inp     
+        
+test_TokenTypesLongRunning :: Assertion
+test_TokenTypesLongRunning = do
+        let api=cabalAPI
+        root<-createTestProject
+        synchronize api root False
+        configure api root Source        
+        let rel="src"</>"Main.hs"
+        writeFile (root </> rel) $ unlines [  
+                  "module Main where",
+                  "import B.D",
+                  "main=return $ map id \"toto\"",
+                  "data Type1=MkType1_1 Int"
+                  ] 
+        build api root True Source
+        synchronize api root False
+        (inp,out,_,_)<-build1lr root rel
+        (mtts,ns)<-(readResult out) :: IO (OpResult (Maybe [NameDef]))
+        assertBool (isJust mtts)
+        assertBool (not $ notesInError ns) 
+        tokenTypesLR inp
+        (tts,nsErrors1)<-readResult out ::IO (OpResult [TokenDef])
+        assertBool (null nsErrors1)
+        assertBool (not $ null tts)
+        continue inp
+        (mtts2,ns2)<-readResult out :: IO (OpResult (Maybe [NameDef]))  
+        assertBool (not $ notesInError ns2)
+        assertBool (isJust mtts2)
+        end inp
+     
+test_ThingAtPointLongRunning :: Assertion
+test_ThingAtPointLongRunning = do
+        let api=cabalAPI
+        root<-createTestProject
+        synchronize api root False
+        configure api root Source        
+        let rel="src"</>"Main.hs"
+        writeFile (root </> rel) $ unlines [  
+                  "module Main where",
+                  "import B.D",
+                  "main=return $ map id \"toto\"",
+                  "data Type1=MkType1_1 Int"
+                  ] 
+        build api root True Source
+        synchronize api root False
+        (inp,out,_,_)<-build1lr root rel
+        (mtts,ns)<-(readResult out) :: IO (OpResult (Maybe [NameDef]))
+        assertBool (isJust mtts)
+        assertBool (not $ notesInError ns) 
+        tokenTypesLR inp
+        (tts,nsErrors1)<-readResult out ::IO (OpResult [TokenDef])
+        assertBool (null nsErrors1)
+        assertBool (not $ null tts)
+        tapLR inp 3 16
+        (tap1,nsErrorsTap)<-readResult out :: IO (OpResult (Maybe ThingAtPoint))
+        assertBool (null nsErrorsTap)
+        assertBool $ isJust tap1
+        assertEqual "map" (tapName $ fromJust tap1)
+        continue inp
+        (mtts2,ns2)<-readResult out :: IO (OpResult (Maybe [NameDef]))  
+        assertBool (not $ notesInError ns2)
+        assertBool (isJust mtts2)
+        end inp    
