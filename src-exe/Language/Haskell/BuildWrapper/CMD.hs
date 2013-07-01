@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveDataTypeable,OverloadedStrings, NamedFieldPuns #-}
+{-# LANGUAGE DeriveDataTypeable,OverloadedStrings, NamedFieldPuns, CPP #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.CMD
 -- Author      : JP Moresmau
@@ -25,7 +25,9 @@ import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BSC
 import Data.Version (showVersion)
 import Control.Exception.Base (catch, IOException)
-
+#if __GLASGOW_HASKELL__ < 706
+import Prelude hiding (catch)
+#endif
 
 type CabalFile = FilePath
 type CabalPath = FilePath
