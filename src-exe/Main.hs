@@ -1,6 +1,5 @@
 -- |
 -- Module      : Main
--- Author      : JP Moresmau
 -- Copyright   : (c) JP Moresmau 2011
 -- License     : BSD3
 -- 

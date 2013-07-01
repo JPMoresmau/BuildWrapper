@@ -2,7 +2,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.GHC
--- Author      : JP Moresmau
 -- Copyright   : (c) JP Moresmau 2011
 -- License     : BSD3
 -- 
@@ -403,7 +402,7 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
                         l<- GMU.liftIO getLine 
                         case l of
                                 "q"->return ()
-                                -- | eval an expression
+                                -- eval an expression
                                 'e':' ':expr->do
                                         s<-handleSourceError (return . show)
                                                (do

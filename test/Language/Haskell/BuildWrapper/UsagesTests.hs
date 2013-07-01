@@ -1,5 +1,15 @@
 {-# LANGUAGE CPP,OverloadedStrings,PatternGuards #-}
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
+-- |
+-- Module      : Language.Haskell.BuildWrapper.UsagesTests
+-- Copyright   : (c) JP Moresmau 2013
+-- License     : BSD3
+-- 
+-- Maintainer  : jpmoresmau@gmail.com
+-- Stability   : beta
+-- Portability : portable
+-- 
+-- Test usage generation
 module Language.Haskell.BuildWrapper.UsagesTests where
 
 import Language.Haskell.BuildWrapper.Base hiding (readFile,writeFile)

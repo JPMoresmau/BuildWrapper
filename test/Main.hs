@@ -1,7 +1,6 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
 -- |
--- Module      : Main
--- Author      : JP Moresmau
+-- Module      : Mainau
 -- Copyright   : (c) JP Moresmau 2011
 -- License     : BSD3
 -- 

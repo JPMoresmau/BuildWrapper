@@ -1,16 +1,15 @@
 {-# LANGUAGE CPP, ScopedTypeVariables #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.Packages
--- Author      : Thiago Arrais
 -- Copyright   : (c) Thiago Arrais 2009
 -- License     : BSD3
--- Url         : http://stackoverflow.com/questions/1522104/how-to-programmatically-retrieve-ghc-package-information
 -- 
 -- Maintainer  : jpmoresmau@gmail.com
 -- Stability   : beta
 -- Portability : portable
 -- 
 -- Packages from packages databases (global, user).
+-- see <http://stackoverflow.com/questions/1522104/how-to-programmatically-retrieve-ghc-package-information>
 module Language.Haskell.BuildWrapper.Packages ( getPkgInfos ) where
 
 import Language.Haskell.BuildWrapper.Base

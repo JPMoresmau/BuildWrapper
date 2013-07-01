@@ -1,7 +1,6 @@
 {-# LANGUAGE DeriveDataTypeable,OverloadedStrings, NamedFieldPuns, CPP #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.CMD
--- Author      : JP Moresmau
 -- Copyright   : (c) JP Moresmau 2011
 -- License     : BSD3
 -- 

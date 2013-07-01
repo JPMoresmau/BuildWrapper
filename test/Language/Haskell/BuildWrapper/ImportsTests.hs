@@ -2,7 +2,6 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.ImportsTests
--- Author      : JP Moresmau
 -- Copyright   : (c) JP Moresmau 2013
 -- License     : BSD3
 -- 

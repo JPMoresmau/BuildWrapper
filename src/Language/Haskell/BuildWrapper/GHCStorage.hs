@@ -1,7 +1,6 @@
 {-# LANGUAGE CPP,OverloadedStrings,PatternGuards #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.GHCStorage
--- Author      : JP Moresmau
 -- Copyright   : (c) JP Moresmau 2012
 -- License     : BSD3
 -- 

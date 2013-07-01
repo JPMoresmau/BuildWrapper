@@ -1,7 +1,6 @@
 {-# LANGUAGE TypeSynonymInstances,OverloadedStrings #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.Src
--- Author      : JP Moresmau
 -- Copyright   : (c) JP Moresmau 2011
 -- License     : BSD3
 -- 

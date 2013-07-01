@@ -1,4 +1,14 @@
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
+-- |
+-- Module      : Language.Haskell.BuildWrapper.CabalDevTests
+-- Copyright   : (c) JP Moresmau 2013
+-- License     : BSD3
+-- 
+-- Maintainer  : jpmoresmau@gmail.com
+-- Stability   : beta
+-- Portability : portable
+-- 
+-- Test cabal dev invocations
 module Language.Haskell.BuildWrapper.CabalDevTests where
 
 import Language.Haskell.BuildWrapper.Base hiding (readFile,writeFile)

@@ -1,7 +1,6 @@
 {-# LANGUAGE PatternGuards,ScopedTypeVariables,CPP #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.Cabal
--- Author      : JP Moresmau
 -- Copyright   : (c) JP Moresmau 2011
 -- License     : BSD3
 -- 

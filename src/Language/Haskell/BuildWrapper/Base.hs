@@ -1,7 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable,OverloadedStrings,PatternGuards, NamedFieldPuns #-}
--- |
--- Module      : Language.Haskell.BuildWrapper.GHC
--- Author      : JP Moresmau
+-- | Module      : Language.Haskell.BuildWrapper.Base
 -- Copyright   : (c) JP Moresmau 2011
 -- License     : BSD3
 -- 
@@ -58,7 +56,8 @@ instance ToJSON BWNoteStatus  where
 instance FromJSON BWNoteStatus where
     parseJSON (String t) =return $ readObj "BWNoteStatus" $ T.unpack $ T.append "BW" t
     parseJSON _= mzero  
- 
+
+-- | read an object from a String, with a given error message if it fails 
 readObj :: Read a=> String -> String -> a
 readObj msg s=let parses=reads s -- :: [(a,String)]
         in if null parses 
@@ -75,6 +74,7 @@ data BWLocation=BWLocation {
         }
         deriving (Show,Read,Eq)
 
+-- | build an empty span in a given file at a given location
 mkEmptySpan :: FilePath -> Int -> Int -> BWLocation
 mkEmptySpan src line col = BWLocation src line col line col
 
@@ -97,7 +97,8 @@ data BWNote=BWNote {
         ,bwnLocation :: BWLocation -- ^ where the note is
         }
         deriving (Show,Read,Eq)
-      
+
+-- | is a note an error?      
 isBWNoteError :: BWNote -> Bool
 isBWNoteError bw=bwnStatus bw == BWError
         
@@ -181,9 +182,11 @@ data InFileSpan=InFileSpan {ifsStart::InFileLoc -- ^ start location
         }
         deriving (Show,Read,Eq,Ord)
 
+-- | do spans overlap?
 ifsOverlap :: InFileSpan -> InFileSpan -> Bool
 ifsOverlap ifs1 ifs2 = iflOverlap ifs1 $ ifsStart ifs2
 
+-- | does span overlap location?
 iflOverlap :: InFileSpan -> InFileLoc -> Bool
 iflOverlap ifs1 ifs2 =let
         l11=iflLine $ ifsStart ifs1
@@ -235,7 +238,7 @@ mkFileSpan :: Int -- ^ start line
         -> InFileSpan
 mkFileSpan sr sc er ec=InFileSpan (InFileLoc sr sc) (InFileLoc er ec)
 
-
+-- | definition of a name
 data NameDef = NameDef
         { ndName  :: T.Text -- ^  name
         , ndType  :: [OutlineDefType] -- ^ types: can have several to combine
@@ -425,6 +428,7 @@ instance FromJSON BuildFlags where
                          v .:? "c"
    parseJSON _= mzero  
    
+-- | information about the thing at a given point in the source   
 data ThingAtPoint = ThingAtPoint {
         tapName :: String,
         tapModule :: Maybe String,
@@ -507,6 +511,7 @@ copyFromMain force src=do
                                 else return Nothing
                 else return Nothing
 
+-- | is the source file more recent than the target file?
 isSourceMoreRecent :: FilePath -> FilePath -> IO Bool
 isSourceMoreRecent fullSrc fullTgt=do
         ex<-doesFileExist fullTgt
@@ -556,6 +561,7 @@ instance FromJSON CabalComponent where
         | otherwise = mzero
     parseJSON _= mzero
 
+-- | get the cabal component name
 cabalComponentName :: CabalComponent -> String
 cabalComponentName CCLibrary{}=""
 cabalComponentName CCExecutable{ccExeName}=ccExeName
@@ -603,6 +609,7 @@ instance FromJSON CabalPackage where
 --                f _ m=return m
 --    parseJSON _= mzero
 
+-- | import clean operation: the span of text to change, the new text
 data ImportClean = ImportClean {
         icSpan :: InFileSpan,
         icText :: T.Text
@@ -618,6 +625,7 @@ instance FromJSON ImportClean where
                 v .: "t"
         parseJSON _=mzero
 
+-- | information about files to load (single file or multiple files)
 data LoadContents = SingleFile {
                 lmFile :: FilePath
                 ,lmModule :: String
@@ -626,11 +634,12 @@ data LoadContents = SingleFile {
                 lmFiles :: [(FilePath,String)]
         }
 
+-- | get files to load
 getLoadFiles :: LoadContents -> [(FilePath,String)]
 getLoadFiles SingleFile{lmFile=f,lmModule=m}=[(f,m)]
 getLoadFiles MultipleFile{lmFiles=fs}=fs
 
--- |  http://book.realworldhaskell.org/read/io-case-study-a-library-for-searching-the-filesystem.html
+-- |  <http://book.realworldhaskell.org/read/io-case-study-a-library-for-searching-the-filesystem.html>
 getRecursiveContents :: FilePath -> IO [FilePath]
 getRecursiveContents topdir = do
   ex<-doesDirectoryExist topdir
@@ -647,7 +656,7 @@ getRecursiveContents topdir = do
           return (concat paths) 
         else return []      
 
--- |  http://book.realworldhaskell.org/read/io-case-study-a-library-for-searching-the-filesystem.html
+-- |  <http://book.realworldhaskell.org/read/io-case-study-a-library-for-searching-the-filesystem.html>
 getRecursiveContentsHidden :: FilePath -> IO [FilePath]
 getRecursiveContentsHidden topdir = do
   ex<-doesDirectoryExist topdir
@@ -690,11 +699,13 @@ deleteGhosts copied=do
                                                         removeFile (tmp </> f)
                                                         return $ Just rel
  
+-- | delete all temporary files
 deleteTemp ::  BuildWrapper()
 deleteTemp = do
         temp<-getFullTempDir
         liftIO $ removeDirectoryRecursive temp
-  
+
+-- | delete generated files  
 deleteGenerated ::  BuildWrapper()
 deleteGenerated = do
         temp<-getFullTempDir  
@@ -753,6 +764,7 @@ data Usage = Usage {
         } 
         deriving (Show,Eq)
  
+-- | read a string from a file, forcing the read and closing the handle
 readFile :: FilePath -> IO String
 -- readFile n=hGetContents =<< openBinaryFile n ReadMode
 readFile n =  do
@@ -761,10 +773,11 @@ readFile n =  do
         rnf contents `seq` hClose inFile -- force the whole file to be read, then close http://stackoverflow.com/a/297630/827593
         return contents
 
-
+-- | write string to file
 writeFile :: FilePath -> String -> IO ()
 writeFile n s = withBinaryFile n WriteMode (\ h -> hPutStr h s)      
 
+-- | perform operation on a binary opened file
 withBinaryFile :: FilePath -> IOMode -> (Handle -> IO a) -> IO a
 withBinaryFile n m f = bracket (openBinaryFile n m) hClose f
 
