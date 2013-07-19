@@ -197,44 +197,60 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
 --                        MultipleFile{}->LoadAllTargets
                 let howMuch=LoadAllTargets
                 -- GMU.liftIO $ putStrLn "Loading..."
-                load howMuch
+                sf<-load howMuch
                            `gcatch` (\(e :: SourceError) -> handle_error ref e)
+                           `gcatch` (\(ae :: GhcApiError) -> do
+                                        dumpError ref contents ae
+                                        return Failed)
+                            `gcatch` (\(se :: SomeException) -> do
+                                        dumpError ref contents se
+                                        return Failed)            
                 -- GMU.liftIO $ putStrLn "Loaded..."           
                 --(warns, errs) <- GMU.liftIO $ readIORef ref
                 --let notes = ghcMessagesToNotes base_dir (warns, errs)
-                notes <- GMU.liftIO $ readIORef ref
+                
                 --c2<-GMU.liftIO getClockTime
                 --GMU.liftIO $ putStrLn ("load all targets: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
                 -- GMU.liftIO $ print fps
-                a<-fmap catMaybes $ mapM (\(fp,m)->(do
+                a<-case sf of
+                        Failed-> return []
+                        _  ->fmap catMaybes $ mapM (\(fp,m)->(do
                                 modSum <- getModSummary $ mkModuleName m
                                 fmap Just $ workOnResult f fp modSum)
                                `gcatch` (\(se :: SourceError) -> do
-                                        when (processError contents (show se)) (do
-                                                GMU.liftIO $ print m
-                                                GMU.liftIO $ print se 
-                                                )
+                                        dumpError ref contents se
                                         return Nothing)
                                `gcatch` (\(ae :: GhcApiError) -> do
-                                        when (processError contents (show ae)) (do
-                                                GMU.liftIO $ print m
-                                                GMU.liftIO $ print ae 
-                                                )
+                                        dumpError ref contents ae
                                         return Nothing)
-                        ) fps
+                                `gcatch` (\(se :: SomeException) -> do
+                                        dumpError ref contents se
+                                        return Nothing)        
+                                ) fps
+                notes <- GMU.liftIO $ readIORef ref                
 #if __GLASGOW_HASKELL__ < 702                           
                 warns <- getWarnings
                 df <- getSessionDynFlags
                 return (a,List.nub $ notes ++ reverse (ghcMessagesToNotes df base_dir (warns, emptyBag)))
 #else
-                notes2 <- GMU.liftIO $ readIORef ref
-                return $ (a,List.nub $ notes2)
+                return $ (a,List.nub $ notes)
 #endif
         where
             processError :: LoadContents -> String -> Bool
             processError MultipleFile{} "Module not part of module graph"=False -- we ignore the error when we process several files and some we can't find
             processError _ _=True
-            
+            dumpError :: (Show a)=> IORef [BWNote] -> LoadContents -> a -> Ghc ()
+            dumpError ref conts ae= when (processError conts (show ae)) (do
+                                                GMU.liftIO $ print conts
+                                                GMU.liftIO $ print ae 
+                                                case conts of
+                                                        (SingleFile fp _)->do
+                                                             let relfp=makeRelative base_dir $ normalise fp
+                                                             let notes=[BWNote BWError (show ae) (BWLocation relfp 1 1 1 1)]
+                                                             GMU.liftIO $ modifyIORef ref $
+                                                                \ ns -> ns ++ notes
+                                                        _->return () 
+                                                )
        
             workOnResult :: GHCApplyFunction a -> FilePath -> ModSummary -> Ghc a
             workOnResult f2 fp modSum= do

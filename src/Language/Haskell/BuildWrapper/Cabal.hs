@@ -405,7 +405,7 @@ onModulePaths f =runIdentity . onModulePathsM (return . f)
  
 -- | get the build info for a given source file
 -- if a source file is in several component, get the first one             
-getBuildInfo ::  FilePath  -- ^the source file
+getBuildInfo ::  FilePath  -- ^ the source file
         -> Maybe String -- ^ the cabal component to use, or Nothing if not specified
         -> BuildWrapper (OpResult (Maybe (LocalBuildInfo,CabalBuildInfo)))
 getBuildInfo fp mccn=do

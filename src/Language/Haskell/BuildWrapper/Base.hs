@@ -633,6 +633,7 @@ data LoadContents = SingleFile {
         | MultipleFile {
                 lmFiles :: [(FilePath,String)]
         }
+        deriving (Show,Read)
 
 -- | get files to load
 getLoadFiles :: LoadContents -> [(FilePath,String)]
