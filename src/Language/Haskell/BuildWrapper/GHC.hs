@@ -1360,7 +1360,7 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                         szQualified2=if ideclQualified imp then 10 else szQualified
                         szPkg2=maybe szPkg (\p->max szPkg (3 + lengthFS p)) $ ideclPkgQual imp
                         L _ mo=ideclName imp
-                        szName2=max szName (1 + lengthFS (moduleNameFS mo))
+                        szName2=maybe szName (\_->max szName (1 + lengthFS (moduleNameFS mo))) $ ideclAs imp
                         szAs2=maybe szAs (\m->max szAs (3 + lengthFS (moduleNameFS m))) $ ideclAs imp
                         in (szSafe2,szQualified2,szPkg2,szName2,szAs2)
                 formatImport :: (Int,Int,Int,Int,Int)-> FinalImportValue -> ImportClean

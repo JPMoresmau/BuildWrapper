@@ -303,7 +303,7 @@ test_CleanImportsInfix = do
         (ics,ns)<-cleanImports api root rel True
         assertBool $ null ns
         assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 23)) 
-                        "import System.FilePath  ((</>))"
+                        "import System.FilePath ((</>))"
                 ] 
                 ics   
                 
