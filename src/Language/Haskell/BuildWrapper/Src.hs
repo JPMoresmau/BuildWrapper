@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances,OverloadedStrings #-}
+{-# LANGUAGE TypeSynonymInstances,OverloadedStrings,CPP #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.Src
 -- Copyright   : (c) JP Moresmau 2011
@@ -38,7 +38,11 @@ getHSEAST input options=do
                            _               -> []
             optionsPragmas = [ optionsPragma | S.OptionsPragma _ _ optionsPragma <- topPragmas ]
             optionsFromPragmas = concatMap words optionsPragmas
+#if MIN_VERSION_haskell_src_exts(1,14,0)   
+            exts=EnableExtension MultiParamTypeClasses : EnableExtension PatternGuards : (map (\x->classifyExtension $ if "-X" `isPrefixOf` x then tail $ tail x else x) $ options ++ optionsFromPragmas)
+#else
             exts=MultiParamTypeClasses : PatternGuards : (map (\x->classifyExtension $ if "-X" `isPrefixOf` x then tail $ tail x else x) $ options ++ optionsFromPragmas)
+#endif
             extsFull=if "-fglasgow-exts" `elem` options ++ optionsFromPragmas
                 then exts ++ glasgowExts
                 else exts 
