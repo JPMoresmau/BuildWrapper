@@ -122,9 +122,9 @@ test_GenerateReferencesSimple = do
       
         assertPackageModule "BWTest-0.1" "A" [1,8,1,9] v
       
-        assertVarUsage "BWTest-0.1" "A" "Cons1" [("Cons1",True,[2,13,2,18]),("reset",False,[10,8,10,13]),("reset",False,[10,17,10,22]),("getString",False,[16,12,16,17])] v
-        assertVarUsage "BWTest-0.1" "A" "Cons2" [("Cons2",True,[4,9,4,14]),("reset",False,[11,8,11,13]),("reset",False,[11,17,11,22])] v
-        assertVarUsage "BWTest-0.1" "A" "mdS" [("mdS",True,[3,9,3,12])] v
+        assertVarUsage "BWTest-0.1" "A" "Cons1" [("MyData",True,[2,13,2,18]),("reset",False,[10,8,10,13]),("reset",False,[10,17,10,22]),("getString",False,[16,12,16,17])] v
+        assertVarUsage "BWTest-0.1" "A" "Cons2" [("MyData",True,[4,9,4,14]),("reset",False,[11,8,11,13]),("reset",False,[11,17,11,22])] v
+        assertVarUsage "BWTest-0.1" "A" "mdS" [("MyData",True,[3,9,3,12])] v
         assertVarUsage "BWTest-0.1" "A" "reset" [("reset",True,[9,1,9,6]),("reset",True,[10,1,10,25]),("reset",True,[11,1,11,24]),("resetAll",False,[13,14,13,19])] v
         assertVarUsage "BWTest-0.1" "A" "resetAll" [("resetAll",True,[13,1,13,19])] v
         assertVarUsage "BWTest-0.1" "A" "getString" [("getString",True,[15,1,15,10]),("getString",True,[16,1,16,27]),("getString",True,[17,1,17,21])] v
@@ -134,11 +134,11 @@ test_GenerateReferencesSimple = do
         assertVarUsage "base" "GHC.Num" "fromInteger" [("reset",False,[11,23,11,24])] v
         
         assertTypeUsage "BWTest-0.1" "A" "MyData" [("MyData",True,[2,6,2,12]),("reset",False,[9,10,9,16]),("reset",False,[9,20,9,26]),("getString",False,[15,14,15,20])] v
-        assertTypeUsage "BWTest-0.1" "A" "MyString" [("mdS",False,[3,14,3,22]),("MyString",True,[7,6,7,14]),("getString",False,[15,30,15,38])] v
+        assertTypeUsage "BWTest-0.1" "A" "MyString" [("MyData",False,[3,14,3,22]),("MyString",True,[7,6,7,14]),("getString",False,[15,30,15,38])] v
         assertTypeUsage "base" "Data.Maybe" "Maybe" [("getString",False,[15,24,15,29])] v
         assertTypeUsage "base" "GHC.Base" "String" [("MyString",False,[7,15,7,21])] v
         assertTypeUsage "base" "GHC.Show" "Show" [("MyData",False,[5,15,5,19])] v
-        assertTypeUsage "ghc-prim" "GHC.Types" "Int" [("Cons2",False,[4,15,4,18])] v
+        assertTypeUsage "ghc-prim" "GHC.Types" "Int" [("MyData",False,[4,15,4,18])] v
         
         vMain<-readStoredUsage (root </> ".dist-buildwrapper" </>  relMain)
         --sUMain<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  relMain))
@@ -228,27 +228,27 @@ test_GenerateReferencesExports =  do
         --sU<-fmap formatJSON (readFile  $ getUsageFile(root </> ".dist-buildwrapper" </>  rel))
         --putStrLn sU
         
-        assertVarUsage "BWTest-0.1" "A" "Cons1" [("Cons1",True,[9,13,9,18]),("reset",False,[17,8,17,13]),("reset",False,[17,17,17,22])] v
-        assertVarUsage "BWTest-0.1" "A" "Cons2" [("Cons2",True,[11,9,11,14]),("reset",False,[18,8,18,13]),("reset",False,[18,17,18,22])] v
-        assertVarUsage "BWTest-0.1" "A" "Cons21" [("Cons21",True,[20,14,20,20])] v
-        assertVarUsage "BWTest-0.1" "A" "Cons22" [("Cons22",True,[22,9,22,15])] v
-        assertVarUsage "BWTest-0.1" "A" "Cons31" [("export",False,[4,5,4,20]),("Cons31",True,[24,14,24,20])] v
-        assertVarUsage "BWTest-0.1" "A" "Cons32" [("Cons32",True,[26,9,26,15])] v
-        assertVarUsage "BWTest-0.1" "A" "mdS" [("mdS",True,[10,9,10,12])] v
-        assertVarUsage "BWTest-0.1" "A" "mdS2" [("mdS2",True,[21,9,21,13])] v
-        assertVarUsage "BWTest-0.1" "A" "mdS3" [("mdS3",True,[25,9,25,13])] v
+        assertVarUsage "BWTest-0.1" "A" "Cons1" [("MyData",True,[9,13,9,18]),("reset",False,[17,8,17,13]),("reset",False,[17,17,17,22])] v
+        assertVarUsage "BWTest-0.1" "A" "Cons2" [("MyData",True,[11,9,11,14]),("reset",False,[18,8,18,13]),("reset",False,[18,17,18,22])] v
+        assertVarUsage "BWTest-0.1" "A" "Cons21" [("MyData2",True,[20,14,20,20])] v
+        assertVarUsage "BWTest-0.1" "A" "Cons22" [("MyData2",True,[22,9,22,15])] v
+        assertVarUsage "BWTest-0.1" "A" "Cons31" [("export",False,[4,5,4,20]),("MyData3",True,[24,14,24,20])] v
+        assertVarUsage "BWTest-0.1" "A" "Cons32" [("MyData3",True,[26,9,26,15])] v
+        assertVarUsage "BWTest-0.1" "A" "mdS" [("MyData",True,[10,9,10,12])] v
+        assertVarUsage "BWTest-0.1" "A" "mdS2" [("MyData2",True,[21,9,21,13])] v
+        assertVarUsage "BWTest-0.1" "A" "mdS3" [("MyData3",True,[25,9,25,13])] v
         assertVarUsage "BWTest-0.1" "A" "reset" [("export",False,[5,5,5,10]),("reset",True,[16,1,16,6]),("reset",True,[17,1,17,25]),("reset",True,[18,1,18,24])] v
         assertVarUsage "base" "GHC.Num" "fromInteger" [("reset",False,[18,23,18,24])] v
         
         assertVarUsage "base" "Data.Ord" "" [("export",False,[7,5,7,20]),("import",False,[8,8,8,16])] v
         
         assertTypeUsage "BWTest-0.1" "A" "MyData" [("export",False,[2,5,2,11]),("MyData",True,[9,6,9,12]),("reset",False,[16,10,16,16]),("reset",False,[16,20,16,26])] v
-        assertTypeUsage "BWTest-0.1" "A" "MyString" [("export",False,[6,5,6,13]),("mdS",False,[10,14,10,22]),("MyString",True,[14,6,14,14]),("mdS2",False,[21,15,21,23]),("mdS3",False,[25,15,25,23])] v
+        assertTypeUsage "BWTest-0.1" "A" "MyString" [("export",False,[6,5,6,13]),("MyData",False,[10,14,10,22]),("MyString",True,[14,6,14,14]),("MyData2",False,[21,15,21,23]),("MyData3",False,[25,15,25,23])] v
         assertTypeUsage "base" "GHC.Base" "String" [("MyString",False,[14,15,14,21])] v
         assertTypeUsage "base" "GHC.Show" "Show" [("MyData",False,[12,15,12,19]),("MyData2",False,[23,15,23,19]),("MyData3",False,[27,15,27,19])] v
         assertTypeUsage "BWTest-0.1" "A" "MyData2" [("export",False,[3,5,3,16]),("MyData2",True,[20,6,20,13])] v
         assertTypeUsage "BWTest-0.1" "A" "MyData3" [("export",False,[4,5,4,20]),("MyData3",True,[24,6,24,13])] v
-        assertTypeUsage "ghc-prim" "GHC.Types" "Int" [("Cons2",False,[11,15,11,18]),("Cons22",False,[22,16,22,19]),("Cons32",False,[26,16,26,19])] v
+        assertTypeUsage "ghc-prim" "GHC.Types" "Int" [("MyData",False,[11,15,11,18]),("MyData2",False,[22,16,22,19]),("MyData3",False,[26,16,26,19])] v
 
  
 test_GenerateReferencesExportAlias :: Assertion

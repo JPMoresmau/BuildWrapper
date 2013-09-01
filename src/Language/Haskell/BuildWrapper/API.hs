@@ -250,6 +250,7 @@ generateUsage returnAll ccn=
                 getSection :: Maybe [OutlineDef]  -> T.Text -> InFileSpan -> (T.Text,Bool)
                 getSection (Just ods) objName ifs =let
                         matchods=filter (\od-> ifsOverlap (odLoc od) ifs) ods
+                        -- most precise outline def
                         bestods=sortBy (\od1 od2->let
                                 l1=iflLine $ ifsStart $ odLoc od1
                                 l2=iflLine $ ifsStart $ odLoc od2
@@ -260,6 +261,17 @@ generateUsage returnAll ccn=
                                         in compare c2 c1
                                    a-> a
                                 ) matchods
+                        -- widest outline def (function type...)
+                        widestods=sortBy (\od1 od2->let
+                                l1=iflLine $ ifsStart $ odLoc od1
+                                l2=iflLine $ ifsStart $ odLoc od2
+                                in case compare l1 l2 of
+                                   EQ -> let
+                                        c1=iflColumn $ ifsStart $ odLoc od1
+                                        c2=iflColumn $ ifsStart $ odLoc od2
+                                        in compare c1 c2
+                                   a-> a
+                                ) matchods        
                         in case bestods of
                                 (x:_)->let 
                                         def=odName x == objName && 
@@ -272,7 +284,7 @@ generateUsage returnAll ccn=
                                                         (Type `elem` odType x)
                                                     && (iflColumn (ifsStart $ odLoc x) + 5 == iflColumn (ifsStart ifs))    
                                                     ))  
-                                       in (odName x,def)
+                                       in (odName $ head widestods,def)
                                 _->("",False)
                 getSection _ _ _=("",False)
 --                importToUsage :: ImportDef -> [Usage]
