@@ -290,7 +290,9 @@ cabalErrorLine cf cabalExe l
                                                 then Just (BWNote BWError "" (mkEmptySpan cf 1 1), [s2])
                                                 else 
                                                         let
-                                                                (loc,rest)=span (/= ':') s2
+                                                                (loc1,_)=span (/= '\'') s2
+                                                                (loc2,rest2)=span (/= ':') s2
+                                                                (loc,rest)=if (length loc1<length loc2) then (s2,"") else (loc2,rest2)
                                                                 (realloc,line,msg)=if null rest || ":"==rest
                                                                         then    (cf,"1",s2)
                                                                         else 

@@ -239,8 +239,28 @@ test_ConfigureErrors = do
         assertEqual 1 (length nsErrors5)
         let (nsError6:[])=nsErrors5
         assertEqual (BWNote BWError "No 'Main-Is' field found for executable BWTest\n" (mkEmptySpan cfn 1 1)) nsError6
-        
-
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.2",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "",
+                "executable BWTest",
+                "  hs-source-dirs: src",
+                "  main-is:        Main.hs",
+                "  other-modules:  B.D",
+                "  build-depends:  base," ++ testProjectName]
+        synchronize api root False
+        (bool6,nsErrors6)<-configure api root Target
+        assertBool (not bool6)
+        assertEqual 1 (length nsErrors6)
+        let (nsError7:[])=nsErrors6
+        assertEqual (BWNote BWError ("The field 'build-depends: "++ testProjectName ++"' refers to a library which is defined\nwithin the same package. To use this feature the package must specify at least\n'cabal-version: >= 1.8'.\n") (mkEmptySpan cfn 1 1)) nsError7
+            
         
 test_ConfigureWarnings :: Assertion
 test_ConfigureWarnings  = do
