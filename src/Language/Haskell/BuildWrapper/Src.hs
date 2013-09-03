@@ -63,16 +63,16 @@ getHSEOutline (Module _ _ _ _ decls,comments)=map addComment $ concatMap declOut
                 --declOutline (GDataDecl l _ _ h cons _) = [OutlineDef (headDecl h) [Data] (makeSpan l) (map qualConDeclOutline cons)]
                 declOutline (TypeFamDecl l h _) = [mkOutlineDef (headDecl h) [Type,Family] (makeSpan l)]
                 declOutline (TypeInsDecl l t1 _) = [mkOutlineDef (typeDecl t1) [Type,Instance] (makeSpan l)] -- ++ " "++(typeDecl t2)
-                declOutline (TypeDecl l h t) = [OutlineDef (headDecl h) [Type] (makeSpan l) [] (Just $ typeDecl t) Nothing]
+                declOutline (TypeDecl l h t) = [OutlineDef (headDecl h) [Type] (makeSpan l) [] (Just $ typeDecl t) Nothing Nothing]
                 declOutline (ClassDecl l _ h _ cdecls) = [mkOutlineDefWithChildren (headDecl h) [Class] (makeSpan l) (maybe [] (concatMap classDecl) cdecls)]
                 declOutline (FunBind l matches) = let
                         n=matchDecl $ head matches
                         (ty,l2)=addTypeInfo n l
-                        in [OutlineDef n [Function] (makeSpan l2) [] ty Nothing]
+                        in [OutlineDef n [Function] (makeSpan l2) [] ty Nothing Nothing]
                 declOutline (PatBind l (PVar _ n) _ _ _)=let
                         nd=nameDecl n
                         (ty,l2)=addTypeInfo nd l
-                        in [OutlineDef nd [Function] (makeSpan l2)  [] ty Nothing]
+                        in [OutlineDef nd [Function] (makeSpan l2)  [] ty Nothing Nothing]
                 declOutline (InstDecl l _ h idecls)=[mkOutlineDefWithChildren (iheadDecl h) [Instance] (makeSpan l) (maybe [] (concatMap instDecl) idecls)]
                 declOutline (SpliceDecl l e)=[mkOutlineDef (spliceDecl e) [Splice] (makeSpan l)]
                 declOutline _ = []
@@ -142,7 +142,7 @@ getHSEOutline (Module _ _ _ _ decls,comments)=map addComment $ concatMap declOut
                                 Just (ty,ss2)->if srcSpanEndLine (srcInfoSpan ss2) == (srcSpanStartLine (srcInfoSpan ss1) - 1)
                                         then (Just ty,combSpanInfo ss2 ss1)
                                         else (Just ty,ss1)
-                commentMap:: DM.Map Int (Int,T.Text)
+                commentMap:: DM.Map Int (Int,Int,T.Text)
                 commentMap = foldl' buildCommentMap DM.empty comments     
                 addComment:: OutlineDef -> OutlineDef
                 addComment od=let
@@ -150,12 +150,12 @@ getHSEOutline (Module _ _ _ _ decls,comments)=map addComment $ concatMap declOut
                         -- search for comment before declaration (line above, same column)
                         pl=DM.lookup (st-1) commentMap
                         od2= case pl of
-                                Just (stc,t) | stc == iflColumn (ifsStart $ odLoc od) -> od{odComment=Just t}
+                                Just (stc,stl,t) | stc == iflColumn (ifsStart $ odLoc od) -> od{odComment=Just t,odStartLineComment=Just stl}
                                 _ -> let
                                         -- search  for comment after declaration (same line)
                                         pl2=DM.lookup st commentMap
                                      in case pl2 of
-                                                Just (_,t)-> od{odComment=Just t}
+                                                Just (_,_,t)-> od{odComment=Just t}
                                                 Nothing -> od
                         in od2{odChildren=map addComment $ odChildren od2}
 getHSEOutline _ = []
@@ -169,21 +169,21 @@ getModuleLocation _=Nothing
 
 
 -- | build the comment map
-buildCommentMap ::  DM.Map Int (Int,T.Text) -- ^ the map: key is line, value is start column and comment text
+buildCommentMap ::  DM.Map Int (Int,Int,T.Text) -- ^ the map: key is line, value is start column, start line and comment text
         -> Comment -- ^  the comment
-        -> DM.Map Int (Int,T.Text)
+        -> DM.Map Int (Int,Int,T.Text)
 buildCommentMap m (Comment _ ss txt)=let
         txtTrimmed=dropWhile isSpace txt
         st=srcSpanStartLine ss
         stc=srcSpanStartColumn ss
         in case txtTrimmed of
-                ('|':rest)->DM.insert (srcSpanEndLine ss) (stc,T.pack $ dropWhile isSpace rest) m
-                ('^':rest)->DM.insert st (-1,T.pack $ dropWhile isSpace rest) m
+                ('|':rest)->DM.insert (srcSpanEndLine ss) (stc,srcSpanStartLine ss,T.pack $ dropWhile isSpace rest) m
+                ('^':rest)->DM.insert st (-1,st,T.pack $ dropWhile isSpace rest) m
                 _-> let
                         pl=DM.lookup (st-1) m
                     in case pl of
                                 -- we merge the comment text with the comment before it
-                                Just (stc2,t)->DM.insert st (stc2,T.concat [t,"\n",T.pack txt]) (DM.delete st m) 
+                                Just (stc2,sl,t)->DM.insert st (stc2,sl,T.concat [t,"\n",T.pack txt]) (DM.delete st m) 
                                 Nothing-> m
 
 

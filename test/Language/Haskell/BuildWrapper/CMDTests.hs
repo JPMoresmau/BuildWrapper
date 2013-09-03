@@ -562,16 +562,16 @@ test_Outline = do
                         ]
                 ,mkOutlineDef "Elem" [Type,Family] (InFileSpan (InFileLoc 13 1)(InFileLoc 13 19))
                 ,mkOutlineDef "Elem [e]" [Type,Instance] (InFileSpan (InFileLoc 15 1)(InFileLoc 15 27)) 
-                ,OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 17 1)(InFileLoc 18 25)) [] (Just "[Char]") Nothing
-                ,OutlineDef "testfunc1bis" [Function] (InFileSpan (InFileLoc 20 1)(InFileLoc 22 25)) [] (Just "String -> [Char]") Nothing      
-                ,OutlineDef "testMethod" [Function] (InFileSpan (InFileLoc 24 1)(InFileLoc 27 13))  [] (Just "forall a . (Num a) => a -> a -> a") Nothing 
+                ,OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 17 1)(InFileLoc 18 25)) [] (Just "[Char]") Nothing Nothing
+                ,OutlineDef "testfunc1bis" [Function] (InFileSpan (InFileLoc 20 1)(InFileLoc 22 25)) [] (Just "String -> [Char]") Nothing Nothing      
+                ,OutlineDef "testMethod" [Function] (InFileSpan (InFileLoc 24 1)(InFileLoc 27 13))  [] (Just "forall a . (Num a) => a -> a -> a") Nothing Nothing 
                 ,mkOutlineDefWithChildren "ToString" [Class] (InFileSpan (InFileLoc 29 1)(InFileLoc 32 0))  [
                         mkOutlineDef "toString" [Function] (InFileSpan (InFileLoc 30 5)(InFileLoc 30 28))
                         ]          
                 ,mkOutlineDefWithChildren "ToString String" [Instance] (InFileSpan (InFileLoc 32 1)(InFileLoc 35 0))  [
                         mkOutlineDef "toString" [Function] (InFileSpan (InFileLoc 33 5)(InFileLoc 33 18)) 
                         ]    
-                ,OutlineDef "Str" [Type] (InFileSpan (InFileLoc 35 1)(InFileLoc 35 16)) [] (Just "String") Nothing              
+                ,OutlineDef "Str" [Type] (InFileSpan (InFileLoc 35 1)(InFileLoc 35 16)) [] (Just "String") Nothing Nothing             
                 ,mkOutlineDefWithChildren "Type1" [Data] (InFileSpan (InFileLoc 37 1)(InFileLoc 41 10))  [
                          mkOutlineDef "MkType1_1" [Constructor] (InFileSpan (InFileLoc 37 12)(InFileLoc 37 25)) 
                         ,mkOutlineDefWithChildren "MkType1_2" [Constructor] (InFileSpan (InFileLoc 38 7)(InFileLoc 41 10)) [
@@ -635,22 +635,22 @@ test_OutlineComments= do
         (OutlineResult defs es is,nsErrors1)<-getOutline api root rel
         assertBool (null nsErrors1)
         let expected=[
-                OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 8 1)(InFileLoc 9 25)) [] (Just "[Char]") Nothing
-                ,OutlineDef "testfunc1bis" [Function] (InFileSpan (InFileLoc 12 1)(InFileLoc 14 25)) [] (Just "String -> [Char]") (Just "testFunc1bis haddock")              
-                ,OutlineDef "testMethod" [Function] (InFileSpan (InFileLoc 18 1)(InFileLoc 21 13))  [] (Just "forall a . (Num a) => a -> a -> a")   (Just "testMethod\n haddock") 
+                OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 8 1)(InFileLoc 9 25)) [] (Just "[Char]") Nothing Nothing
+                ,OutlineDef "testfunc1bis" [Function] (InFileSpan (InFileLoc 12 1)(InFileLoc 14 25)) [] (Just "String -> [Char]") (Just "testFunc1bis haddock")  (Just 11)           
+                ,OutlineDef "testMethod" [Function] (InFileSpan (InFileLoc 18 1)(InFileLoc 21 13))  [] (Just "forall a . (Num a) => a -> a -> a")   (Just "testMethod\n haddock") (Just 16)     
                 ,mkOutlineDefWithChildren "ToString" [Class] (InFileSpan (InFileLoc 23 1)(InFileLoc 27 0))  [
-                        OutlineDef "toString" [Function] (InFileSpan (InFileLoc 24 5)(InFileLoc 24 28)) [] Nothing (Just "toString comment")
+                        OutlineDef "toString" [Function] (InFileSpan (InFileLoc 24 5)(InFileLoc 24 28)) [] Nothing (Just "toString comment") Nothing
                         ]          
-                ,OutlineDef "Str" [Type] (InFileSpan (InFileLoc 27 1)(InFileLoc 27 16)) [] (Just "String") (Just "Str haddock")          
+                ,OutlineDef "Str" [Type] (InFileSpan (InFileLoc 27 1)(InFileLoc 27 16)) [] (Just "String") (Just "Str haddock") (Just 26)             
                 ,OutlineDef "Type1" [Data] (InFileSpan (InFileLoc 30 1)(InFileLoc 34 10))  [
-                         OutlineDef "MkType1_1" [Constructor] (InFileSpan (InFileLoc 30 12)(InFileLoc 30 25)) [] Nothing (Just "MkType1 comment") 
+                         OutlineDef "MkType1_1" [Constructor] (InFileSpan (InFileLoc 30 12)(InFileLoc 30 25)) [] Nothing (Just "MkType1 comment") Nothing
                         ,mkOutlineDefWithChildren "MkType1_2" [Constructor] (InFileSpan (InFileLoc 31 7)(InFileLoc 34 10)) [
                                 mkOutlineDef "mkt2_s" [Field] (InFileSpan (InFileLoc 32 9)(InFileLoc 32 25)) 
                                 ,mkOutlineDef "mkt2_i" [Field] (InFileSpan (InFileLoc 33 9)(InFileLoc 33 22)) 
                                 
                                 ]
                         
-                        ] Nothing (Just "Type1 haddock")    
+                        ] Nothing (Just "Type1 haddock")  (Just 29)       
                 ]
         assertEqual (length expected) (length defs)
         mapM_ (uncurry (assertEqual )) (zip expected defs)
@@ -716,8 +716,8 @@ test_OutlinePreproc =  do
         assertBool (null nsErrors2)
         let expected2=[
                 mkOutlineDefWithChildren "Name" [Data] (InFileSpan (InFileLoc 5 1)(InFileLoc 9 38))  [
-                  OutlineDef "Ident" [Constructor] (InFileSpan (InFileLoc 6 6)(InFileLoc 6 18)) [] Nothing (Just "/varid/ or /conid/."),
-                  OutlineDef "Symbol" [Constructor] (InFileSpan (InFileLoc 7 6)(InFileLoc 7 19)) [] Nothing (Just "/varsym/ or /consym/")
+                  OutlineDef "Ident" [Constructor] (InFileSpan (InFileLoc 6 6)(InFileLoc 6 18)) [] Nothing (Just "/varid/ or /conid/.") Nothing,
+                  OutlineDef "Symbol" [Constructor] (InFileSpan (InFileLoc 7 6)(InFileLoc 7 19)) [] Nothing (Just "/varsym/ or /consym/") Nothing
                   ]
                 ] 
         assertEqual (length expected2) (length defs2)
