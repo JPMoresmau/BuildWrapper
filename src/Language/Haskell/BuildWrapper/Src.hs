@@ -25,7 +25,7 @@ import Data.List (foldl', isPrefixOf)
 -- | get the AST
 getHSEAST :: String -- ^ input text
         -> [String] -- ^ options
-        -> IO (ParseResult (Module SrcSpanInfo, [Comment]))
+        -> (ParseResult (Module SrcSpanInfo, [Comment]))
 getHSEAST input options=do
         -- we add MultiParamTypeClasses because we may need it if the module we're parsing uses a type class with multiple parameters, which doesn't require the PRAGMA (only in the module DEFINING the type class)
         -- we add PatternGuards since GHC only gives a warning if not explicit
@@ -48,7 +48,7 @@ getHSEAST input options=do
                 else exts 
             -- fixities necessary (see http://trac.haskell.org/haskell-src-exts/ticket/189 and https://sourceforge.net/projects/eclipsefp/forums/forum/371922/topic/4808590)
             parseMode=defaultParseMode {extensions=extsFull,ignoreLinePragmas=False,ignoreLanguagePragmas=False,fixities = Just baseFixities} 
-        return $ parseFileContentsWithComments parseMode input
+        parseFileContentsWithComments parseMode input
 
 -- | get the ouline from the AST        
 getHSEOutline :: (Module SrcSpanInfo, [Comment]) -- ^ the commented AST

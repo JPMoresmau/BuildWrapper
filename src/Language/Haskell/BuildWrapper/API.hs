@@ -364,7 +364,8 @@ getAST fp mccn=do
         (bf,ns)<-getBuildFlags fp mccn
         tgt<-getTargetPath fp
         input<-liftIO $ preproc bf tgt
-        pr<- liftIO $ getHSEAST input (bfAst bf)
+        let pr= getHSEAST input (bfAst bf)
+        -- liftIO $ print pr
         return (Just pr,ns)
 
 -- | get GHC typechecked AST for source file
