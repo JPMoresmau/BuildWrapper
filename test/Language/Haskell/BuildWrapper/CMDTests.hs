@@ -657,6 +657,45 @@ test_OutlineComments= do
         assertEqual [] es
         assertEqual [ImportDef "Data.Char" Nothing (InFileSpan (InFileLoc 5 1)(InFileLoc 5 17)) False False "" Nothing] is
          
+test_OutlineComments142 :: Assertion
+test_OutlineComments142= do
+        let api=cabalAPI
+        root<-createTestProject
+        synchronize api root False
+        let rel="src"</>"A.hs"
+        -- use api to write temp file
+        write api root rel $ unlines [
+                "module Module1 where",
+                "",        
+                "-- | Type for an entry in file",
+                "data CblEntry = ",
+                "  -- | This is the documentation for the 1. constructor",
+                "  CblCondition { cblCondition :: String }",
+                "  -- | This is the documentation for the FV",
+                "  | CblFieldValue { ",
+                "    cblFldName :: String, -- ^ name of the field",
+                "    cblFldValues :: [String] -- ^ values of the field",
+                "    } -- ^ field-values pair"                ]
+        (_,nsErrors3f)<-getBuildFlags api root rel
+        assertBool (null nsErrors3f)        
+        (OutlineResult defs es is,nsErrors1)<-getOutline api root rel
+        assertBool (null nsErrors1)
+        assertEqual [] es
+        assertEqual [] is
+        let expected=[
+                OutlineDef "CblEntry" [Data] (InFileSpan (InFileLoc 4 1)(InFileLoc 11 6)) [
+                    OutlineDef "CblCondition" [Constructor] (InFileSpan (InFileLoc 6 3) (InFileLoc 6 42))
+                        [
+                            OutlineDef "cblCondition" [Field] (InFileSpan (InFileLoc 6 18) (InFileLoc 6 40)) [] Nothing Nothing Nothing
+                        ] Nothing (Just "This is the documentation for the 1. constructor") (Just 5) 
+                    , OutlineDef "CblFieldValue" [Constructor] (InFileSpan (InFileLoc 8 5) (InFileLoc 11 6))
+                        [
+                            OutlineDef "cblFldName" [Field] (InFileSpan (InFileLoc 9 5) (InFileLoc 9 25)) [] Nothing (Just "name of the field") Nothing
+                            ,OutlineDef "cblFldValues" [Field] (InFileSpan (InFileLoc 10 5) (InFileLoc 10 29)) [] Nothing (Just "values of the field") Nothing
+                        ] Nothing (Just "This is the documentation for the FV") (Just 7) 
+                ] Nothing (Just "Type for an entry in file") (Just 3)]
+        assertEqual (length expected) (length defs)
+        mapM_ (uncurry (assertEqual )) (zip expected defs)
         
 test_OutlinePreproc :: Assertion
 test_OutlinePreproc =  do

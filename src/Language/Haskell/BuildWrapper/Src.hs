@@ -21,6 +21,7 @@ import qualified Data.Map as DM
 import qualified Data.Text as T
 import Data.Char (isSpace)
 import Data.List (foldl', isPrefixOf)
+import Control.Monad.Trans.State.Lazy (State, get, evalState, put)
 
 -- | get the AST
 getHSEAST :: String -- ^ input text
@@ -53,7 +54,7 @@ getHSEAST input options=do
 -- | get the ouline from the AST        
 getHSEOutline :: (Module SrcSpanInfo, [Comment]) -- ^ the commented AST
         -> [OutlineDef]
-getHSEOutline (Module _ _ _ _ decls,comments)=map addComment $ concatMap declOutline decls
+getHSEOutline (Module _ _ _ _ decls,comments)=evalState (mapM addComment $ concatMap declOutline decls) commentMap
         where 
                 declOutline :: Decl SrcSpanInfo -> [OutlineDef]
                 declOutline (DataFamDecl l _ h _) = [mkOutlineDef (headDecl h) [Data,Family] (makeSpan l)]
@@ -144,20 +145,25 @@ getHSEOutline (Module _ _ _ _ decls,comments)=map addComment $ concatMap declOut
                                         else (Just ty,ss1)
                 commentMap:: DM.Map Int (Int,Int,T.Text)
                 commentMap = foldl' buildCommentMap DM.empty comments     
-                addComment:: OutlineDef -> OutlineDef
-                addComment od=let
-                        st=iflLine $ ifsStart$ odLoc od
-                        -- search for comment before declaration (line above, same column)
-                        pl=DM.lookup (st-1) commentMap
-                        od2= case pl of
-                                Just (stc,stl,t) | stc == iflColumn (ifsStart $ odLoc od) -> od{odComment=Just t,odStartLineComment=Just stl}
-                                _ -> let
-                                        -- search  for comment after declaration (same line)
-                                        pl2=DM.lookup st commentMap
-                                     in case pl2 of
-                                                Just (_,_,t)-> od{odComment=Just t}
-                                                Nothing -> od
-                        in od2{odChildren=map addComment $ odChildren od2}
+                addComment:: OutlineDef -> State (DM.Map Int (Int,Int,T.Text)) OutlineDef
+                addComment od=do
+                        cm<-get
+                        let
+                                st=iflLine $ ifsStart$ odLoc od
+                                -- search for comment before declaration (line above, same column)
+                                pl=DM.lookup (st-1) cm
+                                (cm2,od2)= case pl of
+                                        --  | stc <= iflColumn (ifsStart $ odLoc od) 
+                                        Just (stc,stl,t)-> ( DM.delete (st-1) cm,od{odComment=Just t,odStartLineComment=Just stl})
+                                        _ -> let
+                                                -- search  for comment after declaration (same line)
+                                                pl2=DM.lookup st cm
+                                             in case pl2 of
+                                                        Just (_,_,t)-> (DM.delete st cm,od{odComment=Just t})
+                                                        Nothing -> (cm,od)
+                                children=evalState (mapM addComment $ odChildren od2) cm2
+                        put cm2
+                        return od2{odChildren=children}
 getHSEOutline _ = []
 
 -- | get the ouline from the AST        
