@@ -1273,6 +1273,49 @@ test_ThingAtPointMain = do
 --        assertEqual "not m"  (Just "m") (tapHType $ fromJust tap2)
 --       
 
+test_ThingAtPointUnit :: Assertion
+test_ThingAtPointUnit = do
+        let api=cabalAPI
+        root<-createTestProject
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "executable BWTest",
+                "  hs-source-dirs:  src",
+                "  main-is:         A.hs",
+                "  other-modules:  B.D",
+                "  build-depends:  base"]
+        let rel="src"</>"A.hs"        
+        writeFile (root </> rel) $ unlines [  
+                  "module Main where",
+                  "import Control.Monad (when)",
+                  "main=when True $ print \"5\" >> return ()"
+                  ]
+        synchronize api root False
+        configure api root Target     
+        (bf3,nsErrors3f)<-getBuildFlags api root rel
+        assertBool (null nsErrors3f)
+        assertEqual (Just "Main") (bfModName bf3)
+        (tap1,nsErrors1)<-getThingAtPoint api root rel 3 35
+        assertBool (null nsErrors1)
+        assertBool (isJust tap1)
+        assertEqual "return" (tapName $ fromJust tap1)
+        --assertEqual (Just "forall a. a -> IO ()") (tapType $ fromJust tap1)
+        assertEqual (Just "() -> IO ()") (tapType $ fromJust tap1)
+        (tap2,nsErrors2)<-getThingAtPoint api root rel 3 30
+        assertBool (null nsErrors2)
+        assertBool (isJust tap2)
+        assertEqual ">>" (tapName $ fromJust tap2)
+        --assertEqual (Just "forall a b. IO () -> IO () -> IO ()") (tapType $ fromJust tap2)
+        assertEqual (Just "IO () -> IO () -> IO ()") (tapType $ fromJust tap2)
+        (tap3,nsErrors3)<-getThingAtPoint api root rel 3 7
+        assertBool (null nsErrors3)
+        assertBool (isJust tap3)
+        assertEqual "when" (tapName $ fromJust tap3)
+        assertEqual (Just "Bool -> IO () -> IO ()") (tapType $ fromJust tap3)
         
 test_ThingAtPointMainSubFolder :: Assertion
 test_ThingAtPointMainSubFolder = do

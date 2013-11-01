@@ -38,10 +38,11 @@ import Language.Preprocessor.Cpphs
 import Data.Maybe
 import System.Directory
 import System.FilePath
-import GHC (TypecheckedSource, TypecheckedModule(..), Ghc, ms_mod, pm_mod_summary, moduleName, getSessionDynFlags)
+import GHC (TypecheckedSource, TypecheckedModule(..), Ghc, ms_mod, pm_mod_summary, moduleName, getSessionDynFlags, getSession)
 import Data.Aeson
 import Outputable (ppr)
 import Data.Foldable (foldrM)
+import qualified MonadUtils as GMU (liftIO)
 
 
 -- | copy all files from the project to the temporary folder
@@ -140,10 +141,12 @@ generateUsage returnAll ccn=
                         (ius,aliasMap)<-foldrM (BwGHC.ghcImportToUsage pkg) ([],DM.empty) imps
                         -- GMU.liftIO $ Prelude.print $ showSDoc $ ppr aliasMap
                         df <- getSessionDynFlags
+                        env <- getSession
                         let modu=T.pack $ showSD True df $ ppr $ moduleName $ ms_mod $ pm_mod_summary $ tm_parsed_module tm
                         eus<-mapM (BwGHC.ghcExportToUsage df pkg modu aliasMap) (fromMaybe [] mexps)
                         --ms_mod $ pm_mod_summary $ tm_parsed_module tm
-                        return (f,modu,dataToJSON df hsg,ius ++ concat eus)
+                        js<-GMU.liftIO $ dataToJSON df env tm hsg
+                        return (f,modu,js,ius ++ concat eus)
                 -- | generate all usage information and stores it to file
                 generate :: T.Text  -- ^ the current package name
                         -> (FilePath,T.Text,Value,[Usage]) -> BuildWrapper()

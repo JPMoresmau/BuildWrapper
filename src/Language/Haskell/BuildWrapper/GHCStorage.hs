@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP,OverloadedStrings,PatternGuards #-}
+{-# LANGUAGE CPP,OverloadedStrings,PatternGuards,RankNTypes #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.GHCStorage
 -- Copyright   : (c) JP Moresmau 2012
@@ -31,21 +31,6 @@ import DataCon (dataConName)
 import GHC.SYB.Instances
 #endif 
 
-#if __GLASGOW_HASKELL__ < 702
-import TypeRep (Type(..), PredType(..))
-import VarSet
-#elif __GLASGOW_HASKELL__ < 704
-import TypeRep (Type(..), Pred(..), tyVarsOfType)
-import VarSet (isEmptyVarSet)
-#else
-import TypeRep (Type(..), tyVarsOfType)
-import VarSet (isEmptyVarSet)
-#endif
-
-#if __GLASGOW_HASKELL__ >= 704
-import TcEvidence
-#endif
-
 import qualified Data.ByteString.Lazy as BS
 -- import qualified Data.ByteString.Lazy.Char8 as BSC (putStrLn)
 import qualified Data.ByteString as BSS
@@ -64,8 +49,13 @@ import Data.Time.Clock (UTCTime)
 import Type (splitFunTys)
 import Unique (getUnique)
 import Data.List (sortBy)
--- import GHC.SYB.Utils (Stage(..), showData)
-
+--import GHC.SYB.Utils (Stage(..), showData)
+import qualified MonadUtils as GMU
+import TcRnTypes (tcg_type_env,tcg_rdr_env)
+import qualified CoreUtils as CoreUtils (exprType)
+import Desugar (deSugarExpr)
+import Control.Monad (liftM)
+import Data.Aeson.Types (Pair)
 
 -- | get the file storing the information for the given source file
 getInfoFile :: FilePath -- ^ the source file
@@ -96,17 +86,19 @@ storeBuildFlagsInfo fp bf=setStoredInfo fp "BuildFlags"  (toJSON bf)
 
 -- | generate the JSON from the typechecked module
 -- this incorporates info from the renamed source with types annotations from the typechecked source
-generateGHCInfo :: DynFlags -> TypecheckedModule -> Value
-generateGHCInfo df tcm=let
+generateGHCInfo :: DynFlags -> HscEnv -> TypecheckedModule -> IO Value
+generateGHCInfo df env tcm=do
         -- extract usages from typechecked source
-        tcvals=extractUsages $ dataToJSON df $ typecheckedSource tcm
+        tcvals<-liftM extractUsages $ dataToJSON df env tcm $ typecheckedSource tcm
+        -- print tcvals
         -- store objects with type annotations in a map keyed by module, name, line and column
-        tcByNameLoc=foldr buildMap DM.empty tcvals
+        let tcByNameLoc=foldr buildMap DM.empty tcvals
         -- extract usages from renamed source
-        rnvals=extractUsages $ dataToJSON df $ tm_renamed_source tcm
+        rnvals<-liftM extractUsages $ dataToJSON df env tcm $ tm_renamed_source tcm
+        -- print rnvals
         -- add type information on objects
-        typedVals=map (addType tcByNameLoc) rnvals
-        in (Array $ V.fromList typedVals)
+        let typedVals=map (addType tcByNameLoc) rnvals
+        return (Array $ V.fromList typedVals)
         where 
                 buildMap v@(Object m) dm | 
                         Just pos<-HM.lookup "Pos" m,
@@ -144,10 +136,11 @@ generateGHCInfo df tcm=let
 -- | store the GHC generated AST
 storeGHCInfo ::
         DynFlags
+        -> HscEnv
         -> FilePath -- ^ the source file
         -> TypecheckedModule -- ^ the GHC AST
         -> IO()
-storeGHCInfo df fp tcm= -- do
+storeGHCInfo df env fp tcm=  do
 --        putStrLn $ showData TypeChecker 4 $ typecheckedSource tcm
 --        putStrLn "Typechecked"
 --        BSC.putStrLn $ encode $ dataToJSON $ typecheckedSource tcm
@@ -157,7 +150,7 @@ storeGHCInfo df fp tcm= -- do
 --        BSC.putStrLn $ encode $ Array $ V.fromList tcvals
 --        let rnvals=extractUsages $ dataToJSON $ tm_renamed_source tcm 
 --        BSC.putStrLn $ encode $ Array $ V.fromList rnvals
-        setStoredInfo fp "AST" $ generateGHCInfo df tcm
+        generateGHCInfo df env tcm >>= setStoredInfo fp "AST"
         
                 
 -- | read the GHC AST as a JSON value
@@ -236,19 +229,22 @@ getUsageInfo fp=do
         
 
 -- | convert a Data into a JSON value, with specific treatment for interesting GHC AST objects, and avoiding the holes
-dataToJSON :: Data a => DynFlags -> a -> Value
-dataToJSON  df = 
-  generic `ext1Q` list `extQ` string `extQ` fastString `extQ` srcSpanToJSON 
-          `extQ` name `extQ` ocName `extQ` modName `extQ` var `extQ` exprVar `extQ` dataCon
-          `extQ` bagName `extQ` bagRdrName `extQ` bagVar `extQ` nameSet
-          `extQ` postTcType `extQ` fixity  `extQ` hsBind
-  where generic :: Data a => a -> Value
-        generic t =arr $ gmapQ (dataToJSON df) t
-                -- object [(T.pack $ showConstr (toConstr t)) .= sub ] 
+dataToJSON :: Data a => DynFlags -> HscEnv -> TypecheckedModule -> a -> IO Value
+dataToJSON  df env tcm= 
+  generic `ext1Q` list `extQ` (return . string) `extQ` (return . fastString) `extQ` (return . srcSpanToJSON) 
+          `extQ` (return . name) `extQ` (return . ocName) `extQ` (return . modName) `extQ` var `extQ` exprVar `extQ` (return . dataCon)
+          `extQ` bagName `extQ` bagRdrName `extQ` bagVar `extQ` (return . nameSet)
+          `extQ` (return . postTcType) `extQ` (return . fixity)  `extQ` hsBind
+  where generic :: Data a => a -> IO Value
+        generic t=do
+                let sub=gmapQ (dataToJSON df env tcm) t
+                liftM arr $ sequence sub
+                --res<- gmapQ (dataToJSON df env tcm) t
+                --liftM arr res
         string     = Data.Aeson.String . T.pack :: String -> Value
         fastString:: FastString -> Value
-        fastString fs= object ["FastString" .= T.pack (show fs)] 
-        list l     = arr $ map (dataToJSON df) l
+        fastString fs=object ["FastString" .= T.pack (show fs)] 
+        list l     = liftM arr $ mapM (dataToJSON df env tcm) l
         arr a = let
                 sub=filter (/= Null) a
                 in case sub of
@@ -259,33 +255,36 @@ dataToJSON  df =
         name  n     = object (nameAndModule n ++["GType" .= string "Name","HType".= string (if isValOcc (nameOccName n) then "v" else "t")])
         ocName :: OccName -> Value
         ocName o   = name (mkSystemName (getUnique o) o) 
-                --object ["Name" .= string (OccName.occNameString o),"HType" .= string (if isValOcc o then "v" else "t")]
         modName  :: ModuleName -> Value
-        modName m= object [ "Name" .= string (showSD True df $ ppr m),"GType" .= string "ModuleName","HType" .= string "m"]
+        modName m=  object [ "Name" .= string (showSD True df $ ppr m),"GType" .= string "ModuleName","HType" .= string "m"]
 
-        var :: Var -> Value
-        var  v     = typedVar v (varType v)
+        var ::  Var -> IO Value
+        var  v     = return $ typedVar v (varType v)
         dataCon ::  DataCon -> Value
         dataCon  d  = let
                 t=dataConUserType d
                 in object (nameAndModule (dataConName d) ++ typeToJSON t ++ [
                         "GType" .= string "DataCon",
                         "HType" .=  string "v"])
---        simple:: T.Text -> String -> Value
---        simple nm v=object [nm .= T.pack v]
         simpleV:: T.Text -> Value -> Value
         simpleV nm v=object [nm .= v]
-        bagRdrName:: Bag (Located (HsBind RdrName)) -> Value
-        bagRdrName = simpleV "Bag(Located (HsBind RdrName))" . list . bagToList 
-        bagName   :: Bag (Located (HsBind Name)) -> Value
-        bagName    = simpleV "Bag(Located (HsBind Name))" . list . bagToList 
-        bagVar    :: Bag (Located (HsBind Var)) -> Value
-        bagVar     = simpleV "Bag(Located (HsBind Var))". list . bagToList 
-        exprVar    :: HsExpr Var -> Value
-        exprVar   ev  = let
-                mt=typeOfExpr ev
-                in case mt of
-                        Just (t,v)-> typedVar v t
+        bagRdrName:: Bag (Located (HsBind RdrName)) -> IO Value
+        bagRdrName = liftM (simpleV "Bag(Located (HsBind RdrName))") . list . bagToList 
+        bagName   :: Bag (Located (HsBind Name)) -> IO Value
+        bagName    = liftM (simpleV "Bag(Located (HsBind Name))") . list . bagToList 
+        bagVar    :: Bag (Located (HsBind Var)) -> IO Value
+        bagVar     = liftM (simpleV "Bag(Located (HsBind Var))") . list . bagToList 
+        exprVar    :: HsExpr Var ->IO Value
+        exprVar ev  = do
+                mt<- getType env tcm (L noSrcSpan ev)
+                case mt of
+                        Just t->  case identOfExpr ev of
+                                (Just v)->do
+                                        return $ typedVar v t
+                                Nothing->generic ev
+                                        --do
+                                        --val<-generic ev
+                                        --return $ object (["Name" .= string "Expr","Module" .= string "", "Package" .= string "","GType" .= string "HsExpr","HType" .= string "v","sub" .= val] ++ typeToJSON t)
                         Nothing->generic ev
         typedVar :: Var -> Type -> Value
         typedVar v t=object (nameAndModule (varName v) ++ typeToJSON t ++
@@ -299,26 +298,34 @@ dataToJSON  df =
         fixity  = const Null :: GHC.Fixity -> Value --simple "Fixity" . showSDoc . ppr 
 
         typeToJSON :: Type -> [(T.Text,Value)]
-        typeToJSON t =  -- let
-                --appT=let (a,b)= splitAppTys t in (a:b)
-                --allT2=concatMap typesInsideType appT
-                -- allT=typesInsideType t
-                -- allT2=allT ++ concatMap (\t2->let (a,b)= splitAppTys t2 in (a:b)) allT
-                -- in
+        typeToJSON t =  
                 ["Type" .= string (showSD False df $ pprTypeForUser True t),
                 "QType" .= string (showSD True df $ pprTypeForUser True t)]
-              --  ,"AllTypes" .= (map string $ filter ("[]" /=) $ nubOrd $ map (showSDoc . withPprStyle (mkUserStyle ((\_ _ -> NameNotInScope2), const True) AllTheWay) . pprTypeForUser True) allT2)]
-        hsBind :: HsBindLR Name Name -> Value
-        --(arr [dataToJSON $ getLoc fid,dataToJSON $ unLoc fid]) :
-        hsBind (FunBind fid _ (MatchGroup matches _) _ _ _) =arr $  map (\m->arr [arr [dataToJSON df $ getLoc m,dataToJSON df $ unLoc fid],dataToJSON df m]) matches
+        hsBind :: HsBindLR Name Name -> IO Value
+        hsBind (FunBind fid _ (MatchGroup matches _) _ _ _) =do
+                d2<-dataToJSON df env tcm $ unLoc fid
+                liftM arr $ mapM (\m->do
+                        d1<-dataToJSON df env tcm $ getLoc m
+                        d3<-dataToJSON df env tcm m
+                        return $ arr [arr [d1,d2],d3]) matches
         hsBind a=generic a
-        -- nameAndModule :: Name -> [Pair]
+        nameAndModule :: Name -> [Pair]
         nameAndModule n=let
                 mm=nameModule_maybe n
                 mn=maybe "" (showSD True df . ppr . moduleName) mm
                 pkg=maybe "" (showSD True df . ppr . modulePackageId) mm
                 na=showSD False df $ ppr n
                 in ["Module" .= string mn,"Package" .= string pkg, "Name" .= string na]
+
+-- | get type of an expression, inspired by the code in ghc-mod
+getType ::  HscEnv -> TypecheckedModule -> LHsExpr Var -> IO(Maybe Type)
+getType hs_env tcm e = do
+      (_, mbe) <- GMU.liftIO $ deSugarExpr hs_env modu rn_env ty_env e
+      return $ fmap (CoreUtils.exprType) mbe
+      where
+        modu = ms_mod $ pm_mod_summary $ tm_parsed_module tcm
+        rn_env = tcg_rdr_env $ fst $ tm_internals_ tcm
+        ty_env = tcg_type_env $ fst $ tm_internals_ tcm  
 
 showSD :: Bool
         -> DynFlags
@@ -424,38 +431,6 @@ findInJSONData (Just o@(Object m)) | Just (String _)<-HM.lookup "Name" m=case fr
         Error _ -> Nothing 
 findInJSONData _=Nothing
 
----- | find in JSON AST
---findInJSON :: FindFunc -- ^ the evaluation function  
---        -> Value -- ^ the root object containing the AST 
---        -> Maybe Value
---findInJSON f (Array arr) | not $ V.null arr=let
---        v1=arr V.! 0
---        in if f v1 && V.length arr==2 -- we have an array of two elements, the first one being a matching SrcSpan we go down the second element
---           then 
---                let
---                        mv=findInJSON f $ arr V.! 1
---                in case mv of
---                        Just rv-> Just rv -- found something underneath
---                        Nothing -> Just $ arr V.! 1 -- found nothing underneath, return second element of the array
---           else
---                let rvs=catMaybes $ V.toList $ fmap (findInJSON f) arr -- other case of arrays: check on each element
---                in case rvs of
---                        (x:_)->Just x -- return first match
---                        []->Nothing
---findInJSON f (Object obj)=let rvs=mapMaybe (findInJSON f) $ HM.elems obj -- in a complex object: check on contained elements
---                in case rvs of
---                        (x:_)->Just x
---                        []->Nothing
---findInJSON _ _= Nothing
---
----- | overlap function: find whatever is at the given line and column
---overlap :: Int  -- ^ line
---        -> Int -- ^ column
---        -> FindFunc
---overlap l c (Object m) | 
---        Just pos<-HM.lookup "SrcSpan" m,
---        Just (l1,c1,l2,c2)<-extractSourceSpan pos=l1<=l && c1<=c && l2>=l && c2>=c
---overlap _ _ _=False
 
 -- | find in JSON AST
 findInJSON :: FindFunc -- ^ the evaluation function  
@@ -568,86 +543,9 @@ extractSourceLoc (Object m) |
         Just (Number(I c))<-HM.lookup "column" m=Just (fromIntegral l,fromIntegral c)  
 extractSourceLoc _ = Nothing       
 
--- | resolve the type of an expression
-typeOfExpr :: HsExpr Var -> Maybe (Type,Var)
-typeOfExpr (HsWrap wr (HsVar ident)) =
-  let -- Unwrap a HsWrapper and its associated type
-      unwrap WpHole t            = t
-      unwrap (WpCompose w1 w2) t = unwrap w1 (unwrap w2 t)
-      unwrap (WpCast _) t        = t -- XXX: really?
-      unwrap (WpTyApp t') t      = AppTy t t'
-      unwrap (WpTyLam tv) t      = ForAllTy tv t
-      -- do something else with coercion/dict vars?
-#if __GLASGOW_HASKELL__ < 700
-      unwrap (WpApp v) t         = AppTy t (TyVarTy v)
-      unwrap (WpLam v) t         = ForAllTy v t
-#else
-      -- unwrap (WpEvApp v) t       = AppTy t (TyVarTy v)
-      unwrap (WpEvLam v) t       = ForAllTy v t
-      unwrap (WpEvApp _) t       = t
-#endif
-      unwrap (WpLet _) t       = t
-#ifdef WPINLINE
-      unwrap WpInline t          = t
-#endif
-  in  Just (reduceType $ unwrap wr (varType ident), ident)
--- All other search results produce no type information
-typeOfExpr _ = Nothing
-
--- | Reduce type-level applications by pushing 'AppTy' arguments on a stack and binding them in an environment at the
---   appropriate 'ForAllTy'. Class constraints that have no free variables after reduction are removed. 
-reduceType :: Type -> Type
-reduceType = reduce [] []
- where reduce :: [Type] -> [(Var,Type)] -> Type -> Type
-       -- The stack is only passed into AppTy and ForallTy cases, since otherwise it will be empty anyway.
-       -- We probably don't even need to reduce in the other cases, but it won't cause any problems and keeps this
-       -- function simpler (we do need to substitute).
-       -- NOTE: when working on this code, make sure to temporarily disable caching in GHC.withJSONAST.
-       reduce _          env t@(TyVarTy var)      | Just arg <- lookup var env = arg -- note: var's are unique
-                                                  | otherwise                  = t
-       reduce _          env (TyConApp tycon kts) = TyConApp tycon $ map (reduce [] env) kts
-       reduce stck       env (AppTy typ1 typ2)    = reduce (reduce [] env typ2 : stck) env typ1 -- push argument onto stack
-       reduce []         env (ForAllTy var typ)   = ForAllTy var $ reduce [] env typ
-       reduce (arg:stck) env (ForAllTy var typ)   = reduce stck ((var,arg) : env) typ           -- bind argument from stack to var
-#if __GLASGOW_HASKELL__ > 704
-       reduce _         _ t@(LitTy _)   =  t
-#endif
-       reduce _          env (FunTy typ1 typ2)    = 
-         let rtyp1 = reduce [] env typ1
-             rtyp2 = reduce [] env typ2
-         in  case typ1 of
-               -- remove class constraints without free variables to prevent things like (Ord Char => Char) 
-#if __GLASGOW_HASKELL__ < 704       
-               PredTy _         | isEmptyVarSet (tyVarsOfType rtyp1)                       -> rtyp2
-#else
-               TyConApp tycon _ | isClassTyCon tycon && isEmptyVarSet (tyVarsOfType rtyp1) -> rtyp2      
-#endif
-               _                                                                           -> FunTy rtyp1 rtyp2 
-#if __GLASGOW_HASKELL__ < 704       
-       -- before ghc 7.4, constraints were encoded with a PredTy constructor
-       reduce _ env (PredTy pt) = PredTy $ reducePredType pt
-        where reducePredType (ClassP c ts)  = ClassP c $ map (reduce [] env) ts
-              reducePredType (IParam i t)   = IParam i (reduce [] env t)
-              reducePredType (EqPred t1 t2) = EqPred (reduce [] env t1) (reduce [] env t2)
-
-#if __GLASGOW_HASKELL__ < 702 
-
--- before ghc 7.2, tyVarsOfType was not defined. The code below comes from the ghc-7.2.2 version of TypeRep.hs.
-tyVarsOfType :: Type -> VarSet
--- ^ NB: for type synonyms tyVarsOfType does /not/ expand the synonym
-tyVarsOfType (TyVarTy v)         = unitVarSet v
-tyVarsOfType (TyConApp _ tys)    = tyVarsOfTypes tys
-tyVarsOfType (PredTy sty)        = varsOfPred tyVarsOfType sty
-tyVarsOfType (FunTy arg res)     = tyVarsOfType arg `unionVarSet` tyVarsOfType res
-tyVarsOfType (AppTy fun arg)     = tyVarsOfType fun `unionVarSet` tyVarsOfType arg
-tyVarsOfType (ForAllTy tyvar ty) = delVarSet (tyVarsOfType ty) tyvar
-
-tyVarsOfTypes :: [Type] -> TyVarSet
-tyVarsOfTypes tys = foldr (unionVarSet . tyVarsOfType) emptyVarSet tys
-
-varsOfPred :: (Type -> VarSet) -> PredType -> VarSet
-varsOfPred f (IParam _ ty)    = f ty
-varsOfPred f (ClassP _ tys)   = foldr (unionVarSet . f) emptyVarSet tys
-varsOfPred f (EqPred ty1 ty2) = f ty1 `unionVarSet` f ty2
-#endif    
-#endif
+-- | resolve the ident in an expression
+identOfExpr :: HsExpr Var -> Maybe Var
+identOfExpr (HsWrap _ (HsVar ident)) = Just ident
+identOfExpr (HsWrap _ wr1) =identOfExpr wr1
+-- All other search results produce no ident information
+identOfExpr _ = Nothing

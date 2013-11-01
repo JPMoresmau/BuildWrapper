@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP, OverloadedStrings, TypeSynonymInstances,StandaloneDeriving,DeriveDataTypeable,ScopedTypeVariables, MultiParamTypeClasses, PatternGuards, NamedFieldPuns  #-}
+{-# LANGUAGE CPP, OverloadedStrings, TypeSynonymInstances,StandaloneDeriving,DeriveDataTypeable,ScopedTypeVariables, MultiParamTypeClasses, PatternGuards, NamedFieldPuns, TupleSections, KindSignatures  #-}
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.GHC
@@ -59,7 +59,7 @@ import System.FilePath
 
 import qualified MonadUtils as GMU
 import Name (isTyVarName,isDataConName,isVarName,isTyConName)
-import Var (varType)
+import Var (varType, Var)
 import PprTyThing (pprTypeForUser)
 import Control.Monad (when, liftM, unless)
 import qualified Data.Vector as V (foldr)
@@ -78,6 +78,10 @@ import Data.Time.Calendar (Day(ModifiedJulianDay))
 import Control.Exception (SomeException)
 import Debugger (showTerm)
 import Exception (gtry)
+import qualified CoreUtils as CoreUtils (exprType)
+import Control.Applicative ((<$>))
+import Desugar (deSugarExpr)
+import TcRnTypes (tcg_rdr_env, tcg_type_env)
 
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
@@ -120,7 +124,8 @@ withJSONAST f fp base_dir modul options=do
                                 Nothing-> return Nothing
         where gen tc=do
                 df<-getSessionDynFlags
-                return $ generateGHCInfo df tc 
+                env<-getSession
+                GMU.liftIO $ generateGHCInfo df env tc 
 
 -- | the main method loading the source contents into GHC
 withASTNotes ::  GHCApplyFunction a -- ^ the final action to perform on the result
@@ -270,8 +275,9 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
 #endif                         
                 let fullfp=ff fp
                 opts<-getSessionDynFlags
+                env <- getSession
                 -- GMU.liftIO $ putStrLn ("writing " ++ fullfp)
-                GMU.liftIO $ storeGHCInfo opts fullfp (dm_typechecked_module l)
+                GMU.liftIO $ storeGHCInfo opts env fullfp (dm_typechecked_module l)
                 --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
                 f2 fp $ dm_typechecked_module l                
         
@@ -1114,6 +1120,9 @@ instance Monoid (Bag a) where
   mempty = emptyBag
   mappend = unionBags
   mconcat = unionManyBags        
+  
+
+  
         
 start, end :: SrcSpan -> (Int,Int)   
 #if __GLASGOW_HASKELL__ < 702   
@@ -1265,14 +1274,15 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                 clean _ tm=do
                         let (_,imps,_,_)=fromJust $ tm_renamed_source tm
                         df <- getSessionDynFlags
+                        env<- getSession
                         let modu=T.pack $ showSD True df $ ppr $ moduleName $ ms_mod $ pm_mod_summary $ tm_parsed_module tm
-                        let (Array vs)= generateGHCInfo df tm
+                        (Array vs)<- GMU.liftIO $ generateGHCInfo df env tm
                         impMaps<-mapM ghcImportMap imps
                         -- let impMap=DM.unions impMaps
                         let implicit=DS.fromList $ concatMap (maybe [] snd . (DM.lookup "")) impMaps
                         let allImps=concatMap DM.assocs impMaps
                         -- GMU.liftIO $ putStrLn $ show $ map (\(n,(_,ns))->(n,ns)) allImps
-                        -- GMU.liftIO $ print implicit
+                        GMU.liftIO $ print vs
                         let usgMap=V.foldr ghcValToUsgMap DM.empty vs
                         let usgMapWithoutMe=DM.delete modu usgMap
                         -- GMU.liftIO $ print usgMapWithoutMe
@@ -1296,7 +1306,7 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                                 =let
                                         mm=DM.lookup mo um
                                         isType=ht=="t"
-                                        isConstructor=not isType && isUpper (T.head n) && isJust mst
+                                        isConstructor=not isType && isUpper (T.head n) && isJust mst && Null /= fromJust mst
                                         key=if isConstructor
                                                 then let
                                                         Just (String t)=mst
