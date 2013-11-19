@@ -635,7 +635,12 @@ ghctokensArbitrary' base_dir contents= do
         let sb=stringToStringBuffer contents
 #endif
 
-        dflags1 <- getSessionDynFlags
+        flg' <- getSessionDynFlags
+#if __GLASGOW_HASKELL__ >= 700
+        let dflags1 = List.foldl' xopt_set flg' lexerFlags
+#else
+        let dflags1 = List.foldl' dopt_set flg' lexerFlags
+#endif        
         let prTS = lexTokenStreamH sb lexLoc dflags1
         case prTS of
                 POk _ toks      -> do
