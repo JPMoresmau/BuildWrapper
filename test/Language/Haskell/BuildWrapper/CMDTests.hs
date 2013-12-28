@@ -285,7 +285,7 @@ test_ConfigureWarnings  = do
         assertBool bool1
         assertEqual 1 (length ns1)
         let (nsWarning1:[])=ns1
-        assertEqual  (BWNote BWWarning "Unknown fields: field1 (line 5)\nFields allowed in this section:\nname, version, cabal-version, build-type, license, license-file,\ncopyright, maintainer, build-depends, stability, homepage,\npackage-url, bug-reports, synopsis, description, category, author,\ntested-with, data-files, data-dir, extra-source-files,\nextra-tmp-files\n" (mkEmptySpan cfn 5 1)) nsWarning1
+        assertEqual  (BWNote BWWarning "Unknown fields: field1 (line 5)\nFields allowed in this section:\nname, version, cabal-version, build-type, license, license-file,\ncopyright, maintainer, build-depends, stability, homepage,\npackage-url, bug-reports, synopsis, description, category, author,\ntested-with, data-files, data-dir, extra-source-files,\nextra-tmp-files, extra-doc-files\n" (mkEmptySpan cfn 5 1)) nsWarning1
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "build-type:     Simple",

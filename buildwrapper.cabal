@@ -1,5 +1,5 @@
 name:           buildwrapper
-version:        0.7.7
+version:        0.8.0
 cabal-version:  >= 1.8
 build-type:     Simple
 license:        BSD3
@@ -24,6 +24,7 @@ library
                    mtl,
                    directory,
                    Cabal,
+                   dynamic-cabal >=0.2 && <0.3,
                    process,
                    regex-tdfa,
                    ghc,
@@ -67,6 +68,7 @@ executable buildwrapper
                    cmdargs,
                    filepath,
                    Cabal,
+                   dynamic-cabal >=0.2 && <0.3,
                    directory,
                    mtl,
                    ghc,
@@ -100,6 +102,7 @@ test-suite buildwrapper-test
                    filepath,
                    directory,
                    Cabal,
+                   dynamic-cabal,
                    old-time,
                    aeson >=0.4,
                    text,

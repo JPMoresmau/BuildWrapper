@@ -22,25 +22,15 @@ import Data.Ord (comparing)
 import Data.List
 import Data.Maybe
 
-#if MIN_VERSION_Cabal(1,15,0)   
-import Data.Version (parseVersion)
-import Text.ParserCombinators.ReadP(readP_to_S)
-#endif
-
 import qualified Data.Map as DM
 import qualified Data.Set as DS
 
 import Exception (ghandle)
 
 import Distribution.ModuleName
-import Distribution.PackageDescription ( otherModules,library,executables,testSuites,Library,hsSourceDirs,libBuildInfo,Executable(..),exeName,modulePath,buildInfo,TestSuite(..),testName,TestSuiteInterface(..),testInterface,testBuildInfo,BuildInfo,cppOptions,defaultExtensions,otherExtensions,oldExtensions )
-import Distribution.Simple.GHC
-#if MIN_VERSION_Cabal(1,15,0)   
-import Distribution.Simple.Program.GHC
-#endif
-import Distribution.Simple.LocalBuildInfo
-import Distribution.Simple.Compiler(OptimisationLevel(..))
+
 import qualified Distribution.PackageDescription as PD 
+import qualified Distribution.PackageDescription.Parse as PD 
 import Distribution.Package
 import Distribution.InstalledPackageInfo as IPI
 import Distribution.Version
@@ -56,6 +46,9 @@ import System.Exit
 import System.FilePath
 import System.Process
 import Data.Functor.Identity (runIdentity)
+
+
+import qualified Distribution.Client.Dynamic as DCD
 
 getCabalLibraryVersion :: String
 getCabalLibraryVersion = VERSION_Cabal
@@ -112,7 +105,7 @@ cabalBuild' reRun output srcOrTgt= do
                         cd<-getCurrentDirectory
                         setCurrentDirectory (takeDirectory cf)
                         (ex,out,err)<-readProcessWithExitCode cp args ""
-                        -- putStrLn err
+                        putStrLn err
                         if isInfixOf "cannot satisfy -package-id" err ||  isInfixOf "re-run the 'configure'" err
                                 then 
                                         return Nothing
@@ -133,9 +126,13 @@ cabalBuild' reRun output srcOrTgt= do
                         else return (BuildResult False [],n)
                 Just (Just (r,n2,fps)) -> return (BuildResult r fps, n ++ n2)
 
+-- | the file where we save the targets
+targetFile :: String
+targetFile="dynamic_targets"
+
 -- | run cabal configure
 cabalConfigure :: WhichCabal -- ^ use original cabal or temp cabal file
-        -> BuildWrapper (OpResult (Maybe LocalBuildInfo)) -- ^ return the build info on success, or Nothing on failure
+        -> BuildWrapper (OpResult (Maybe [DCD.Target])) -- ^ return the build info on success, or Nothing on failure
 cabalConfigure srcOrTgt= do
         cf<-getCabalFile srcOrTgt
         cp<-gets cabalPath
@@ -168,8 +165,13 @@ cabalConfigure srcOrTgt= do
                                 ExitSuccess  -> if any isBWNoteError msgs 
                                         then return (Nothing,msgs)
                                         else do 
-                                                lbi<-DSC.getPersistBuildConfig dist_dir
-                                                return (Just lbi,msgs)
+                                                --lbi<-DSC.getPersistBuildConfig dist_dir
+                                                let setup_config = DSC.localBuildInfoFile dist_dir
+                                                tgs <- DCD.runQuery (DCD.on DCD.localPkgDesc DCD.targets) setup_config
+                                                tgs'<- setOptions dist_dir tgs
+                                                let tgsF=dist_dir </> targetFile
+                                                Prelude.writeFile tgsF $ show tgs'
+                                                return (Just tgs',msgs)
                                 ExitFailure ec -> if null msgs
                                                 then return (Nothing,[BWNote BWError ("Cabal configure returned error code " ++ show ec) (mkEmptySpan cf 1 1)])   
                                                 else return (Nothing, msgs)
@@ -187,36 +189,45 @@ getCabalFile Source= gets cabalFile
 getCabalFile Target= fmap takeFileName (gets cabalFile)
                          >>=getTargetPath
 
+getPackageName :: BuildWrapper String
+getPackageName = do
+        cf<-gets cabalFile
+        gpd<-liftIO $ PD.readPackageDescription V.silent cf
+        return $ display $ packageId $ PD.packageDescription gpd
+
 -- | get Cabal build info, running configure if needed
 cabalInit :: WhichCabal  -- ^ use original cabal or temp cabal file
-        -> BuildWrapper (OpResult (Maybe LocalBuildInfo))
+        -> BuildWrapper (OpResult (Maybe [DCD.Target]))
 cabalInit srcOrTgt= do
    cabal_file<-getCabalFile srcOrTgt
    dist_dir<-getDistDir
-   let setup_config = DSC.localBuildInfoFile dist_dir
-   conf'd <- liftIO $ doesFileExist setup_config
+   -- let setup_config = DSC.localBuildInfoFile dist_dir
+   let tgtF=dist_dir </> targetFile
+   conf'd <- liftIO $ doesFileExist tgtF
    if not conf'd 
         then do
                 liftIO $ putStrLn "configuring because setup_config not present"
                 cabalConfigure srcOrTgt
         else do
              cabal_time <- liftIO $ getModificationTime cabal_file
-             conf_time <- liftIO $ getModificationTime setup_config
+             conf_time <- liftIO $ getModificationTime tgtF
              if cabal_time > conf_time 
                 then do
                         liftIO $ putStrLn "configuring because setup_config too old"
                         cabalConfigure srcOrTgt
                 else do
-                        mb_lbi <- liftIO $ DSC.maybeGetPersistBuildConfig dist_dir
-                        case mb_lbi of
-                          Nothing -> do
+                        tgs <-liftM read $ liftIO $ Prelude.readFile tgtF
+                        -- tgs <- liftIO $ DCD.runQuery (DCD.on DCD.localPkgDesc DCD.targets) setup_config
+                        --mb_lbi <- liftIO $ DSC.maybeGetPersistBuildConfig dist_dir
+                        case tgs of
+                          [] -> do
                             liftIO $ putStrLn "configuring because persist build config not present"
                             cabalConfigure srcOrTgt
-                          Just _lbi -> return (Just _lbi, [])
+                          _ -> return (Just tgs, [])
 
 -- | run a action with the cabal build info
 withCabal :: WhichCabal  -- ^ use original cabal or temp cabal file
-        -> (LocalBuildInfo -> BuildWrapper a) -- ^ action to run if we get a build info
+        -> ([DCD.Target] -> BuildWrapper a) -- ^ action to run if we get a build info
         -> BuildWrapper (OpResult (Maybe a))  -- ^ the result of the action, or Nothing if we could get Cabal info
 withCabal srcOrTgt f=do
         (mlbi,notes)<-cabalInit srcOrTgt
@@ -374,8 +385,7 @@ getBuiltPath line=let
           
 -- | the cabal build info for a specific component
 data CabalBuildInfo=CabalBuildInfo {
-        cbiBuildInfo::BuildInfo -- ^ the build info
-        ,cbiComponentBuildInfo :: ComponentLocalBuildInfo -- ^ the component local build info
+        cbiTarget :: DCD.Target -- ^ the target
         ,cbiBuildFolder::FilePath -- ^ the folder to build that component into
         ,cbiIsLibrary::Bool -- ^ is the component the library
         ,cbiModulePaths::[(Maybe ModuleName,FilePath)]  -- ^ the module name and corresponding source file for each contained Haskell module
@@ -409,7 +419,7 @@ onModulePaths f =runIdentity . onModulePathsM (return . f)
 -- if a source file is in several component, get the first one             
 getBuildInfo ::  FilePath  -- ^ the source file
         -> Maybe String -- ^ the cabal component to use, or Nothing if not specified
-        -> BuildWrapper (OpResult (Maybe (LocalBuildInfo,CabalBuildInfo)))
+        -> BuildWrapper (OpResult (Maybe ([DCD.Target],CabalBuildInfo)))
 getBuildInfo fp mccn=do
         case mccn of
                 Nothing -> do
@@ -443,80 +453,121 @@ getBuildInfo fp mccn=do
              getComp (Just ccn) fps=
                 return $ filter (\cbi->cabalComponentName (cbiComponent cbi) == ccn) fps
  
+
+setOptions :: FilePath -> [DCD.Target] -> IO([DCD.Target] )
+setOptions dist_dir tgs=do
+  let setup_config = DSC.localBuildInfoFile dist_dir
+  cv<-DCD.getCabalVersion setup_config
+  let optStr=if cv>=Version [1,15,0] []
+               then "       let opts=renderGhcOptions ((fst $ head $ readP_to_S  parseVersion  \""++VERSION_ghc++"\") :: Version) $ componentGhcOptions V.silent lbi{withOptimization=NoOptimisation} b clbi fp"
+               else "       let opts=ghcOptions lbi{withOptimization=NoOptimisation} b clbi fp"
+  let withStr=if cv>=Version [1,17,0] []
+                then "withAllComponentsInBuildOrder"
+                else "withComponentsLBI"
+  let bd=dist_dir </> "build"
+  let fmp=foldr (\t m->DM.insert (DCD.targetName t) (getBuildDir bd t) m) DM.empty tgs
+  let src= unlines [
+                "module DynamicCabalQuery where"
+                ,"import Distribution.PackageDescription"
+                ,"import Distribution.Simple.LocalBuildInfo"
+                ,"import Data.IORef"
+                ,"import qualified Data.Map as DM"
+                ,"import qualified Distribution.Verbosity as V"
+                ,"import Data.Version (parseVersion)"
+                ,"import Text.ParserCombinators.ReadP(readP_to_S)"
+                ,"import Distribution.Simple.Program.GHC"
+                ,"import Distribution.Simple.GHC"
+                ,"import Distribution.Version"
+                ,"import Control.Monad"
+                ,"import Distribution.Simple.Compiler(OptimisationLevel(..))"
+                ,"import Data.Maybe"
+                ,""
+                ,"result :: IO (DM.Map String [String])"
+                ,"result=do"
+                ,"lbi<-liftM (read . Prelude.unlines . drop 1 . lines) $ Prelude.readFile \""++setup_config ++"\""
+                ,"let pkg=localPkgDescr lbi"
+                ,"r<-newIORef DM.empty"
+                ,"let fmp=DM."++ show fmp 
+                ,withStr++" pkg lbi (\\c clbi->do"
+                ,"       let b=componentBuildInfo c"
+                ,"       let n=foldComponent (const \"\") exeName testName benchmarkName c"
+                ,"       let fp=fromJust $ DM.lookup n fmp"
+                , optStr
+                ,"       modifyIORef r (DM.insert n opts)"
+                ,"       return ()"
+                ,"       )"
+                ,"readIORef r" ]
+  -- print src
+  m::DM.Map String [String]<-liftIO $ DCD.runRawQuery src setup_config
+  return $ map (set m)tgs
+  where
+        set mOpts t=case DM.lookup (DCD.targetName t) mOpts of
+                        Just opts->t{DCD.ghcOptions=opts}
+                        _->t
+
+ 
 -- | get GHC options for a file            
-fileGhcOptions :: (LocalBuildInfo,CabalBuildInfo) -- ^ the cabal info
+fileGhcOptions :: CabalBuildInfo -- ^ the cabal info
         -> BuildWrapper [String] -- ^ the module name and the options to pass GHC
-fileGhcOptions (lbi,CabalBuildInfo bi clbi fp isLib _ _)=do
+fileGhcOptions (CabalBuildInfo tgt fp isLib _ _)=do
         dist_dir<-getDistDir
         let inplace=dist_dir </> "package.conf.inplace"
         inplaceExist<-liftIO $ doesFileExist inplace
-#if MIN_VERSION_Cabal(1,15,0)   
-        v<-cabalV
-        let opts l b c f=renderGhcOptions ((fst $ head $ readP_to_S  parseVersion  VERSION_ghc) :: Version) $ componentGhcOptions v l b c f 
-#else
-        let opts=ghcOptions
-#endif        
+        n<-getPackageName
         let pkg
                   | isLib =
-                    ["-package-name", display $ packageId $ localPkgDescr lbi]
+                    ["-package-name",n]
                   | inplaceExist = ["-package-conf", inplace]
                   | otherwise = []
-        return (pkg ++ opts (lbi{withOptimization=NoOptimisation}) bi clbi fp)
- 
-
+        return (pkg ++ DCD.ghcOptions tgt)
                 
 -- | get CPP options for a file
 fileCppOptions :: CabalBuildInfo -- ^ the cabal info
         -> [String] -- ^ the list of CPP options
-fileCppOptions cbi=cppOptions $ cbiBuildInfo cbi      
+fileCppOptions cbi=DCD.cppOptions $ cbiTarget cbi      
 
 -- | get the cabal extensions
 cabalExtensions :: CabalBuildInfo -- ^ the cabal info
         -> (ModuleName,[String]) -- ^ the module name and cabal extensions
-cabalExtensions CabalBuildInfo{cbiBuildInfo=bi,cbiModulePaths=ls}=(fromJust $ fst $ head ls,map show (otherExtensions bi ++ defaultExtensions bi ++ oldExtensions bi))      
+cabalExtensions CabalBuildInfo{cbiTarget=bi,cbiModulePaths=ls}=(fromJust $ fst $ head ls,DCD.extensions bi)      
        
 -- | get the source directory from a build info
-getSourceDirs :: BuildInfo -- ^ the build info
+getSourceDirs :: DCD.Target -- ^ the build info
         -> [FilePath]   -- ^ the source paths, guaranteed non null
 getSourceDirs bi=let
-        hsd=hsSourceDirs bi
+        hsd=DCD.sourceDirs bi
         in case hsd of
                 [] -> ["."]
                 _ -> hsd 
        
 -- | get all components, referencing all the files found in the source folders 
-getAllFiles :: LocalBuildInfo -- ^ the build info
+getAllFiles :: [DCD.Target] -- ^ the build info
         -> BuildWrapper [CabalBuildInfo]
-getAllFiles lbi= do
-                let pd=localPkgDescr lbi
-                let libs=maybe [] extractFromLib $ library pd
-                let exes=map extractFromExe $ executables pd
-                let tests=map extractFromTest $ testSuites pd
-                cbis<-mapM (\(a,b,c,isLib,d,cc)->do
+getAllFiles tgs= do
+                dist_dir<-getDistDir
+                let bd=dist_dir </> "build"
+                let libs=map (extractFromLib bd) $ filter  DCD.isLibrary tgs
+                let exes=map (extractFromExe bd) $ filter DCD.isExecutable tgs
+                let tests=map (extractFromTest bd) $ filter DCD.isTest tgs
+                cbis<-mapM (\(a,c,isLib,d,cc)->do
                         mf<-copyAll d
-                        return (CabalBuildInfo a b c isLib mf cc)) (libs ++ exes ++ tests)
-                cbis2<-getReferencedFiles lbi
+                        return (CabalBuildInfo a c isLib mf cc)) (libs ++ exes ++ tests)
+                cbis2<-getReferencedFiles tgs
                 return $ zipWith (\c1@CabalBuildInfo{cbiModulePaths=cb1} CabalBuildInfo{cbiModulePaths=cb2}->c1{cbiModulePaths=nubOrd $ cb1++cb2}) cbis cbis2
                 -- return cbis
         where 
-        extractFromLib :: Library -> [(BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath],CabalComponent)]
-        extractFromLib l=let
-                lib=libBuildInfo l
-                in [(lib, fromJustDebug "extractFromLibAll" $ libraryConfig lbi,buildDir lbi, True, getSourceDirs lib,cabalComponentFromLibrary l)]
-        extractFromExe :: Executable -> (BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath],CabalComponent)
-        extractFromExe e@Executable{exeName=exeName'}=let
-                ebi=buildInfo e
-                targetDir = buildDir lbi </> exeName'
-                exeDir    = targetDir </> (exeName' ++ "-tmp")
-                hsd=getSourceDirs ebi
-                in (ebi,fromJustDebug "extractFromExeAll" $ lookup exeName' $ executableConfigs lbi,exeDir,False, hsd,cabalComponentFromExecutable e) 
-        extractFromTest :: TestSuite -> (BuildInfo,ComponentLocalBuildInfo,FilePath,Bool,[FilePath],CabalComponent)
-        extractFromTest t@TestSuite {testName=testName'} =let
-                tbi=testBuildInfo t
-                targetDir = buildDir lbi </> testName'
-                testDir    = targetDir </> (testName' ++ "-tmp")
-                hsd=getSourceDirs tbi
-                in (tbi,fromJustDebug "extractFromTestAll" $ lookup testName' $ testSuiteConfigs lbi,testDir,False,hsd,cabalComponentFromTestSuite t)
+        extractFromLib :: FilePath-> DCD.Target -> (DCD.Target,FilePath,Bool,[FilePath],CabalComponent)
+        extractFromLib bd l=(l,bd, True, getSourceDirs l,cabalComponentFromLibrary l)
+        extractFromExe :: FilePath-> DCD.Target -> (DCD.Target,FilePath,Bool,[FilePath],CabalComponent)
+        extractFromExe bd e=let
+                exeDir    = getBuildDir bd e
+                hsd=getSourceDirs e
+                in (e,exeDir,False, hsd,cabalComponentFromExecutable e) 
+        extractFromTest :: FilePath-> DCD.Target -> (DCD.Target,FilePath,Bool,[FilePath],CabalComponent)
+        extractFromTest bd t=let
+                testDir    = getBuildDir bd t
+                hsd=getSourceDirs t
+                in (t,testDir,False,hsd,cabalComponentFromTestSuite t)
         copyAll :: [FilePath] -> BuildWrapper [(Maybe ModuleName,FilePath)]
         copyAll fps= do 
                   allF<-mapM copyAll' fps
@@ -536,13 +587,20 @@ getAllFiles lbi= do
                 return $ map (\f->(simpleParse $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) notMyself
                 -- return $ map (\(x,y)->(fromJust x,y)) $ filter (isJust . fst) $ map (\f->(simpleParse $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) notMyself
  
+getBuildDir :: FilePath ->  DCD.Target -> FilePath
+getBuildDir bd t=case DCD.name t of
+                DCD.Library _-> bd
+                DCD.Executable n _->bd </> n </> (n ++ "-tmp")
+                DCD.TestSuite n _->bd </> n </> (n ++ "-tmp")
+ 
 -- | get all components, referencing only the files explicitely indicated in the cabal file
-getReferencedFiles :: LocalBuildInfo -> BuildWrapper [CabalBuildInfo]
-getReferencedFiles lbi= do
-                let pd=localPkgDescr lbi
-                let libs=maybe [] extractFromLib $ library pd
-                let exes=map extractFromExe $ executables pd
-                let tests=map extractFromTest $ testSuites pd
+getReferencedFiles :: [DCD.Target] -> BuildWrapper [CabalBuildInfo]
+getReferencedFiles tgs= do
+                dist_dir<-getDistDir
+                let bd=dist_dir </> "build"
+                let libs=map (extractFromLib bd) $ filter DCD.isLibrary tgs
+                let exes=map (extractFromExe bd) $ filter DCD.isExecutable tgs
+                let tests=map (extractFromTest bd) $ filter DCD.isTest tgs
                 let cbis=libs ++ exes ++ tests
                 mapM (\c1@CabalBuildInfo{cbiModulePaths=cb1}->do
                         cb2<-filterM (\(_,f)->do
@@ -550,34 +608,31 @@ getReferencedFiles lbi= do
                                 liftIO $ doesFileExist fs) cb1
                         return c1{cbiModulePaths=cb2}) cbis
         where 
-        extractFromLib :: Library -> [CabalBuildInfo]
-        extractFromLib l=let
-                lib=libBuildInfo l
-                modules=PD.exposedModules l ++ otherModules lib
-                in [CabalBuildInfo lib (fromJustDebug "extractFromLibRef" $ libraryConfig lbi)
-                        (buildDir lbi) True (copyModules modules (getSourceDirs lib)) (cabalComponentFromLibrary l)]
-        extractFromExe :: Executable ->CabalBuildInfo
-        extractFromExe e@Executable{exeName=exeName'}=let
-                ebi=buildInfo e
-                targetDir = buildDir lbi </> exeName'
-                exeDir    = targetDir </> (exeName' ++ "-tmp")
-                modules= (otherModules ebi)
-                hsd=getSourceDirs ebi
-                in CabalBuildInfo ebi (fromJustDebug "extractFromExeRef" $ lookup exeName' $ executableConfigs lbi) exeDir False (copyMain (modulePath e) hsd ++ copyModules modules hsd) (cabalComponentFromExecutable e) 
-        extractFromTest :: TestSuite -> CabalBuildInfo
-        extractFromTest t@TestSuite {testName=testName'} =let
-                tbi=testBuildInfo t
-                targetDir = buildDir lbi </> testName'
-                testDir    = targetDir </> (testName' ++ "-tmp")
-                modules= (otherModules tbi )
-                hsd=getSourceDirs tbi
-                extras=case testInterface t of
-                    (TestSuiteExeV10 _ mp) -> copyMain mp hsd
-                    (TestSuiteLibV09 _ mn) -> copyModules [mn] hsd
+        extractFromLib :: FilePath -> DCD.Target -> CabalBuildInfo
+        extractFromLib bd l=let
+                DCD.Library mods=DCD.name l
+                modules=mods ++ DCD.otherModules l
+                in CabalBuildInfo l
+                        bd True (copyModules modules (getSourceDirs l)) (cabalComponentFromLibrary l)
+        extractFromExe :: FilePath -> DCD.Target ->CabalBuildInfo
+        extractFromExe bd e=let
+                DCD.Executable _ mp=DCD.name e
+                exeDir = getBuildDir bd e
+                modules= DCD.otherModules e
+                hsd=getSourceDirs e
+                in CabalBuildInfo e exeDir False (copyMain mp hsd ++ copyModules modules hsd) (cabalComponentFromExecutable e) 
+        extractFromTest :: FilePath -> DCD.Target -> CabalBuildInfo
+        extractFromTest bd t =let
+                DCD.TestSuite _ mmp=DCD.name t
+                testDir = getBuildDir bd t
+                modules= DCD.otherModules t
+                hsd=getSourceDirs t
+                extras=case mmp of
+                    Just mp -> copyMain mp hsd
                     _ -> []
-                in CabalBuildInfo tbi (fromJustDebug ("extractFromTestRef:"++testName' ++ show (testSuiteConfigs lbi)) $ lookup testName' $ testSuiteConfigs lbi) testDir False (extras ++ copyModules modules hsd) (cabalComponentFromTestSuite t)
-        copyModules :: [ModuleName] -> [FilePath] -> [(Maybe ModuleName,FilePath)]
-        copyModules mods=copyFiles (concatMap (\m->[toFilePath m <.> "hs", toFilePath m <.> "lhs"]) mods)
+                in CabalBuildInfo t testDir False (extras ++ copyModules modules hsd) (cabalComponentFromTestSuite t)
+        copyModules :: [String] -> [FilePath] -> [(Maybe ModuleName,FilePath)]
+        copyModules mods=copyFiles (concatMap (\m->[toFilePath m <.> "hs", toFilePath m <.> "lhs"]) $ mapMaybe stringToModuleName mods)
         copyFiles :: [FilePath] -> [FilePath] -> [(Maybe ModuleName,FilePath)]
         copyFiles mods dirs=let
                 rmods=filter (isJust . snd ) $ map (\x->(x,simpleParse $ fileToModule x)) mods
@@ -596,14 +651,14 @@ moduleToString = intercalate "." . components
 -- | get all components in the Cabal file
 cabalComponents :: BuildWrapper (OpResult [CabalComponent])
 cabalComponents = do
-     (rs,ns)<-withCabal Source (return . cabalComponentsFromDescription . localPkgDescr)
+     (rs,ns)<-withCabal Source (return . cabalComponentsFromDescription)
      return (fromMaybe [] rs,ns)   
 
 -- | get all the dependencies in the cabal file
 cabalDependencies :: Maybe FilePath   -- ^ the path to the cabal-dev sandbox if any
         -> BuildWrapper (OpResult [(FilePath,[CabalPackage])]) -- ^ the result is an array of tuples: the path to the package database, the list of packages in that db that the Cabal file references
 cabalDependencies msandbox= do
-     (rs,ns)<-withCabal Source (\lbi-> liftIO $
+     (rs,ns)<-withCabal Source (\tgs-> liftIO $
           ghandle
             (\ (e :: IOError) ->
                do print e
@@ -611,17 +666,17 @@ cabalDependencies msandbox= do
             $
             do 
                pkgs <- liftIO $ getPkgInfos msandbox
-               --let m=cabalComponentsDependencies (localPkgDescr lbi)
-               --print m
+               --let m=cabalComponentsDependencies tgs
+               --print msandbox
                --let deps=PD.buildDepends (localPkgDescr lbi)
                --print deps
                --liftIO $ mapM_ (\d->print $ (show d) ++ (show $ DM.lookup (show $ simplifyDependency d) m)) deps
-               return $ dependencies (localPkgDescr lbi) pkgs
+               return $ dependencies tgs pkgs
             )
      return (fromMaybe [] rs,ns)
 
 -- | get all dependencies from the package description and the list of installed packages        
-dependencies :: PD.PackageDescription -- ^ the cabal description
+dependencies ::  [DCD.Target] -- ^ the cabal description
         -> [(FilePath,[InstalledPackageInfo])] -- ^ the installed packages, by package database location
         -> [(FilePath,[CabalPackage])] -- ^ the referenced packages, by package database location
 dependencies pd pkgs=let
@@ -643,7 +698,7 @@ dependencies pd pkgs=let
                                 Just l->sortBy (flip (comparing (pkgVersion . sourcePackageId . snd))) ((fp,i):l)
                         in DM.insert key newvals dm
                         ) m ipis
-                getDep :: DM.Map CabalComponent [Dependency] -> [(FilePath,InstalledPackageInfo)] -> [(FilePath,CabalPackage)] -> [(FilePath,CabalPackage)]
+                getDep :: DM.Map CabalComponent [(String, Maybe Version)] -> [(FilePath,InstalledPackageInfo)] -> [(FilePath,CabalPackage)] -> [(FilePath,CabalPackage)]
                 getDep _ [] acc= acc
                 getDep allC ((fp,InstalledPackageInfo{sourcePackageId=i,exposed=e,IPI.exposedModules=ems,IPI.hiddenModules=hms}):xs) acc= let
                         (s,m)=DM.foldrWithKey (splitMatching i) (DS.empty,DM.empty) allC
@@ -654,7 +709,7 @@ dependencies pd pkgs=let
                         mns=map display (ems++hms)
                         in getDep m xs ((fp,CabalPackage (display $ pkgName i) (display $ pkgVersion i) e cps mns): acc) -- build CabalPackage structure
                 splitMatching pkgId comp deps (s,m)=let
-                         (ds,_)=partition (\(Dependency n v)->(pkgName pkgId == n) && withinRange (pkgVersion pkgId) v) deps
+                         (ds,_)=partition (\(n,mv)->(pkgName pkgId == PackageName n) && isJust mv && (pkgVersion pkgId) == fromJust mv) deps
                          s'=if null ds 
                                 then s
                                 else DS.insert comp s
@@ -662,33 +717,44 @@ dependencies pd pkgs=let
                          in (s',m')        
               
 -- | get all components from the package description        
-cabalComponentsFromDescription :: PD.PackageDescription -- ^ the package description
+cabalComponentsFromDescription :: [DCD.Target] -- ^ the package description
         -> [CabalComponent]
-cabalComponentsFromDescription pd= [cabalComponentFromLibrary $ fromJust (PD.library pd)
-         | isJust (PD.library pd)] ++
-              map cabalComponentFromExecutable (PD.executables pd) ++
-                map cabalComponentFromTestSuite (PD.testSuites pd)
+cabalComponentsFromDescription = map cabalComponentFromTarget
              
-cabalComponentsDependencies :: PD.PackageDescription -- ^ the package description
-        -> DM.Map CabalComponent [Dependency]
-cabalComponentsDependencies pd=let
-        mLib=case  PD.library pd of
-                Nothing -> DM.empty
-                Just lib->DM.singleton (cabalComponentFromLibrary lib) (PD.targetBuildDepends $ PD.libBuildInfo lib)
-        mExe=DM.fromList $ map (\e->((cabalComponentFromExecutable e),(PD.targetBuildDepends $ PD.buildInfo e))) (PD.executables pd)
-        mTs=DM.fromList $ map (\ts->((cabalComponentFromTestSuite ts),(PD.targetBuildDepends $ PD.testBuildInfo ts))) (PD.testSuites pd)
-        in DM.unionWith (++) mTs $ DM.unionWith (++) mLib mExe
+cabalComponentsDependencies :: [DCD.Target] -- ^ the package description
+        -> DM.Map CabalComponent [(String, Maybe Version)]
+cabalComponentsDependencies tgs=foldr f DM.empty tgs
+        where 
+                f tg m=DM.insert (cabalComponentFromTarget tg) (DCD.dependencies tg) m
+--        let
+--        mLib=case  PD.library pd of
+--                Nothing -> DM.empty
+--                Just lib->DM.singleton (cabalComponentFromLibrary lib) (PD.targetBuildDepends $ PD.libBuildInfo lib)
+--        mExe=DM.fromList $ map (\e->((cabalComponentFromExecutable e),(PD.targetBuildDepends $ PD.buildInfo e))) (PD.executables pd)
+--        mTs=DM.fromList $ map (\ts->((cabalComponentFromTestSuite ts),(PD.targetBuildDepends $ PD.testBuildInfo ts))) (PD.testSuites pd)
+--        in DM.unionWith (++) mTs $ DM.unionWith (++) mLib mExe
         -- where mapDep cc bi=DM.fromList $ map (\x->(cc)) (PD.targetBuildDepends bi)
 
 
+cabalComponentFromTarget :: DCD.Target -> CabalComponent
+cabalComponentFromTarget t=let
+        b=DCD.buildable t
+        in case DCD.name t of
+                DCD.Library _->  CCLibrary b
+                DCD.Executable n _->CCExecutable n b
+                DCD.TestSuite n _->CCTestSuite n b
 
-cabalComponentFromLibrary :: Library -> CabalComponent
-cabalComponentFromLibrary =CCLibrary . PD.buildable . PD.libBuildInfo
+cabalComponentFromLibrary :: DCD.Target -> CabalComponent
+cabalComponentFromLibrary =CCLibrary . DCD.buildable 
 
-cabalComponentFromExecutable :: Executable -> CabalComponent
-cabalComponentFromExecutable e =CCExecutable (PD.exeName e) (PD.buildable $ PD.buildInfo e)
+cabalComponentFromExecutable :: DCD.Target -> CabalComponent
+cabalComponentFromExecutable e =let
+        DCD.Executable exeName' _=DCD.name e
+        in CCExecutable (exeName') (DCD.buildable e)
 
-cabalComponentFromTestSuite :: TestSuite -> CabalComponent
-cabalComponentFromTestSuite ts=CCTestSuite (PD.testName ts) (PD.buildable $ PD.testBuildInfo ts)
+cabalComponentFromTestSuite :: DCD.Target -> CabalComponent
+cabalComponentFromTestSuite ts=let
+        DCD.TestSuite testName' _=DCD.name ts
+        in CCTestSuite (testName') (DCD.buildable ts)
 
 

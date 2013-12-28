@@ -11,9 +11,6 @@
 -- API entry point, with all exposed methods
 module Language.Haskell.BuildWrapper.API where
 
-import Distribution.Simple.LocalBuildInfo (localPkgDescr)
-import Distribution.Package (packageId)
-import Distribution.Text (display)
 import Language.Haskell.BuildWrapper.Base
 import Language.Haskell.BuildWrapper.Cabal
 import qualified Language.Haskell.BuildWrapper.GHC as BwGHC
@@ -100,7 +97,7 @@ generateUsage returnAll ccn=
                 temp<-getFullTempDir
                 
                 let dir=takeDirectory cf
-                let pkg=T.pack $ display $ packageId $ localPkgDescr lbi
+                pkg<-liftM T.pack getPackageName
                 allMps<-mapM (\cbi->do
                         let 
                                 mps1=map (\(m,f)->(f,moduleToString $ fromJust m)) $ filter (isJust . fst) $ cbiModulePaths cbi
@@ -112,7 +109,7 @@ generateUsage returnAll ccn=
                                         ) $ filter (\(f,_)->fitForUsage f
                                                 )
                                                 mps1
-                        opts<-fileGhcOptions (lbi,cbi)    
+                        opts<-fileGhcOptions cbi    
                         modules<-liftIO $ do
                                 cd<-getCurrentDirectory
                                 setCurrentDirectory dir
@@ -334,7 +331,7 @@ getBuildFlags fp mccn=do
                         --liftIO $ print mcbi
                         ret<-case mcbi of
                                 Just cbi->do
-                                        opts2<-fileGhcOptions cbi
+                                        opts2<-fileGhcOptions $ snd cbi
                                         -- liftIO $ Prelude.print fp
                                         -- liftIO $ Prelude.print $ cbiModulePaths $ snd cbi
                                         -- liftIO $ Prelude.print opts2
