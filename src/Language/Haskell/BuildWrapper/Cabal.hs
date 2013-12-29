@@ -588,7 +588,7 @@ getAllFiles tgs= do
                 -- return $ map (\(x,y)->(fromJust x,y)) $ filter (isJust . fst) $ map (\f->(simpleParse $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) notMyself
  
 getBuildDir :: FilePath ->  DCD.Target -> FilePath
-getBuildDir bd t=case DCD.name t of
+getBuildDir bd t=case DCD.info t of
                 DCD.Library _-> bd
                 DCD.Executable n _->bd </> n </> (n ++ "-tmp")
                 DCD.TestSuite n _->bd </> n </> (n ++ "-tmp")
@@ -610,20 +610,20 @@ getReferencedFiles tgs= do
         where 
         extractFromLib :: FilePath -> DCD.Target -> CabalBuildInfo
         extractFromLib bd l=let
-                DCD.Library mods=DCD.name l
+                DCD.Library mods=DCD.info l
                 modules=mods ++ DCD.otherModules l
                 in CabalBuildInfo l
                         bd True (copyModules modules (getSourceDirs l)) (cabalComponentFromLibrary l)
         extractFromExe :: FilePath -> DCD.Target ->CabalBuildInfo
         extractFromExe bd e=let
-                DCD.Executable _ mp=DCD.name e
+                DCD.Executable _ mp=DCD.info e
                 exeDir = getBuildDir bd e
                 modules= DCD.otherModules e
                 hsd=getSourceDirs e
                 in CabalBuildInfo e exeDir False (copyMain mp hsd ++ copyModules modules hsd) (cabalComponentFromExecutable e) 
         extractFromTest :: FilePath -> DCD.Target -> CabalBuildInfo
         extractFromTest bd t =let
-                DCD.TestSuite _ mmp=DCD.name t
+                DCD.TestSuite _ mmp=DCD.info t
                 testDir = getBuildDir bd t
                 modules= DCD.otherModules t
                 hsd=getSourceDirs t
@@ -739,7 +739,7 @@ cabalComponentsDependencies tgs=foldr f DM.empty tgs
 cabalComponentFromTarget :: DCD.Target -> CabalComponent
 cabalComponentFromTarget t=let
         b=DCD.buildable t
-        in case DCD.name t of
+        in case DCD.info t of
                 DCD.Library _->  CCLibrary b
                 DCD.Executable n _->CCExecutable n b
                 DCD.TestSuite n _->CCTestSuite n b
@@ -749,12 +749,12 @@ cabalComponentFromLibrary =CCLibrary . DCD.buildable
 
 cabalComponentFromExecutable :: DCD.Target -> CabalComponent
 cabalComponentFromExecutable e =let
-        DCD.Executable exeName' _=DCD.name e
+        DCD.Executable exeName' _=DCD.info e
         in CCExecutable (exeName') (DCD.buildable e)
 
 cabalComponentFromTestSuite :: DCD.Target -> CabalComponent
 cabalComponentFromTestSuite ts=let
-        DCD.TestSuite testName' _=DCD.name ts
+        DCD.TestSuite testName' _=DCD.info ts
         in CCTestSuite (testName') (DCD.buildable ts)
 
 
