@@ -150,6 +150,7 @@ cabalConfigure srcOrTgt= do
                         "--verbose=" ++ show (fromEnum v),
                         "--user",
                         "--enable-tests",
+                        "--enable-benchmarks",
                         "--builddir="++dist_dir
                         ] 
                         ++ (if null uf then [] else ["--flags="++uf])
@@ -511,7 +512,7 @@ setOptions dist_dir tgs=do
 -- | get GHC options for a file            
 fileGhcOptions :: CabalBuildInfo -- ^ the cabal info
         -> BuildWrapper [String] -- ^ the module name and the options to pass GHC
-fileGhcOptions (CabalBuildInfo tgt fp isLib _ _)=do
+fileGhcOptions (CabalBuildInfo tgt _ isLib _ _)=do
         dist_dir<-getDistDir
         let inplace=dist_dir </> "package.conf.inplace"
         inplaceExist<-liftIO $ doesFileExist inplace
@@ -522,7 +523,7 @@ fileGhcOptions (CabalBuildInfo tgt fp isLib _ _)=do
                   | inplaceExist = ["-package-conf", inplace]
                   | otherwise = []
         return (pkg ++ DCD.ghcOptions tgt)
-                
+
 -- | get CPP options for a file
 fileCppOptions :: CabalBuildInfo -- ^ the cabal info
         -> [String] -- ^ the list of CPP options
@@ -551,9 +552,10 @@ getAllFiles tgs= do
                 let libs=map (extractFromLib bd) $ filter  DCD.isLibrary tgs
                 let exes=map (extractFromExe bd) $ filter DCD.isExecutable tgs
                 let tests=map (extractFromTest bd) $ filter DCD.isTest tgs
+                let benches=map (extractFromBench bd) $ filter DCD.isBench tgs
                 cbis<-mapM (\(a,c,isLib,d,cc)->do
                         mf<-copyAll d
-                        return (CabalBuildInfo a c isLib mf cc)) (libs ++ exes ++ tests)
+                        return (CabalBuildInfo a c isLib mf cc)) (libs ++ exes ++ tests ++benches)
                 cbis2<-getReferencedFiles tgs
                 return $ zipWith (\c1@CabalBuildInfo{cbiModulePaths=cb1} CabalBuildInfo{cbiModulePaths=cb2}->c1{cbiModulePaths=nubOrd $ cb1++cb2}) cbis cbis2
                 -- return cbis
@@ -570,6 +572,11 @@ getAllFiles tgs= do
                 testDir    = getBuildDir bd t
                 hsd=getSourceDirs t
                 in (t,testDir,False,hsd,cabalComponentFromTestSuite t)
+        extractFromBench :: FilePath-> DCD.Target -> (DCD.Target,FilePath,Bool,[FilePath],CabalComponent)
+        extractFromBench bd t=let
+                benchDir    = getBuildDir bd t
+                hsd=getSourceDirs t
+                in (t,benchDir,False,hsd,cabalComponentFromBenchmark t)
         copyAll :: [FilePath] -> BuildWrapper [(Maybe ModuleName,FilePath)]
         copyAll fps= do 
                   allF<-mapM copyAll' fps
@@ -594,6 +601,7 @@ getBuildDir bd t=case DCD.info t of
                 DCD.Library _-> bd
                 DCD.Executable n _->bd </> n </> (n ++ "-tmp")
                 DCD.TestSuite n _->bd </> n </> (n ++ "-tmp")
+                DCD.BenchSuite n _->bd </> n </> (n ++ "-tmp")
  
 -- | get all components, referencing only the files explicitely indicated in the cabal file
 getReferencedFiles :: [DCD.Target] -> BuildWrapper [CabalBuildInfo]
@@ -603,7 +611,8 @@ getReferencedFiles tgs= do
                 let libs=map (extractFromLib bd) $ filter DCD.isLibrary tgs
                 let exes=map (extractFromExe bd) $ filter DCD.isExecutable tgs
                 let tests=map (extractFromTest bd) $ filter DCD.isTest tgs
-                let cbis=libs ++ exes ++ tests
+                let benches=map (extractFromBench bd) $ filter DCD.isBench tgs
+                let cbis=libs ++ exes ++ tests ++ benches
                 mapM (\c1@CabalBuildInfo{cbiModulePaths=cb1}->do
                         cb2<-filterM (\(_,f)->do
                                 fs<-getFullSrc f
@@ -633,6 +642,17 @@ getReferencedFiles tgs= do
                     Just mp -> copyMain mp hsd
                     _ -> []
                 in CabalBuildInfo t testDir False (extras ++ copyModules modules hsd) (cabalComponentFromTestSuite t)
+        extractFromBench :: FilePath -> DCD.Target -> CabalBuildInfo
+        extractFromBench bd t =let
+                DCD.BenchSuite _ mmp=DCD.info t
+                benchDir = getBuildDir bd t
+                modules= DCD.otherModules t
+                hsd=getSourceDirs t
+                extras=case mmp of
+                    Just mp -> copyMain mp hsd
+                    _ -> []
+                in CabalBuildInfo t benchDir False (extras ++ copyModules modules hsd) (cabalComponentFromBenchmark t)
+        
         copyModules :: [String] -> [FilePath] -> [(Maybe ModuleName,FilePath)]
         copyModules mods=copyFiles (concatMap (\m->[toFilePath m <.> "hs", toFilePath m <.> "lhs"]) $ mapMaybe stringToModuleName mods)
         copyFiles :: [FilePath] -> [FilePath] -> [(Maybe ModuleName,FilePath)]
@@ -745,6 +765,7 @@ cabalComponentFromTarget t=let
                 DCD.Library _->  CCLibrary b
                 DCD.Executable n _->CCExecutable n b
                 DCD.TestSuite n _->CCTestSuite n b
+                DCD.BenchSuite n _->CCBenchmark n b
 
 cabalComponentFromLibrary :: DCD.Target -> CabalComponent
 cabalComponentFromLibrary =CCLibrary . DCD.buildable 
@@ -759,4 +780,7 @@ cabalComponentFromTestSuite ts=let
         DCD.TestSuite testName' _=DCD.info ts
         in CCTestSuite (testName') (DCD.buildable ts)
 
-
+cabalComponentFromBenchmark :: DCD.Target -> CabalComponent
+cabalComponentFromBenchmark ts=let
+        DCD.BenchSuite benchName' _=DCD.info ts
+        in CCBenchmark (benchName') (DCD.buildable ts)

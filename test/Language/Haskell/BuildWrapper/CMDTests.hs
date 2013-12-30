@@ -1571,6 +1571,54 @@ test_CabalComponents= do
         assertEqual (CCTestSuite "BWTest-test" False) ts2          
 
 
+test_CabalBenchmark  :: Assertion
+test_CabalBenchmark= do
+        let api=cabalAPI
+        root<-createTestProject
+        synchronize api root False
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+                "version:0.1",
+                "cabal-version:  >= 1.8",
+                "build-type:     Simple",
+                "",
+                "library",
+                "  hs-source-dirs:  src",
+                "  exposed-modules: A",
+                "  other-modules:  B.C",
+                "  build-depends:  base",
+                "",
+                "executable BWTest",
+                "  hs-source-dirs:  src",
+                "  main-is:         Main.hs",
+                "  other-modules:  B.D",
+                "  build-depends:  base",
+                "",
+                "test-suite BWTest-test",
+                "  type:            exitcode-stdio-1.0",
+                "  hs-source-dirs:  test",
+                "  main-is:         Main.hs",
+                "  other-modules:  TestA",
+                "  build-depends:  base",
+                "",
+                "benchmark BWTest-bench",
+                "  type:            exitcode-stdio-1.0",
+                "  hs-source-dirs:  test",
+                "  main-is:         Main.hs",
+                "  other-modules:  TestA",
+                "  build-depends:  base",
+                ""
+                ]
+        configure api root Source
+        (cps2,nsOK2)<-getCabalComponents api root
+        assertBool (null nsOK2)
+        assertEqual 4 (length cps2)
+        let (l2:ex2:ts2:b2:[])=cps2
+        assertEqual (CCLibrary True) l2
+        assertEqual (CCExecutable "BWTest" True) ex2
+        assertEqual (CCTestSuite "BWTest-test" True) ts2   
+        assertEqual (CCBenchmark "BWTest-bench" True) b2   
+        
 test_CabalDependencies  :: Assertion
 test_CabalDependencies = do
         let api=cabalAPI

@@ -548,18 +548,24 @@ data CabalComponent
         { ccTestName :: String -- ^ test suite name
         , ccBuildable :: Bool -- ^ is the test suite buildable
         } -- ^ test suite
+  | CCBenchmark 
+        { ccBenchName :: String -- ^ benchmark name
+        , ccBuildable :: Bool -- ^ is the be buildabnchmarkle
+        } -- ^ test suite
   deriving (Eq, Show, Read,Ord)
 
 instance ToJSON CabalComponent where
         toJSON (CCLibrary b)=  object ["Library" .= b]
         toJSON (CCExecutable e b)=  object ["Executable" .= b,"e" .= e]
         toJSON (CCTestSuite t b)=  object ["TestSuite" .= b,"t" .= t]
+        toJSON (CCBenchmark t b)=  object ["Benchmark" .= b,"b" .= t]
 
 instance FromJSON CabalComponent where
     parseJSON (Object v)
         | Just b <- M.lookup "Library" v =CCLibrary <$> parseJSON b
         | Just b <- M.lookup "Executable" v =CCExecutable <$> v .: "e" <*> parseJSON b
         | Just b <- M.lookup "TestSuite" v =CCTestSuite <$> v .: "t" <*> parseJSON b
+        | Just b <- M.lookup "Benchmark" v =CCBenchmark <$> v .: "b" <*> parseJSON b
         | otherwise = mzero
     parseJSON _= mzero
 
@@ -568,6 +574,7 @@ cabalComponentName :: CabalComponent -> String
 cabalComponentName CCLibrary{}=""
 cabalComponentName CCExecutable{ccExeName}=ccExeName
 cabalComponentName CCTestSuite{ccTestName}=ccTestName
+cabalComponentName CCBenchmark{ccBenchName}=ccBenchName
 
 -- | a cabal package
 data CabalPackage=CabalPackage {
