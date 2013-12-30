@@ -257,7 +257,7 @@ parseCabalMessages cf cabalExe s=let
                                         then dropWhile isSpace $ drop (length cf + 1) msg
                                         else msg
                                 in (Just (BWNote BWWarning "" (mkEmptySpan cf (extractLine msg2) 1),[msg2]),addCurrent currentNote ls)
-                        | Just (bw,n)<- cabalErrorLine cf cabalExe l=(Just (bw,n),addCurrent currentNote ls)
+                        | Just (bw,n)<- cabalErrorLine cf cabalExe l (null $ filter isBWNoteError ls)=(Just (bw,n),addCurrent currentNote ls)
                         | Just (jcn,msgs)<-currentNote=
                                 if not $ null l
                                         then (Just (jcn,l:msgs),ls)
@@ -292,8 +292,9 @@ addCurrent (Just (n,msgs)) xs=xs++[makeNote n msgs]
 cabalErrorLine :: FilePath -- ^ cabal file
         -> FilePath -- ^ path to cabal executable
         -> String -- ^ line
+        -> Bool -- ^ first error?
         -> Maybe (BWNote,[String])
-cabalErrorLine cf cabalExe l 
+cabalErrorLine cf cabalExe l fstErr
         | Just s4 <- dropPrefixes [cabalExe,setupExe cabalExe,fromCabalDevExe cabalExe] l=
                                 let 
                                         s2=dropWhile isSpace $ drop 1 s4 -- drop 1 for ":" that follows file name
@@ -315,6 +316,7 @@ cabalErrorLine cf cabalExe l
                                                                                                 then (cf,"1",s2)
                                                                                                 else (loc,line',tail msg')
                                                         in Just (BWNote BWError "" (mkEmptySpan realloc (readInt line 1) 1),[msg])
+         | not fstErr=cabalErrorLine cf cabalExe (cabalExe ++ ":" ++ l) False
          | otherwise=Nothing           
 
 -- | parse messages from build
@@ -338,7 +340,7 @@ parseBuildMessages cf cabalExe distDir s=let
                                        else (Nothing,ls++[makeNote jcn msgs])
                         --  | Just fp<-getBuiltPath l=(currentNote,ls,fp:fps)
                         | Just n<-extractLocation l=(Just (n,[bwnTitle n]),ls)
-                        | Just (bw,n)<- cabalErrorLine cf cabalExe l=(Just (bw,n),addCurrent currentNote ls)
+                        | Just (bw,n)<- cabalErrorLine cf cabalExe l (null $ filter isBWNoteError ls)=(Just (bw,n),addCurrent currentNote ls)
                         | otherwise =(Nothing,ls)
                 extractLocation el=let
                         (_,_,aft,ls)=el =~ "(.+):([0-9]+):([0-9]+):" :: (String,String,String,[String])   

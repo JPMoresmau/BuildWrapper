@@ -238,7 +238,7 @@ test_ConfigureErrors = do
         assertBool (not bool5)
         assertEqual 1 (length nsErrors5)
         let (nsError6:[])=nsErrors5
-        assertEqual (BWNote BWError "No 'Main-Is' field found for executable BWTest\n" (mkEmptySpan cfn 1 1)) nsError6
+        assertEqual (BWNote BWError "no 'main-is' field found for executable bwtest\n" (mkEmptySpan cfn 1 1)) (nsError6{bwnTitle=map toLower $ bwnTitle nsError6})
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "cabal-version:  >= 1.2",
