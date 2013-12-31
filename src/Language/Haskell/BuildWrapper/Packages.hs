@@ -58,6 +58,9 @@ getPkgInfos msandbox=
         path_dir = dir </> "package.conf.d"
         path_file = dir </> "package.conf"
         path_sd_dir= dir </> ("packages-" ++ ghcVersion ++ ".conf")
+        -- cabal sandboxes
+        path_ghc_dir= dir </> currentArch ++ '-' : currentOS ++ "-ghc-" ++ ghcVersion ++ "-packages.conf.d"
+                           
       in do
         exists_dir <- doesDirectoryExist path_dir
         if exists_dir
@@ -76,8 +79,13 @@ getPkgInfos msandbox=
                   then do
                     pkgs <- readContents (PkgDirectory path_sd_dir)
                     return $ Just pkgs
-                  else return Nothing
-
+                  else  do
+                    exists_dirGhc <- doesDirectoryExist path_ghc_dir
+                    if exists_dirGhc
+                      then do
+                        pkgs <- readContents (PkgDirectory path_ghc_dir)
+                        return $ Just pkgs
+                      else return Nothing
     currentArch :: String
     currentArch = System.Info.arch
 
@@ -111,7 +119,8 @@ getPkgInfos msandbox=
         Just sd->do
                 r <- lookForPackageDBIn sd
                 case r of
-                           Nothing -> return []
+                           Nothing ->do
+                             return []
                            Just pkgs -> return pkgs
     -- Process GHC_PACKAGE_PATH, if present:
     e_pkg_path <- Exc.try (getEnv "GHC_PACKAGE_PATH")
