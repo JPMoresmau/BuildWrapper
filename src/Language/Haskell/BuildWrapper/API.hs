@@ -109,11 +109,13 @@ generateUsage returnAll ccn=
                                         ) $ filter (\(f,_)->fitForUsage f
                                                 )
                                                 mps1
+                        
                         opts<-fileGhcOptions cbi    
                         modules<-liftIO $ do
                                 cd<-getCurrentDirectory
                                 setCurrentDirectory dir
-                                (mods,_)<-BwGHC.withASTNotes (getModule pkg) (temp </>) dir (MultipleFile mps) opts     
+                                (mods,notes)<-BwGHC.withASTNotes (getModule pkg) (temp </>) dir (MultipleFile mps) opts     
+                                print notes
                                 setCurrentDirectory cd 
                                 return mods
                         mapM_ (generate pkg) modules
