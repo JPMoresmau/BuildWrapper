@@ -130,14 +130,14 @@ test_EvalLongRunning = do
         assertBool (isJust mtts)
         assertBool (not $ notesInError ns) 
         eval inp "reverse \"toto\"" 
-        s1<- readResult out :: IO (String)
-        assertEqual "\"otot\"" s1
+        s1<- readResult out :: IO [(String,String)]
+        assertEqual [("[GHC.Types.Char]","\"otot\"")] s1
         eval inp "main" 
-        s2<- readResult out :: IO (String)
-        assertEqual "\"toto\"" s2     
+        s2<- readResult out :: IO [(String,String)]
+        assertEqual [("[GHC.Types.Char]","\"toto\"")] s2     
         eval inp "MkType1_1"
-        s3<- readResult out :: IO (String)
-        assertBool $ "No instance for" `isPrefixOf` s3     
+        s3<- readResult out :: IO [(String,String)]
+        assertBool $ isPrefixOf "No instance for" $ snd $ head s3     
         end inp     
         
 test_TokenTypesLongRunning :: Assertion
@@ -202,3 +202,36 @@ test_ThingAtPointLongRunning = do
         assertBool (not $ notesInError ns2)
         assertBool (isJust mtts2)
         end inp    
+        
+test_LocalsLongRunning :: Assertion
+test_LocalsLongRunning = do
+        let api=cabalAPI
+        root<-createTestProject
+        synchronize api root False
+        configure api root Source        
+        let rel="src"</>"Main.hs"
+        writeFile (root </> rel) $ unlines [  
+                  "module Main where",
+                  "main=return $ map id \"toto\"",
+                  "",
+                  "fun1 l1=let",
+                  "    l2=reverse \"toto\"",
+                  "    in head l2"
+                  ] 
+        build api root True Source
+        synchronize api root False
+        (inp,out,_,_)<-build1lr root rel
+        (mtts,ns)<-(readResult out) :: IO (OpResult (Maybe [NameDef]))
+        assertBool (isJust mtts)
+        assertBool (not $ notesInError ns) 
+        localsLR inp 4 1 6 10
+        (tap1,nsErrorsTap)<-readResult out :: IO (OpResult ([ThingAtPoint]))
+        assertBool (null nsErrorsTap)
+        let namesM=map tapName tap1
+        assertBool (elem "l2" namesM)
+        assertBool (elem "l1" namesM)
+        continue inp
+        (mtts2,ns2)<-readResult out :: IO (OpResult (Maybe [NameDef]))  
+        assertBool (not $ notesInError ns2)
+        assertBool (isJust mtts2)
+        end inp   

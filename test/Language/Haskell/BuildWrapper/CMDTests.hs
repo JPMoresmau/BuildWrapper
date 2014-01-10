@@ -2073,6 +2073,11 @@ tapLR h l c=do
         hPutStrLn h ('p':show (l,c))  
         hFlush h    
   
+localsLR::  Handle -> Int -> Int -> Int -> Int -> IO()
+localsLR h l c el ec=do
+        hPutStrLn h ('l':show (l,c,el,ec))  
+        hFlush h      
+  
 cmdOpts :: [String] -> [String] 
 cmdOpts =map ("--cabaloption=" ++)   
    

@@ -13,7 +13,6 @@
 module Language.Haskell.BuildWrapper.GHC where
 import Language.Haskell.BuildWrapper.Base hiding (Target,ImportExportType(..))
 import Language.Haskell.BuildWrapper.GHCStorage
-import Language.Haskell.BuildWrapper.Src
 
 import Prelude hiding (readFile, writeFile)
 import Data.Char
@@ -61,7 +60,7 @@ import qualified MonadUtils as GMU
 import Name (isTyVarName,isDataConName,isVarName,isTyConName)
 import Var (varType, Var)
 import PprTyThing (pprTypeForUser)
-import Control.Monad (when, liftM, unless)
+import Control.Monad (when, liftM)
 import qualified Data.Vector as V (foldr)
 import Module (moduleNameFS)
 -- import System.Time (getClockTime, diffClockTimes, timeDiffToString)
@@ -78,10 +77,7 @@ import Data.Time.Calendar (Day(ModifiedJulianDay))
 import Control.Exception (SomeException)
 import Debugger (showTerm)
 import Exception (gtry)
-import qualified CoreUtils as CoreUtils (exprType)
-import Control.Applicative ((<$>))
-import Desugar (deSugarExpr)
-import TcRnTypes (tcg_rdr_env, tcg_type_env)
+import Control.Arrow ((&&&))
 
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
@@ -425,30 +421,8 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
                         case l of
                                 "q"->return ()
                                 -- eval an expression
-                                'e':' ':expr->do
-                                        s<-handleSourceError (return . show)
-                                               (do
-                                                rr<- runStmt expr RunToCompletion
-                                                case rr of
-                                                        RunOk ns->do
-                                                                df<-getSessionDynFlags
-                                                                ls<-mapM (\n->do
-                                                                        mty<-lookupName n
-                                                                        case mty of
-                                                                                Just (AnId aid)->do
-                                                                                        t<-gtry $ GHC.obtainTermFromId 100 False aid
-                                                                                        case t of
-                                                                                            Right term -> showTerm term
-                                                                                            Left  exn  -> return (text "*** Exception:" <+>
-                                                                                                                    text (show (exn :: SomeException)))
-                                                                                _->return empty
-                                                                        ) ns
-                                                                return $ showSDDump df $ vcat ls
-                                                        RunException e ->return $ show e
-                                                        _->return "")
-                                        GMU.liftIO $ BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode s
-                                        GMU.liftIO $ hFlush stdout
-                                        r1 t2
+                                'e':' ':expr->eval expr t2
+                                -- token types
                                 "t"->do
                                        input<- GMU.liftIO $ readFile fp
                                        ett<-tokenTypesArbitrary' fp input (".lhs" == takeExtension fp)
@@ -459,6 +433,7 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
                                                 BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode ret
                                                 hFlush stdout
                                        r1 t2  
+                                -- thing at point
                                 'p':xs->do
                                        GMU.liftIO $ do
                                                 let (line,col)=read xs
@@ -471,8 +446,50 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
                                                         _-> Nothing      
                                                 BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode (mm,[]::[BWNote])
                                                 hFlush stdout
-                                       r1 t2                    
+                                       r1 t2
+                                -- locals
+                                'l':xs->do
+                                       GMU.liftIO $ do
+                                         let (sline,scol,eline,ecol)=read xs
+                                         mv<-readGHCInfo fp
+                                         let mm=case mv of 
+                                                 Just v->let
+                                                      cont=contains sline (scionColToGhcCol scol) eline (scionColToGhcCol ecol)
+                                                      isVar=isGHCType "Var"
+                                                      mf=findAllInJSON (\x->cont x && isVar x) v
+                                                    in mapMaybe (findInJSONData . Just) mf  
+                                                 _-> []      
+                                         BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode (mm,[]::[BWNote])
+                                         hFlush stdout
+                                       r1 t2
                                 _ ->go t2
+                eval expr t2=do
+                    s<-handleSourceError (\e->return [("",show e)])
+                           (do
+                            rr<- runStmt expr RunToCompletion
+                            case rr of
+                                    RunOk ns->do
+                                            df<-getSessionDynFlags
+                                            ls<-mapM (\n->do
+                                                    mty<-lookupName n
+                                                    case mty of
+                                                            Just (AnId aid)->do
+                                                                    let pprTyp    = (pprTypeForUser True . idType) aid
+                                                                    t<-gtry $ GHC.obtainTermFromId 100 False aid
+                                                                    evalDoc<-case t of
+                                                                        Right term -> showTerm term
+                                                                        Left  exn  -> return (text "*** Exception:" <+>
+                                                                                                text (show (exn :: SomeException)))
+                                                                    return (pprTyp,evalDoc)                        
+                                                            _->return (empty,empty)
+                                                    ) ns
+                                            let q=(qualName &&& qualModule) defaultUserStyle
+                                            return $ map (\(a,b)->(showSDUser q df a,showSDUser q df b)) ls
+                                    RunException e ->return [("",show e)]
+                                    _->return [])
+                    GMU.liftIO $ BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode s
+                    GMU.liftIO $ hFlush stdout
+                    r1 t2       
                        
 name2nd :: GhcMonad m=> DynFlags -> Name -> m NameDef
 name2nd df n=do
