@@ -791,4 +791,21 @@ writeFile n s = withBinaryFile n WriteMode (\ h -> hPutStr h s)
 withBinaryFile :: FilePath -> IOMode -> (Handle -> IO a) -> IO a
 withBinaryFile n m f = bracket (openBinaryFile n m) hClose f
 
-          
+-- | Evaluation of result
+-- using String since we get them from GHC API
+data EvalResult = EvalResult {
+  erType :: Maybe String
+  ,erResult :: Maybe String
+  ,erError :: Maybe String
+  } deriving (Show,Read,Eq,Ord)
+
+instance ToJSON EvalResult where
+        toJSON (EvalResult mt mr me)=object ["t" .= mt, "r" .= mr, "e" .= me]
+        
+instance FromJSON EvalResult where
+        parseJSON (Object v)=EvalResult <$>
+                v .: "t" <*>
+                v .: "r" <*>
+                v .: "e"
+        parseJSON _=mzero
+        

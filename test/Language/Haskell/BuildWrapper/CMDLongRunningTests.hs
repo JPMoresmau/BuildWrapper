@@ -130,14 +130,14 @@ test_EvalLongRunning = do
         assertBool (isJust mtts)
         assertBool (not $ notesInError ns) 
         eval inp "reverse \"toto\"" 
-        s1<- readResult out :: IO [(String,String)]
-        assertEqual [("[GHC.Types.Char]","\"otot\"")] s1
+        s1<- readResult out :: IO [EvalResult]
+        assertEqual [EvalResult (Just "[GHC.Types.Char]") (Just "\"otot\"") Nothing] s1
         eval inp "main" 
-        s2<- readResult out :: IO [(String,String)]
-        assertEqual [("[GHC.Types.Char]","\"toto\"")] s2     
+        s2<- readResult out :: IO [EvalResult]
+        assertEqual [EvalResult (Just "[GHC.Types.Char]") (Just "\"toto\"") Nothing] s2     
         eval inp "MkType1_1"
-        s3<- readResult out :: IO [(String,String)]
-        assertBool $ isPrefixOf "No instance for" $ snd $ head s3     
+        s3<- readResult out :: IO [EvalResult]
+        assertBool $ isPrefixOf "No instance for" $ (\(EvalResult _ _ (Just err))->err) $ head s3     
         end inp     
         
 test_TokenTypesLongRunning :: Assertion

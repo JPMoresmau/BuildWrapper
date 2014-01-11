@@ -464,13 +464,14 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
                                        r1 t2
                                 _ ->go t2
                 eval expr t2=do
-                    s<-handleSourceError (\e->return [("",show e)])
+                    s<-handleSourceError (\e->return [EvalResult Nothing Nothing (Just $ show e)])
                            (do
                             rr<- runStmt expr RunToCompletion
                             case rr of
                                     RunOk ns->do
                                             df<-getSessionDynFlags
-                                            ls<-mapM (\n->do
+                                            let q=(qualName &&& qualModule) defaultUserStyle
+                                            mapM (\n->do
                                                     mty<-lookupName n
                                                     case mty of
                                                             Just (AnId aid)->do
@@ -480,12 +481,10 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
                                                                         Right term -> showTerm term
                                                                         Left  exn  -> return (text "*** Exception:" <+>
                                                                                                 text (show (exn :: SomeException)))
-                                                                    return (pprTyp,evalDoc)                        
-                                                            _->return (empty,empty)
+                                                                    return $ EvalResult (Just $ showSDUser q df pprTyp) (Just $ showSDUser q df evalDoc) Nothing                      
+                                                            _->return $ EvalResult Nothing Nothing Nothing
                                                     ) ns
-                                            let q=(qualName &&& qualModule) defaultUserStyle
-                                            return $ map (\(a,b)->(showSDUser q df a,showSDUser q df b)) ls
-                                    RunException e ->return [("",show e)]
+                                    RunException e ->return [EvalResult Nothing Nothing (Just $ show e)]
                                     _->return [])
                     GMU.liftIO $ BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode s
                     GMU.liftIO $ hFlush stdout
