@@ -327,6 +327,7 @@ getType hs_env tcm e = do
         rn_env = tcg_rdr_env $ fst $ tm_internals_ tcm
         ty_env = tcg_type_env $ fst $ tm_internals_ tcm  
 
+-- | show SDoc wrapper
 showSD :: Bool
         -> DynFlags
         -> SDoc
@@ -339,6 +340,7 @@ showSD True df =showSDoc df
 showSD False df =showSDocUnqual df
 #endif
 
+-- | show SDoc for user wrapper
 showSDUser :: PrintUnqualified
         -> DynFlags
         -> SDoc
@@ -349,6 +351,7 @@ showSDUser unqual _ =showSDocForUser unqual
 showSDUser unqual df =showSDocForUser df unqual
 #endif
 
+-- | show SDoc for dump wrapper
 showSDDump :: DynFlags
         -> SDoc
         -> String
@@ -358,10 +361,13 @@ showSDDump _ =showSDocDump
 showSDDump df =showSDocDump df
 #endif
 
+-- | convert a SrcSpan to a JSON Value
 srcSpanToJSON :: SrcSpan -> Value
 srcSpanToJSON src 
         | isGoodSrcSpan src   = object[ "SrcSpan" .= toJSON [srcLocToJSON $ srcSpanStart src, srcLocToJSON $ srcSpanEnd src]] 
         | otherwise = Null
+
+-- | convert a SrcLoc to a JSON Value
 #if __GLASGOW_HASKELL__ < 702   
 srcLocToJSON :: SrcLoc -> Value
 srcLocToJSON sl 
@@ -373,7 +379,7 @@ srcLocToJSON (RealSrcLoc sl)=object ["line" .= toJSON (srcLocLine sl),"column" .
 srcLocToJSON _ = Null        
 #endif
 
-
+-- | get all types contained by another type
 typesInsideType :: Type -> [Type]
 typesInsideType t=let
          (f1,f2)=splitFunTys t
@@ -425,6 +431,7 @@ findInJSONFormatted qual typed (Just (Object m)) | Just (String name)<-HM.lookup
                 addDot _=error "expected String value for Module key"
 findInJSONFormatted _ _ _="no info"
 
+-- | find a named value in JSON data
 findInJSONData :: Maybe Value -> Maybe ThingAtPoint
 findInJSONData (Just o@(Object m)) | Just (String _)<-HM.lookup "Name" m=case fromJSON o of
         Success tap->tap
@@ -488,6 +495,7 @@ isGHCType tp (Object m) |
 isGHCType _ _ =False
 
 
+-- | extract usages from a global JSON Value
 extractUsages :: Value -- ^ the root object containing the AST 
         -> [Value]
 extractUsages (Array arr) | not $ V.null arr=let
@@ -500,6 +508,7 @@ extractUsages (Object obj)=concatMap extractUsages $ HM.elems obj -- in a comple
         -- (extractName o) : 
 extractUsages  _= []
 
+-- | Extract name values from a JSON Value
 extractName :: Value -> Value -> [Value]
 extractName src (Object m) |
         Just ifl<-extractSource src,
@@ -520,6 +529,7 @@ extractName src (Object m) |
                 in [object atts]
 extractName _ _=[]
 
+-- | extract source information from a JSON Value
 extractSource :: Value ->  Maybe InFileSpan
 extractSource (Object m) | 
         Just pos<-HM.lookup "SrcSpan" m,

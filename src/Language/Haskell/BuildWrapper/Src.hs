@@ -154,7 +154,8 @@ getHSEOutline (Module _ _ _ _ decls,comments)=evalState (mapM addComment $ conca
                                 pl=DM.lookup (st-1) cm
                                 (cm2,od2)= case pl of
                                         --  | stc <= iflColumn (ifsStart $ odLoc od) 
-                                        Just (stc,stl,t)-> ( DM.delete (st-1) cm,od{odComment=Just t,odStartLineComment=Just stl})
+                                        -- stc ) 
+                                        Just (_,stl,t)-> ( DM.delete (st-1) cm,od{odComment=Just t,odStartLineComment=Just stl})
                                         _ -> let
                                                 -- search  for comment after declaration (same line)
                                                 pl2=DM.lookup st cm
@@ -227,16 +228,20 @@ getHSEImportExport (Module _ mhead _ imps _,_)=(headExp mhead,impDefs imps)
                 child (IThingWith l n cns) = ImportSpecDef (nameDecl n) IEThingWith (makeSpan l) (map cnameDecl cns)
 getHSEImportExport _=([],[])                
 
+-- | extract name 
 nameDecl :: Name a -> T.Text
 nameDecl (Ident _ s)=T.pack s
 nameDecl (Symbol _ s)=T.pack s
+-- | extract class name 
 cnameDecl :: CName a -> T.Text
 cnameDecl (VarName _ s)=nameDecl s
 cnameDecl (ConName _ s)=nameDecl s
+-- | extract qualified name 
 qnameDecl :: QName a -> T.Text
 qnameDecl (Qual _ _ n)=nameDecl n
 qnameDecl (UnQual _ n)=nameDecl n
 qnameDecl _ ="" 
+-- | extract module name
 mnnameDecl :: ModuleName a -> T.Text
 mnnameDecl (ModuleName _ s)=T.pack s
  

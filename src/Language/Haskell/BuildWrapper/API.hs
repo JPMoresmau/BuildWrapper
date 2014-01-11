@@ -389,6 +389,7 @@ withGHCAST fp mccn f=withGHCAST' fp mccn (\a b c d->do
         r<- f a b c d
         return (Just r,[]))
 
+-- | perform an action on the GHC AST, returning notes alonside with the result
 withGHCAST' ::  FilePath -- ^ the source file
         -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
         -> (FilePath --  ^ the source file
@@ -454,7 +455,7 @@ getTokenTypes fp=do
                 Left bw -> return ([],[bw])
                  
                 
--- ^ get all occurrences of a token in the file
+-- | get all occurrences of a token in the file
 getOccurrences :: FilePath -- ^ the source file
         -> String -- ^ the token to search for
         -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
@@ -533,7 +534,8 @@ cleanImports fp doFormat mccn=do
                                 setCurrentDirectory cd
                                 return (m,ns ++ bwns2)
                 _ -> return ([],ns)
-    
+
+-- | clean generated and copied files    
 clean :: Bool -- ^ everything?
         -> BuildWrapper Bool
 clean everything=do

@@ -50,9 +50,11 @@ import Data.Functor.Identity (runIdentity)
 
 import qualified Distribution.Client.Dynamic as DCD
 
+-- | get the version of the cabal library
 getCabalLibraryVersion :: String
 getCabalLibraryVersion = VERSION_Cabal
 
+-- | get all files to copy to temp folder
 getFilesToCopy :: BuildWrapper(OpResult [FilePath])
 getFilesToCopy =do
        (mfps,bwns)<-withCabal Source getAllFiles
@@ -60,7 +62,7 @@ getFilesToCopy =do
                 Just fps->(nub $ concatMap (map snd . cbiModulePaths) fps,bwns)
                 Nothing ->([],bwns); 
 
-
+-- | get cabal verbose level
 cabalV :: BuildWrapper V.Verbosity
 cabalV =do
         v<-gets verbosity
@@ -190,6 +192,7 @@ getCabalFile Source= gets cabalFile
 getCabalFile Target= fmap takeFileName (gets cabalFile)
                          >>=getTargetPath
 
+-- | get package name from cabal file
 getPackageName :: BuildWrapper String
 getPackageName = do
         cf<-gets cabalFile
@@ -269,27 +272,33 @@ parseCabalMessages cf cabalExe s=let
                         in if null ls
                                 then 1
                                 else readInt (head ls) 1
- 
+
+-- | get the setup exe file name
 setupExe :: FilePath -- ^ path to cabal executable
         -> FilePath
 setupExe cabalExe=addExtension "setup" $ takeExtension cabalExe 
 
+-- | get cabal executable from cabal-dev
 fromCabalDevExe :: FilePath -- ^ path to cabal executable
         -> FilePath
 fromCabalDevExe cabalExe | "cabal-dev"<-dropExtension cabalExe=addExtension "cabal" $ takeExtension cabalExe 
 fromCabalDevExe cabalExe=cabalExe
 
+-- | drop all potential prefixes from the given string
 dropPrefixes :: [String] -> String -> Maybe String
 dropPrefixes prfxs s2=foldr (stripPrefixIfNeeded s2) Nothing prfxs
 
+-- | stop prefix if the given string starts by it
 stripPrefixIfNeeded :: String -> String -> Maybe String -> Maybe String
 stripPrefixIfNeeded _ _ j@(Just _)=j
 stripPrefixIfNeeded s3 prfx  _=stripPrefix prfx s3
 
+-- | add a note with a potential additional message
 addCurrent :: Maybe (BWNote, [String]) -> [BWNote] -> [BWNote]
 addCurrent Nothing xs=xs
 addCurrent (Just (n,msgs)) xs=xs++[makeNote n msgs]
 
+-- | parse a Cabal error line
 cabalErrorLine :: FilePath -- ^ cabal file
         -> FilePath -- ^ path to cabal executable
         -> String -- ^ line
@@ -352,7 +361,8 @@ parseBuildMessages cf cabalExe distDir s=let
                                       in case ls2 of
                                         (loc2:ext1:_:_:[])-> Just $ BWNote BWError (drop (length loc2 + length ext1 + 1) el) (mkEmptySpan (validLoc cf distDir loc2) 1 1)
                                         _     -> Nothing
-  
+ 
+-- | get a valid path 
 validLoc :: FilePath -- ^ the cabal file 
         -> FilePath -- ^ the dist dir
         -> FilePath
@@ -360,7 +370,8 @@ validLoc :: FilePath -- ^ the cabal file
 validLoc cf distDir f=if distDir `isPrefixOf` f
         then cf
         else f
-  
+
+-- | read an integer and return a default value if not readable  
 readInt :: String -> Int -> Int
 readInt s def=let parses=reads s ::[(Int,String)]
         in if null parses 
@@ -456,7 +467,7 @@ getBuildInfo fp mccn=do
              getComp (Just ccn) fps=
                 return $ filter (\cbi->cabalComponentName (cbiComponent cbi) == ccn) fps
  
-
+-- | set the GHC options on targets
 setOptions :: FilePath -> [DCD.Target] -> IO([DCD.Target] )
 setOptions dist_dir tgs=do
   let setup_config = DSC.localBuildInfoFile dist_dir
@@ -595,7 +606,8 @@ getAllFiles tgs= do
                 let notMyself=filter (\x->not $ any (`isInfixOf` x) [cabalDevDist, cabalDist, tf]) allF
                 return $ map (\f->(simpleParse $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) notMyself
                 -- return $ map (\(x,y)->(fromJust x,y)) $ filter (isJust . fst) $ map (\f->(simpleParse $ fileToModule $ makeRelative fullFP f,makeRelative dir f)) notMyself
- 
+
+-- | get build dir for a target 
 getBuildDir :: FilePath ->  DCD.Target -> FilePath
 getBuildDir bd t=case DCD.info t of
                 DCD.Library _-> bd
@@ -662,7 +674,7 @@ getReferencedFiles tgs= do
         copyMain :: FilePath  ->[FilePath] ->  [(Maybe ModuleName,FilePath)]
         copyMain fs = map (\ d -> (Just $ fromString "Main", d </> fs)) 
        
-       
+-- | parse a string into a module name       
 stringToModuleName :: String -> Maybe ModuleName
 stringToModuleName=simpleParse       
         
@@ -742,7 +754,8 @@ dependencies pd pkgs=let
 cabalComponentsFromDescription :: [DCD.Target] -- ^ the package description
         -> [CabalComponent]
 cabalComponentsFromDescription = map cabalComponentFromTarget
-             
+ 
+-- | get dependencies for all stanzas            
 cabalComponentsDependencies :: [DCD.Target] -- ^ the package description
         -> DM.Map CabalComponent [(String, Maybe Version)]
 cabalComponentsDependencies tgs=foldr f DM.empty tgs
@@ -757,7 +770,7 @@ cabalComponentsDependencies tgs=foldr f DM.empty tgs
 --        in DM.unionWith (++) mTs $ DM.unionWith (++) mLib mExe
         -- where mapDep cc bi=DM.fromList $ map (\x->(cc)) (PD.targetBuildDepends bi)
 
-
+-- | convert a dynamic cabla target into a CabalComponent
 cabalComponentFromTarget :: DCD.Target -> CabalComponent
 cabalComponentFromTarget t=let
         b=DCD.buildable t
@@ -767,19 +780,23 @@ cabalComponentFromTarget t=let
                 DCD.TestSuite n _->CCTestSuite n b
                 DCD.BenchSuite n _->CCBenchmark n b
 
+-- | transform a library target into a CabalComponent
 cabalComponentFromLibrary :: DCD.Target -> CabalComponent
 cabalComponentFromLibrary =CCLibrary . DCD.buildable 
 
+-- | transform an executable target into a CabalComponent
 cabalComponentFromExecutable :: DCD.Target -> CabalComponent
 cabalComponentFromExecutable e =let
         DCD.Executable exeName' _=DCD.info e
         in CCExecutable (exeName') (DCD.buildable e)
 
+-- | transform a test suite target into a CabalComponent
 cabalComponentFromTestSuite :: DCD.Target -> CabalComponent
 cabalComponentFromTestSuite ts=let
         DCD.TestSuite testName' _=DCD.info ts
         in CCTestSuite (testName') (DCD.buildable ts)
 
+-- | transform a benchmark target into a CabalComponent
 cabalComponentFromBenchmark :: DCD.Target -> CabalComponent
 cabalComponentFromBenchmark ts=let
         DCD.BenchSuite benchName' _=DCD.info ts

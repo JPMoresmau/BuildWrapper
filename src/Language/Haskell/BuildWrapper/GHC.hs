@@ -79,6 +79,7 @@ import Debugger (showTerm)
 import Exception (gtry)
 import Control.Arrow ((&&&))
 
+-- | a function taking the file name and typechecked module as parameters
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 
 -- | get the GHC typechecked AST
@@ -132,25 +133,7 @@ withASTNotes ::  GHCApplyFunction a -- ^ the final action to perform on the resu
         -> IO (OpResult [a])
 withASTNotes f ff base_dir contents options=initGHC (ghcWithASTNotes f ff base_dir contents True) options
 
---        do
---    -- http://hackage.haskell.org/trac/ghc/ticket/7380#comment:1     : -O2 is removed from the options  
---    let cleaned=filter (not . List.isInfixOf "-O") options
---    let lflags=map noLoc cleaned
---    -- print cleaned
---    (_leftovers, _) <- parseStaticFlags lflags
---    runGhc (Just libdir) $ do
---        flg <- getSessionDynFlags
---        (flg', _, _) <- parseDynamicFlags flg _leftovers
---        GHC.defaultCleanupHandler flg' $ do
---                -- our options here
---                -- if we use OneShot, we need the other modules to be built
---                -- so we can't use hscTarget = HscNothing
---                -- and it takes a while to actually generate the o and hi files for big modules
---                -- if we use CompManager, it's slower for modules with lots of dependencies but we can keep hscTarget= HscNothing which makes it better for bigger modules
---                -- we use target interpreted so that it works with TemplateHaskell
---                setSessionDynFlags flg' {hscTarget = HscInterpreted, ghcLink = NoLink , ghcMode = CompManager}  
---                ghcWithASTNotes f ff base_dir contents
-  
+-- | init GHC session
 initGHC ::  Ghc a  
         -> [String] -- ^ the GHC options
         -> IO a 
@@ -171,8 +154,9 @@ initGHC f options=  do
                 -- if we use CompManager, it's slower for modules with lots of dependencies but we can keep hscTarget= HscNothing which makes it better for bigger modules
                 -- we use target interpreted so that it works with TemplateHaskell
                 setSessionDynFlags flg' {hscTarget = HscInterpreted, ghcLink = NoLink , ghcMode = CompManager}  
-                f            
-               
+                f       
+                     
+-- | run a GHC action and get results with notes         
 ghcWithASTNotes   ::  
         GHCApplyFunction a -- ^ the final action to perform on the result
         -> (FilePath -> FilePath) -- ^ transform given file path to find bwinfo path
@@ -363,7 +347,7 @@ getGhcNameDefsInScope fp base_dir modul options=do
                 (x:_)->(Just x,ns)
                 _->(Nothing, ns)
                 
--- | get all names in scope, packaged in NameDefs
+-- | get all names in scope, packaged in NameDefs, and keep running a loop listening to commands
 getGhcNameDefsInScopeLongRunning  :: FilePath -- ^ source path
         -> FilePath -- ^ base directory
         -> String -- ^ module name
@@ -489,7 +473,8 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
                     GMU.liftIO $ BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode s
                     GMU.liftIO $ hFlush stdout
                     r1 t2       
-                       
+   
+-- | convert a Name int a NameDef                    
 name2nd :: GhcMonad m=> DynFlags -> Name -> m NameDef
 name2nd df n=do
         m<- getInfo n
@@ -680,7 +665,7 @@ lexTokenStreamH buf loc dflags = unP go initState
               L _ ITeof -> return []
               _ -> liftM (ltok:) go
 
-
+-- | get lexer initial location
 #if __GLASGOW_HASKELL__ < 702
 lexLoc :: SrcLoc
 lexLoc = mkSrcLoc (mkFastString "<interactive>") 1 (scionColToGhcCol 1)
@@ -689,7 +674,7 @@ lexLoc :: RealSrcLoc
 lexLoc = mkRealSrcLoc  (mkFastString "<interactive>") 1 (scionColToGhcCol 1)
 #endif
 
-
+-- | get lexer flags
 #if __GLASGOW_HASKELL__ >= 700
 lexerFlags :: [ExtensionFlag]
 #else
@@ -737,12 +722,13 @@ ofInterest (L loc _) =
 tokenToType :: Located Token -> TokenDef
 tokenToType (L sp t) = TokenDef (tokenType t) (ghcSpanToLocation sp)       
         
--- | Generate the interactive token list used by EclipseFP for syntax highlighting
+-- | Generate the interactive token list used by EclipseFP for syntax highlighting, in the IO monad
 tokenTypesArbitrary :: FilePath -> String -> Bool -> [String] -> IO (Either BWNote [TokenDef])
 tokenTypesArbitrary projectRoot contents literate options = generateTokens projectRoot contents literate options convertTokens id
   where
     convertTokens = map tokenToType        
 
+-- | Generate the interactive token list used by EclipseFP for syntax highlighting, when already in a GHC session
 tokenTypesArbitrary' :: FilePath -> String -> Bool -> Ghc (Either BWNote [TokenDef])
 tokenTypesArbitrary' projectRoot contents literate  = generateTokens' projectRoot contents literate convertTokens id
   where
@@ -846,6 +832,7 @@ preprocessSource contents literate=
                         | "-}" `List.isInfixOf` l = f
                         | otherwise = ContinuePragma f
 
+-- | preprocessor behavior data
 data PPBehavior=Continue Int | Indent Int | Start | ContinuePragma PPBehavior
         deriving Eq
 
@@ -857,6 +844,7 @@ ghcErrMsgToNote df= ghcMsgToNote df BWError
 ghcWarnMsgToNote :: DynFlags -> FilePath -> WarnMsg -> BWNote
 ghcWarnMsgToNote df= ghcMsgToNote df BWWarning
 
+-- | convert a GHC message to our note type
 -- Note that we do *not* include the extra info, since that information is
 -- only useful in the case where we do not show the error location directly
 -- in the source.
@@ -897,10 +885,8 @@ mkQualifiedTokenValue :: FastString -- ^ the qualifier
                       -> T.Text
 mkQualifiedTokenValue q a = (T.pack . unpackFS . concatFS) [q, dotFS, a]
 
--- | Make a token definition from its source location and Lexer.hs token type.
---mkTokenDef :: Located Token -> TokenDef
---mkTokenDef (L sp t) = TokenDef (mkTokenName t) (ghcSpanToLocation sp)
 
+-- | make a text name from a token
 mkTokenName :: Token -> T.Text
 mkTokenName = T.pack . showConstr . toConstr
 
@@ -912,7 +898,7 @@ deriving instance Typeable StringBuffer
 deriving instance Data StringBuffer
 #endif
 
-
+-- | get token type from Token
 tokenType :: Token -> T.Text
 tokenType  ITas = "K"                         -- Haskell keywords
 tokenType  ITcase = "K"
@@ -1114,9 +1100,11 @@ tokenType ITlcase= "S"
 tokenType (ITqQuasiQuote {}) = "TH" -- [Qual.quoter| quote |]
 #endif
 
+-- | a dot as a FastString
 dotFS :: FastString
 dotFS = fsLit "."
 
+-- | generate a token value
 tokenValue :: Bool -> Token -> T.Text
 tokenValue _ t | tokenType t `elem` ["K", "EK"] = T.drop 2 $ mkTokenName t
 tokenValue _ (ITvarid a) = mkUnqualTokenValue a
@@ -1144,8 +1132,10 @@ instance Monoid (Bag a) where
   
 
   
-        
-start, end :: SrcSpan -> (Int,Int)   
+-- | extract start line and column from SrcSpan    
+start :: SrcSpan -> (Int,Int)   
+-- | extract end line and column from SrcSpan    
+end :: SrcSpan -> (Int,Int)   
 #if __GLASGOW_HASKELL__ < 702   
 start ss= (srcSpanStartLine ss, srcSpanStartCol ss)
 end ss= (srcSpanEndLine ss, srcSpanEndCol ss)
@@ -1155,10 +1145,11 @@ start (UnhelpfulSpan _)=error "UnhelpfulSpan in cmpOverlap start"
 end (RealSrcSpan ss)= (srcSpanEndLine ss, srcSpanEndCol ss)   
 end (UnhelpfulSpan _)=error "UnhelpfulSpan in cmpOverlap start"   
 #endif
-       
+
+-- | map of module aliases       
 type AliasMap=DM.Map ModuleName [ModuleName]
 
-
+-- | get usages from GHC imports
 ghcImportToUsage :: T.Text -> LImportDecl Name ->  ([Usage],AliasMap) -> Ghc ([Usage],AliasMap)
 ghcImportToUsage myPkg (L _ imp) (ls,moduMap)=(do
         let L src modu=ideclName imp
@@ -1180,7 +1171,8 @@ ghcImportToUsage myPkg (L _ imp) (ls,moduMap)=(do
         `gcatch` (\(se :: SourceError) -> do
                 GMU.liftIO $ print se
                 return ([],moduMap))
-         
+
+-- | get usages from GHC IE         
 ghcLIEToUsage :: DynFlags -> Maybe T.Text -> T.Text -> T.Text -> LIE Name -> [Usage]
 ghcLIEToUsage df tpkg tmod tsection (L src (IEVar nm))=[ghcNameToUsage df tpkg tmod tsection nm src False]
 ghcLIEToUsage df tpkg tmod tsection (L src (IEThingAbs nm))=[ghcNameToUsage df tpkg tmod tsection nm src True ] 
@@ -1189,7 +1181,8 @@ ghcLIEToUsage df tpkg tmod tsection (L src (IEThingWith nm cons))=ghcNameToUsage
         map (\ x -> ghcNameToUsage df tpkg tmod tsection x src False) cons 
 ghcLIEToUsage _ tpkg tmod tsection (L src (IEModuleContents _))= [Usage tpkg tmod "" tsection False (toJSON $ ghcSpanToLocation src) False]              
 ghcLIEToUsage _ _ _ _ _=[]
-        
+   
+-- | get usage from GHC exports     
 ghcExportToUsage :: DynFlags -> T.Text -> T.Text ->AliasMap -> LIE Name -> Ghc [Usage]        
 ghcExportToUsage df myPkg myMod moduMap lie@(L _ name)=(do
         ls<-case name of
@@ -1207,12 +1200,15 @@ ghcExportToUsage df myPkg myMod moduMap lie@(L _ name)=(do
         `gcatch` (\(se :: SourceError) -> do
                 GMU.liftIO $ print se
                 return [])
-        
+ 
+-- | generate a usage for a name       
 ghcNameToUsage ::  DynFlags -> Maybe T.Text -> T.Text -> T.Text -> Name -> SrcSpan -> Bool -> Usage 
 ghcNameToUsage df tpkg tmod tsection nm src typ=Usage tpkg tmod (T.pack $ showSD False df $ ppr nm) tsection typ (toJSON $ ghcSpanToLocation src) False
 
+-- | map of imports
 type ImportMap=DM.Map T.Text (LImportDecl Name,[T.Text])
 
+-- | build an import map from all imports
 ghcImportMap :: LImportDecl Name -> Ghc ImportMap
 ghcImportMap l@(L _ imp)=(do
         let L _ modu=ideclName imp
@@ -1275,7 +1271,9 @@ ghcImportMap l@(L _ imp)=(do
 
 -- | module, function/type, constructors
 type TypeMap=DM.Map T.Text (DM.Map T.Text (DS.Set T.Text))
+-- | mapping to import declaration to actually needed names
 type FinalImportValue=(LImportDecl Name,DM.Map T.Text (DS.Set T.Text))
+-- | map from original text to needed names
 type FinalImportMap=DM.Map T.Text FinalImportValue
      
      
