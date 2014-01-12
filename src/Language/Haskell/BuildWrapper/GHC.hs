@@ -77,7 +77,7 @@ import Data.Time.Calendar (Day(ModifiedJulianDay))
 import Control.Exception (SomeException)
 import Debugger (showTerm)
 import Exception (gtry)
-import Control.Arrow ((&&&))
+import Control.Arrow ((&&&), first)
 
 -- | a function taking the file name and typechecked module as parameters
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
@@ -405,7 +405,11 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
                         case l of
                                 "q"->return ()
                                 -- eval an expression
-                                'e':' ':expr->eval expr t2
+                                'e':' ':expr->do
+                                      s<-getEvalResults expr
+                                      GMU.liftIO $ BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode s
+                                      GMU.liftIO $ hFlush stdout
+                                      r1 t2       
                                 -- token types
                                 "t"->do
                                        input<- GMU.liftIO $ readFile fp
@@ -447,8 +451,13 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
                                          hFlush stdout
                                        r1 t2
                                 _ ->go t2
-                eval expr t2=do
-                    s<-handleSourceError (\e->return [EvalResult Nothing Nothing (Just $ show e)])
+    
+ 
+-- | evaluate expression in the GHC monad
+getEvalResults :: forall (m :: * -> *).
+                    GhcMonad m =>
+                    String -> m [EvalResult]
+getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (Just $ show e)])
                            (do
                             rr<- runStmt expr RunToCompletion
                             case rr of
@@ -469,10 +478,7 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
                                                             _->return $ EvalResult Nothing Nothing Nothing
                                                     ) ns
                                     RunException e ->return [EvalResult Nothing Nothing (Just $ show e)]
-                                    _->return [])
-                    GMU.liftIO $ BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode s
-                    GMU.liftIO $ hFlush stdout
-                    r1 t2       
+                                    _->return [])    
    
 -- | convert a Name int a NameDef                    
 name2nd :: GhcMonad m=> DynFlags -> Name -> m NameDef
@@ -494,6 +500,8 @@ name2nd df n=do
               ty2t (AnId aid)=Just $ T.pack $ showSD False df $ pprTypeForUser True $ varType aid
               ty2t (ADataCon dc)=Just $ T.pack $ showSD False df $ pprTypeForUser True $ dataConUserType dc
               ty2t _ = Nothing
+
+
 
 -- | get the "thing" at a particular point (line/column) in the source
 -- this is using the saved JSON info if available
@@ -533,7 +541,17 @@ getLocalsJSON sline scol eline ecol fp base_dir modul options= do
                 return $ mapMaybe (findInJSONData . Just) mf  
             ) fp base_dir modul options
         return $ fromMaybe [] mmf  
-  
+
+-- | evaluate an expression
+eval :: String -- ^ the expression
+        -> FilePath -- ^ source file path
+        -> FilePath -- ^ base directory
+        -> String  -- ^ module name
+        -> [String] -- ^  build flags
+        -> IO ([EvalResult])
+eval expression fp base_dir modul options= do
+  mf<-withASTNotes (\_ _->getEvalResults expression) id base_dir (SingleFile fp modul) options
+  return $ concat $ fst mf  
   
 -- | convert a GHC SrcSpan to a Span,  ignoring the actual file info
 ghcSpanToLocation ::GHC.SrcSpan

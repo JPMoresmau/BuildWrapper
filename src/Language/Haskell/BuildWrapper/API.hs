@@ -40,6 +40,7 @@ import Data.Aeson
 import Outputable (ppr)
 import Data.Foldable (foldrM)
 import qualified MonadUtils as GMU (liftIO)
+import Control.Arrow (first)
 
 
 -- | copy all files from the project to the temporary folder
@@ -478,11 +479,8 @@ getThingAtPoint :: FilePath -- ^ the source file
 --        -> Bool -- ^ do we want the result qualified?
 --        -> Bool -- ^ do we want the result typed?
         -> BuildWrapper (OpResult (Maybe ThingAtPoint))
-getThingAtPoint fp line col mccn=do
-        mm<-withGHCAST fp mccn $ BwGHC.getThingAtPointJSON line col
-        return $ case mm of 
-                (Just m,ns)->(m,ns)
-                (Nothing,ns)-> (Nothing,ns)
+getThingAtPoint fp line col mccn=
+        liftM (first (fromMaybe Nothing)) $ withGHCAST fp mccn $ BwGHC.getThingAtPointJSON line col
 
 -- | get locals identifiers
 getLocals :: FilePath -- ^ the source file
@@ -492,11 +490,17 @@ getLocals :: FilePath -- ^ the source file
         -> Int -- ^ the end column
         -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
         -> BuildWrapper (OpResult ([ThingAtPoint]))
-getLocals fp sline scol eline ecol mccn=do
-        mm<-withGHCAST fp mccn $ BwGHC.getLocalsJSON sline scol eline ecol
-        return $ case mm of 
-                (Just m,ns)->(m,ns)
-                (Nothing,ns)-> ([],ns)
+getLocals fp sline scol eline ecol mccn=
+        liftM (first (fromMaybe [])) $ withGHCAST fp mccn $ BwGHC.getLocalsJSON sline scol eline ecol
+ 
+-- | evaluate an expression
+evalExpression :: FilePath -- ^ the source file
+        -> String -- ^ expression
+        -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
+        -> BuildWrapper (OpResult ([EvalResult]))
+evalExpression fp expression mccn=
+        liftM (first (fromMaybe [])) $ withGHCAST fp mccn $ BwGHC.eval expression
+
                 
 -- | get all names in scope (GHC API)                
 getNamesInScope :: FilePath

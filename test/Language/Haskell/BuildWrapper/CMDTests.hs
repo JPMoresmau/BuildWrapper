@@ -54,6 +54,7 @@ class APIFacade a where
         getOccurrences :: a -> FilePath -> FilePath -> String -> IO (OpResult [TokenDef])
         getThingAtPoint :: a -> FilePath -> FilePath -> Int -> Int -> IO (OpResult (Maybe ThingAtPoint))
         getLocals :: a -> FilePath -> FilePath -> Int -> Int -> Int -> Int -> IO (OpResult [ThingAtPoint])
+        eval :: a -> FilePath -> FilePath -> String-> IO (OpResult [EvalResult])
         getNamesInScope :: a -> FilePath -> FilePath-> IO (OpResult (Maybe [String]))
         getCabalDependencies :: a -> FilePath -> Maybe FilePath -> IO (OpResult [(FilePath,[CabalPackage])])
         getCabalComponents :: a -> FilePath -> IO (OpResult [CabalComponent])
@@ -84,6 +85,7 @@ instance APIFacade CMDAPI where
         getOccurrences (CMDAPI c _) r fp s= runAPI c r "occurrences" ["--file="++fp,"--token="++s]
         getThingAtPoint (CMDAPI c _) r fp l cl= fmap removeLayoutTAP $ runAPI c r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show cl]
         getLocals (CMDAPI c _) r fp sl sc el ec= runAPI c r "locals" ["--file="++fp,"--sline="++ show sl,"--scolumn="++ show sc,"--eline="++ show el,"--ecolumn="++ show ec]
+        eval (CMDAPI c _) r fp ex= runAPI c r "eval" ["--file="++fp,"--expression="++ ex]
         getNamesInScope (CMDAPI c _) r fp= runAPI c r "namesinscope" ["--file="++fp]
         getCabalDependencies (CMDAPI c o) r mfp= runAPI c r "dependencies" ((maybe [] (\x->["--sandbox="++x]) mfp)++ cmdOpts o)
         getCabalComponents (CMDAPI c _) r= runAPI c r "components" []
@@ -1393,6 +1395,31 @@ test_Locals = do
         assertBool (elem "l1" namesM)
         return ()
 
+test_Eval :: Assertion
+test_Eval = do
+        let api=cabalAPI
+        root<-createTestProject
+        synchronize api root False
+        configure api root Source        
+        let rel="src"</>"Main.hs"
+        writeFile (root </> rel) $ unlines [  
+                  "module Main where",
+                  "import B.D",
+                  "main=return $ map id \"toto\"",
+                  "data Type1=MkType1_1 Int"
+                  ] 
+        build api root True Source
+        synchronize api root False
+        (_,nsErrors)<-getBuildFlags api root rel
+        assertBool (null nsErrors)   
+
+        (s1,_)<-eval api root rel "reverse \"toto\"" 
+        assertEqual [EvalResult (Just "[GHC.Types.Char]") (Just "\"otot\"") Nothing] s1
+        (s2,_)<-eval api root  rel "main" 
+        assertEqual [EvalResult (Just "[GHC.Types.Char]") (Just "\"toto\"") Nothing] s2     
+        (s3,_)<-eval api root rel "MkType1_1"
+        assertBool $ isPrefixOf "No instance for" $ (\(EvalResult _ _ (Just err))->err) $ head s3     
+        return ()
 
 test_NamesInScope :: Assertion
 test_NamesInScope = do
@@ -2053,8 +2080,8 @@ continue h=do
         hPutStrLn h "."
         hFlush h
 
-eval :: Handle -> String -> IO ()
-eval h expr=do
+evalLR :: Handle -> String -> IO ()
+evalLR h expr=do
         hPutStrLn h ("e "++expr)
         hFlush h
 

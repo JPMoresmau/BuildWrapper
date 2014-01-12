@@ -44,6 +44,7 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | Occurrences {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath,token::String, component:: Maybe String, logCabal::Bool}
         | ThingAtPointCmd {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, line::Int, column::Int, component:: Maybe String, logCabal::Bool}
         | Locals {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, sline::Int, scolumn::Int,eline::Int, ecolumn::Int, component:: Maybe String, logCabal::Bool}
+        | Eval {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, expression::String, component:: Maybe String, logCabal::Bool}
         | NamesInScope {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, component:: Maybe String, logCabal::Bool} 
         | Dependencies {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], sandbox::FilePath, logCabal::Bool}
         | Components {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], logCabal::Bool}
@@ -51,6 +52,7 @@ data BWCmd=Synchronize {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile:
         | GenerateUsage {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], returnAll:: Bool, cabalComponent::String, logCabal::Bool}
         | CleanImports {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], file:: FilePath, format :: Bool, component:: Maybe String, logCabal::Bool}
         | Clean {tempFolder::TempFolder, cabalPath::CabalPath, cabalFile::CabalFile, cabalFlags::String, cabalOption::[String], everything:: Bool, logCabal::Bool}
+        
     deriving (Show,Read,Data,Typeable)    
   
 
@@ -126,6 +128,10 @@ mlocals=Locals tf cp cf uf co fp
         (def &= help "start column" &= name "start column")
         (def &= help "end line" &= name "end line")
         (def &= help "end column" &= name "end column") mcc lc
+meval :: BWCmd
+meval=Eval tf cp cf uf co fp 
+        (def &= help "expression to evaluation" &= name "expression")
+        mcc lc
 mnamesInScope :: BWCmd
 mnamesInScope=NamesInScope tf cp cf uf co fp mcc lc
 mdependencies :: BWCmd
@@ -142,7 +148,7 @@ cmdMain :: IO ()
 cmdMain = cmdArgs
   (modes
      [msynchronize, msynchronize1, mconfigure, mwrite, mbuild, mbuild1,
-      mgetbf,mcleanimports, moutline, mtokenTypes, moccurrences, mthingAtPoint, mlocals, 
+      mgetbf,mcleanimports, moutline, mtokenTypes, moccurrences, mthingAtPoint, mlocals, meval,
       mnamesInScope, mdependencies, mcomponents, mgenerateUsage,mclean]
      &= helpArg [explicit, name "help", name "h"]
      &= help "buildwrapper executable"
@@ -167,6 +173,7 @@ cmdMain = cmdArgs
                 handle c@Occurrences{file=fi,token=t,component=mcomp}=runCmd c (getOccurrences fi t mcomp)
                 handle c@ThingAtPointCmd{file=fi,line=l,column=col,component=mcomp}=runCmd c (getThingAtPoint fi l col mcomp)
                 handle c@Locals{file=fi,sline=sl,scolumn=scol,eline=el,ecolumn=ecol,component=mcomp}=runCmd c (getLocals fi sl scol el ecol mcomp)
+                handle c@Eval{file=fi,expression=expr,component=mcomp}=runCmd c (evalExpression fi expr mcomp)
                 handle c@NamesInScope{file=fi,component=mcomp}=runCmd c (getNamesInScope fi mcomp)
                 handle c@Dependencies{sandbox=sd}=runCmd c (getCabalDependencies sd)
                 handle c@Components{}=runCmd c getCabalComponents

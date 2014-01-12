@@ -129,13 +129,13 @@ test_EvalLongRunning = do
         (mtts,ns)<-(readResult out) :: IO (OpResult (Maybe [NameDef]))
         assertBool (isJust mtts)
         assertBool (not $ notesInError ns) 
-        eval inp "reverse \"toto\"" 
+        evalLR inp "reverse \"toto\"" 
         s1<- readResult out :: IO [EvalResult]
         assertEqual [EvalResult (Just "[GHC.Types.Char]") (Just "\"otot\"") Nothing] s1
-        eval inp "main" 
+        evalLR inp "main" 
         s2<- readResult out :: IO [EvalResult]
         assertEqual [EvalResult (Just "[GHC.Types.Char]") (Just "\"toto\"") Nothing] s2     
-        eval inp "MkType1_1"
+        evalLR inp "MkType1_1"
         s3<- readResult out :: IO [EvalResult]
         assertBool $ isPrefixOf "No instance for" $ (\(EvalResult _ _ (Just err))->err) $ head s3     
         end inp     
