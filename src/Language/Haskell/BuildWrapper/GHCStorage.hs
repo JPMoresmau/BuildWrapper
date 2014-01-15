@@ -549,8 +549,8 @@ extractSourceSpan _ =Nothing
 -- | extract the source location from JSON
 extractSourceLoc :: Value -> Maybe (Int,Int)
 extractSourceLoc (Object m) | 
-        Just (Number(I l))<-HM.lookup "line" m,
-        Just (Number(I c))<-HM.lookup "column" m=Just (fromIntegral l,fromIntegral c)  
+        Just (Number l)<-HM.lookup "line" m,
+        Just (Number c)<-HM.lookup "column" m=Just (round l,round c)  
 extractSourceLoc _ = Nothing       
 
 -- | resolve the ident in an expression
