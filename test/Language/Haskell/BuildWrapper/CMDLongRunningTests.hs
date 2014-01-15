@@ -130,16 +130,29 @@ test_EvalLongRunning = do
         assertBool (isJust mtts)
         assertBool (not $ notesInError ns) 
         evalLR inp "reverse \"toto\"" 
-        s1<- readResult out :: IO [EvalResult]
+        (s1,_)<- readResult out :: IO (OpResult [EvalResult])
         assertEqual [EvalResult (Just "[GHC.Types.Char]") (Just "\"otot\"") Nothing] s1
         evalLR inp "main" 
-        s2<- readResult out :: IO [EvalResult]
+        (s2,_)<- readResult out :: IO (OpResult [EvalResult])
         assertEqual [EvalResult (Just "[GHC.Types.Char]") (Just "\"toto\"") Nothing] s2     
         evalLR inp "MkType1_1"
-        s3<- readResult out :: IO [EvalResult]
+        (s3,_)<- readResult out :: IO (OpResult [EvalResult])
         assertBool $ isPrefixOf "No instance for" $ (\(EvalResult _ _ (Just err))->err) $ head s3     
+        threadDelay 1000000
+        write api root rel $ unlines [  
+                  "module Main where",
+                  "import B.D",
+                  "main=return $ map id \"titi\"",
+                  "data Type1=MkType1_1 Int",
+                  "data Type2=MkType2_1 Int"
+                  ] 
+        continue inp
+        readResult out :: IO (OpResult (Maybe [NameDef]))  
+        evalLR inp "main" 
+        (s4,_)<- readResult out :: IO (OpResult [EvalResult])
+        assertEqual [EvalResult (Just "[GHC.Types.Char]") (Just "\"titi\"") Nothing] s4
         end inp     
-        
+      
 test_TokenTypesLongRunning :: Assertion
 test_TokenTypesLongRunning = do
         let api=cabalAPI

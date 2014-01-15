@@ -40,7 +40,7 @@ import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,Warn
 #endif
 import GHC
 import GHC.Paths ( libdir )
-import HscTypes ( srcErrorMessages, SourceError, GhcApiError)
+import HscTypes (srcErrorMessages, SourceError, GhcApiError)
 import Outputable
 import FastString (FastString,unpackFS,concatFS,fsLit,mkFastString, lengthFS)
 import Lexer hiding (loc)
@@ -77,7 +77,8 @@ import Data.Time.Calendar (Day(ModifiedJulianDay))
 import Control.Exception (SomeException)
 import Debugger (showTerm)
 import Exception (gtry)
-import Control.Arrow ((&&&), first)
+import Control.Arrow ((&&&))
+
 
 -- | a function taking the file name and typechecked module as parameters
 type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
@@ -153,7 +154,8 @@ initGHC f options=  do
                 -- and it takes a while to actually generate the o and hi files for big modules
                 -- if we use CompManager, it's slower for modules with lots of dependencies but we can keep hscTarget= HscNothing which makes it better for bigger modules
                 -- we use target interpreted so that it works with TemplateHaskell
-                setSessionDynFlags flg' {hscTarget = HscInterpreted, ghcLink = NoLink , ghcMode = CompManager}  
+                -- LinkInMemory needed for evaluation after reload
+                setSessionDynFlags flg' {hscTarget = HscInterpreted, ghcLink = LinkInMemory , ghcMode = CompManager}  
                 f       
                      
 -- | run a GHC action and get results with notes         
@@ -181,7 +183,7 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
 --                        SingleFile{lmModule=m}->LoadUpTo $ mkModuleName m
 --                        MultipleFile{}->LoadAllTargets
                 let howMuch=LoadAllTargets
-                -- GMU.liftIO $ putStrLn "Loading..."
+                --GMU.liftIO $ putStrLn "Loading..."
                 sf<-load howMuch
                            `gcatch` (\(e :: SourceError) -> handle_error ref e)
                            `gcatch` (\(ae :: GhcApiError) -> do
@@ -244,6 +246,7 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
                 d <- desugarModule t -- to get warnings
                 l <- loadModule d
                 --c3<-GMU.liftIO getClockTime
+                --GMU.liftIO $ putStrLn "Set context..."
 #if __GLASGOW_HASKELL__ < 704
                 setContext [ms_mod modSum] []
 #else
@@ -381,6 +384,7 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
 
                         (ns1,add2)<-if hasLoaded && t2==t1 then -- modification time is only precise to the second in GHC 7.6 or above, see http://hackage.haskell.org/trac/ghc/ticket/7473
                                 (do 
+                                        GMU.liftIO $ print "reloading"
                                         removeTarget (TargetFile fp Nothing)      
                                         load LoadAllTargets
                                         return ([],True)
@@ -407,7 +411,7 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
                                 -- eval an expression
                                 'e':' ':expr->do
                                       s<-getEvalResults expr
-                                      GMU.liftIO $ BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode s
+                                      GMU.liftIO $ BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode (s,[]::[BWNote])
                                       GMU.liftIO $ hFlush stdout
                                       r1 t2       
                                 -- token types
@@ -459,22 +463,23 @@ getEvalResults :: forall (m :: * -> *).
                     String -> m [EvalResult]
 getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (Just $ show e)])
                            (do
+                            df<-getSessionDynFlags
                             rr<- runStmt expr RunToCompletion
                             case rr of
                                     RunOk ns->do
-                                            df<-getSessionDynFlags
+                                           
                                             let q=(qualName &&& qualModule) defaultUserStyle
                                             mapM (\n->do
                                                     mty<-lookupName n
                                                     case mty of
                                                             Just (AnId aid)->do
                                                                     let pprTyp    = (pprTypeForUser True . idType) aid
-                                                                    t<-gtry $ GHC.obtainTermFromId 100 False aid
+                                                                    t<-gtry $ GHC.obtainTermFromId maxBound True aid
                                                                     evalDoc<-case t of
                                                                         Right term -> showTerm term
                                                                         Left  exn  -> return (text "*** Exception:" <+>
                                                                                                 text (show (exn :: SomeException)))
-                                                                    return $ EvalResult (Just $ showSDUser q df pprTyp) (Just $ showSDUser q df evalDoc) Nothing                      
+                                                                    return $ EvalResult (Just $ showSDUser q df pprTyp) (Just $ showSDUser q df evalDoc) Nothing
                                                             _->return $ EvalResult Nothing Nothing Nothing
                                                     ) ns
                                     RunException e ->return [EvalResult Nothing Nothing (Just $ show e)]
