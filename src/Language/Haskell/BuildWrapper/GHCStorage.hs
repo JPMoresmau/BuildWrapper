@@ -93,10 +93,10 @@ generateGHCInfo df env tcm=do
         -- print tcvals
         -- store objects with type annotations in a map keyed by module, name, line and column
         let tcByNameLoc=foldr buildMap DM.empty tcvals
-        print tcByNameLoc
+        -- print tcByNameLoc
         -- extract usages from renamed source
         rnvals<-liftM extractUsages $ dataToJSON df env tcm $ tm_renamed_source tcm
-        print rnvals
+        -- print rnvals
         -- add type information on objects
         let typedVals=map (addType tcByNameLoc) rnvals
         return (Array $ V.fromList typedVals)
