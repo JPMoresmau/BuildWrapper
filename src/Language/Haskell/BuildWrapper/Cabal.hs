@@ -220,7 +220,7 @@ cabalInit srcOrTgt= do
                         liftIO $ putStrLn "configuring because setup_config too old"
                         cabalConfigure srcOrTgt
                 else do
-                        tgs <-liftM read $ liftIO $ Prelude.readFile tgtF
+                        tgs <-liftM tryReadList $ liftIO $ Prelude.readFile tgtF
                         -- tgs <- liftIO $ DCD.runQuery (DCD.on DCD.localPkgDesc DCD.targets) setup_config
                         --mb_lbi <- liftIO $ DSC.maybeGetPersistBuildConfig dist_dir
                         case tgs of
@@ -376,6 +376,13 @@ readInt :: String -> Int -> Int
 readInt s def=let parses=reads s ::[(Int,String)]
         in if null parses 
                 then def
+                else fst $ head parses
+
+-- | read a list and return the empty list if not readable  
+tryReadList :: Read a => String -> [a]
+tryReadList s=let parses=reads s
+        in if null parses 
+                then []
                 else fst $ head parses
         
 -- | add a message to the note
