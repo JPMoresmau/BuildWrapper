@@ -93,13 +93,15 @@ generateGHCInfo df env tcm=do
         -- print tcvals
         -- store objects with type annotations in a map keyed by module, name, line and column
         let tcByNameLoc=foldr buildMap DM.empty tcvals
+        print tcByNameLoc
         -- extract usages from renamed source
         rnvals<-liftM extractUsages $ dataToJSON df env tcm $ tm_renamed_source tcm
-        -- print rnvals
+        print rnvals
         -- add type information on objects
         let typedVals=map (addType tcByNameLoc) rnvals
         return (Array $ V.fromList typedVals)
         where 
+                mn=T.pack $ showSD True df $ ppr $ moduleName $ ms_mod $ pm_mod_summary $ tm_parsed_module tcm
                 buildMap v@(Object m) dm | 
                         Just pos<-HM.lookup "Pos" m,
                         Success ifs <- fromJSON pos,
@@ -122,7 +124,10 @@ generateGHCInfo df env tcm=do
                                 mv2=case mv of
                                         Nothing -> DM.lookup (mo,s,iflLine $ ifsStart ifs,0) dm
                                         a->a
-                                in case mv2 of
+                                mv3=if mn==mo && isNothing mv2
+                                  then DM.lookup ("",s,iflLine $ ifsStart ifs,0) dm
+                                  else mv2        
+                                in case mv3 of
                                         Just (Object m2) |
                                                  Just qt<-HM.lookup "QType" m2,
                                                  Just t<-HM.lookup "Type" m2,
