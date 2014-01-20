@@ -30,7 +30,7 @@ import Data.Maybe (catMaybes)
 
 import System.IO.UTF8 (hPutStr,hGetContents)
 import System.IO (IOMode, openBinaryFile, IOMode(..), Handle, hClose)
-import Control.DeepSeq (rnf)
+import Control.DeepSeq (rnf, NFData)
 
 -- | State type
 type BuildWrapper=StateT BuildWrapperState IO
@@ -74,6 +74,9 @@ data BWLocation=BWLocation {
         }
         deriving (Show,Read,Eq)
 
+instance NFData BWLocation
+  where rnf (BWLocation src sl sc el ec)=rnf src `seq` rnf sl `seq` rnf sc `seq` rnf el `seq` rnf ec
+
 -- | build an empty span in a given file at a given location
 mkEmptySpan :: FilePath -> Int -> Int -> BWLocation
 mkEmptySpan src line col = BWLocation src line col line col
@@ -97,6 +100,9 @@ data BWNote=BWNote {
         ,bwnLocation :: BWLocation -- ^ where the note is
         }
         deriving (Show,Read,Eq)
+
+instance NFData BWNote
+  where rnf (BWNote _ t l)=rnf t `seq` rnf l
 
 -- | is a note an error?      
 isBWNoteError :: BWNote -> Bool
@@ -793,11 +799,15 @@ withBinaryFile n m f = bracket (openBinaryFile n m) hClose f
 
 -- | Evaluation of result
 -- using String since we get them from GHC API
+-- this can be fully evaluated via deepseq to make sure any side effect are evaluated
 data EvalResult = EvalResult {
   erType :: Maybe String
   ,erResult :: Maybe String
   ,erError :: Maybe String
   } deriving (Show,Read,Eq,Ord)
+
+instance NFData EvalResult
+  where rnf (EvalResult t r e)=rnf t `seq` rnf r `seq` rnf e
 
 instance ToJSON EvalResult where
         toJSON (EvalResult mt mr me)=object ["t" .= mt, "r" .= mr, "e" .= me]

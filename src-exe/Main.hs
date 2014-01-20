@@ -11,7 +11,10 @@
 module Main where
 
 import Language.Haskell.BuildWrapper.CMD
+import System.IO (hSetBuffering, stdout, BufferMode(..))
 
 -- | main entry point
 main::IO()
-main = cmdMain
+main = do
+  hSetBuffering stdout LineBuffering
+  cmdMain

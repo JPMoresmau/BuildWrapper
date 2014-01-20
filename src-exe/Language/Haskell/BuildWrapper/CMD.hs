@@ -18,6 +18,7 @@ import Control.Monad.State
 import System.Console.CmdArgs hiding (Verbosity(..),verbosity)
 import System.Directory (canonicalizePath)
 import Paths_buildwrapper
+import System.IO
 
 import Data.Aeson
 import qualified Data.ByteString.Lazy as BS
@@ -185,5 +186,6 @@ cmdMain = cmdArgs
                 runCmdV vb  cmd f=
                  do { cabalFile' <- (canonicalizePath $ cabalFile cmd) `catch` ((\_->return $ cabalFile cmd)::(IOException -> IO String)) -- canonicalize cabal-file path because Eclipse does not correctly keep track of case changes on the project path, but for preview the file does not exist!
                     ; resultJson <- evalStateT f (BuildWrapperState (tempFolder cmd) (cabalPath cmd) cabalFile' vb (cabalFlags cmd) (cabalOption cmd) (logCabal cmd))
+                    ;  hFlush stdout; hFlush stderr;  BSC.putStrLn "" -- ensure streams are flushed, and prefix and start of the line
                     ; BSC.putStrLn . BS.append "build-wrapper-json:" . encode $ resultJson
                     }

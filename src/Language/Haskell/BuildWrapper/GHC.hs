@@ -64,7 +64,7 @@ import Control.Monad (when, liftM)
 import qualified Data.Vector as V (foldr)
 import Module (moduleNameFS)
 -- import System.Time (getClockTime, diffClockTimes, timeDiffToString)
-import System.IO (hFlush, stdout)
+import System.IO (hFlush, stdout, stderr)
 import System.Directory (getModificationTime)
 #if __GLASGOW_HASKELL__ < 706
 import System.Time (ClockTime(TOD))
@@ -78,6 +78,7 @@ import Control.Exception (SomeException)
 import Debugger (showTerm)
 import Exception (gtry)
 import Control.Arrow ((&&&))
+import Control.DeepSeq (($!!))
 
 
 -- | a function taking the file name and typechecked module as parameters
@@ -384,7 +385,7 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
 
                         (ns1,add2)<-if hasLoaded && t2==t1 then -- modification time is only precise to the second in GHC 7.6 or above, see http://hackage.haskell.org/trac/ghc/ticket/7473
                                 (do 
-                                        GMU.liftIO $ print "reloading"
+                                        -- GMU.liftIO $ print "reloading"
                                         removeTarget (TargetFile fp Nothing)      
                                         load LoadAllTargets
                                         return ([],True)
@@ -411,8 +412,14 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
                                 -- eval an expression
                                 'e':' ':expr->do
                                       s<-getEvalResults expr
-                                      GMU.liftIO $ BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode (s,[]::[BWNote])
-                                      GMU.liftIO $ hFlush stdout
+                                      GMU.liftIO $ do
+                                          let js=encode $!! (s,[]::[BWNote])
+                                          -- ensure streams are flushed, and prefix and start of the line
+                                          hFlush stdout
+                                          hFlush stderr
+                                          BSC.putStrLn ""
+                                          BSC.putStrLn $ BS.append "build-wrapper-json:" js
+                                          hFlush stdout
                                       r1 t2       
                                 -- token types
                                 "t"->do
@@ -479,7 +486,7 @@ getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (J
                                                                         Right term -> showTerm term
                                                                         Left  exn  -> return (text "*** Exception:" <+>
                                                                                                 text (show (exn :: SomeException)))
-                                                                    return $ EvalResult (Just $ showSDUser q df pprTyp) (Just $ showSDUser q df evalDoc) Nothing
+                                                                    return $! EvalResult (Just $! showSDUser q df pprTyp) (Just $! showSDUser q df evalDoc) Nothing
                                                             _->return $ EvalResult Nothing Nothing Nothing
                                                     ) ns
                                     RunException e ->return [EvalResult Nothing Nothing (Just $ show e)]
@@ -556,7 +563,8 @@ eval :: String -- ^ the expression
         -> IO ([EvalResult])
 eval expression fp base_dir modul options= do
   mf<-withASTNotes (\_ _->getEvalResults expression) id base_dir (SingleFile fp modul) options
-  return $ concat $ fst mf  
+  let r=concat $!! fst mf  
+  return $!! concat $ fst mf  
   
 -- | convert a GHC SrcSpan to a Span,  ignoring the actual file info
 ghcSpanToLocation ::GHC.SrcSpan
@@ -1324,7 +1332,7 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                         let implicit=DS.fromList $ concatMap (maybe [] snd . (DM.lookup "")) impMaps
                         let allImps=concatMap DM.assocs impMaps
                         -- GMU.liftIO $ putStrLn $ show $ map (\(n,(_,ns))->(n,ns)) allImps
-                        GMU.liftIO $ print vs
+                        -- GMU.liftIO $ print vs
                         let usgMap=V.foldr ghcValToUsgMap DM.empty vs
                         let usgMapWithoutMe=DM.delete modu usgMap
                         -- GMU.liftIO $ print usgMapWithoutMe
