@@ -486,7 +486,7 @@ getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (J
                                                                         Right term -> showTerm term
                                                                         Left  exn  -> return (text "*** Exception:" <+>
                                                                                                 text (show (exn :: SomeException)))
-                                                                    return $! EvalResult (Just $! showSDUser q df pprTyp) (Just $! showSDUser q df evalDoc) Nothing
+                                                                    return $! EvalResult (Just $! showSDUser q df pprTyp) (Just $! showSDUser neverQualify df evalDoc) Nothing
                                                             _->return $ EvalResult Nothing Nothing Nothing
                                                     ) ns
                                     RunException e ->return [EvalResult Nothing Nothing (Just $ show e)]
