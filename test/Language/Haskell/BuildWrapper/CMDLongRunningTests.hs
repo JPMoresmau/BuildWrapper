@@ -152,6 +152,56 @@ test_EvalLongRunning = do
         (s4,_)<- readResult out :: IO (OpResult [EvalResult])
         assertEqual [EvalResult (Just "[GHC.Types.Char]") (Just "\"titi\"") Nothing] s4
         end inp     
+  
+test_EvalTextLongRunning :: Assertion
+test_EvalTextLongRunning = do
+        let api=cabalAPI
+        root<-createTestProject
+        let cf=testCabalFile root
+        writeFile cf $ unlines ["name: "++testProjectName,
+          "version:0.1",
+          "cabal-version:  >= 1.8",
+          "build-type:     Simple",
+          "",
+          "library",
+          "  hs-source-dirs:  src",
+          "  exposed-modules: A",
+          "  other-modules:  B.C",
+          "  build-depends:  base",
+          "",
+          "executable BWTest",
+          "  hs-source-dirs:  src",
+          "  main-is:         Main.hs",
+          "  other-modules:  B.D",
+          "  build-depends:  base, text",
+          "",
+          "test-suite BWTest-test",
+          "  type:            exitcode-stdio-1.0",
+          "  hs-source-dirs:  test",
+          "  main-is:         Main.hs",
+          "  other-modules:  TestA",
+          "  build-depends:  base",
+          ""
+          ]      
+          
+        synchronize api root False
+        configure api root Source        
+        let rel="src"</>"Main.hs"
+        writeFile (root </> rel) $ unlines [  
+                  "module Main where",
+                  "import qualified Data.Text as T",
+                  "t=T.pack \"test\""
+                  ] 
+        build api root True Source
+        synchronize api root False
+        (inp,out,_,_)<-build1lr root rel
+        (mtts,ns)<-(readResult out) :: IO (OpResult (Maybe [NameDef]))
+        assertBool (isJust mtts)
+        assertBool (not $ notesInError ns) 
+        evalLR inp "t" 
+        (s1,_)<- readResult out :: IO (OpResult [EvalResult])
+        assertEqual [EvalResult (Just "Data.Text.Internal.Text") (Just "\"test\"") Nothing] s1
+        end inp    
       
 test_TokenTypesLongRunning :: Assertion
 test_TokenTypesLongRunning = do

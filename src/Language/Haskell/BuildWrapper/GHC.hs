@@ -40,11 +40,19 @@ import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,Warn
 #endif
 import GHC
 import GHC.Paths ( libdir )
-import HscTypes (srcErrorMessages, SourceError, GhcApiError)
+import HscTypes (srcErrorMessages, SourceError, GhcApiError, extendInteractiveContext, hsc_IC)
 import Outputable
 import FastString (FastString,unpackFS,concatFS,fsLit,mkFastString, lengthFS)
 import Lexer hiding (loc)
 import Bag
+import Linker
+import RtClosureInspect
+
+import GhcMonad
+import Id
+import Var hiding (varName)
+import UniqSupply
+import PprTyThing
 
 #if __GLASGOW_HASKELL__ >= 702
 import SrcLoc
@@ -57,10 +65,8 @@ import StringBuffer
 import System.FilePath
 
 import qualified MonadUtils as GMU
-import Name (isTyVarName,isDataConName,isVarName,isTyConName)
-import Var (varType, Var)
-import PprTyThing (pprTypeForUser)
-import Control.Monad (when, liftM)
+import Name (isTyVarName,isDataConName,isVarName,isTyConName, mkInternalName)
+import Control.Monad (when, liftM, liftM2)
 import qualified Data.Vector as V (foldr)
 import Module (moduleNameFS)
 -- import System.Time (getClockTime, diffClockTimes, timeDiffToString)
@@ -75,10 +81,11 @@ import Data.Time.Clock (UTCTime(UTCTime))
 import Data.Time.Calendar (Day(ModifiedJulianDay))
 #endif
 import Control.Exception (SomeException)
-import Debugger (showTerm)
 import Exception (gtry)
 import Control.Arrow ((&&&))
 import Control.DeepSeq (($!!))
+import Unsafe.Coerce (unsafeCoerce)
+import OccName (mkOccName, varName)
 
 
 -- | a function taking the file name and typechecked module as parameters
@@ -102,7 +109,7 @@ withAST ::  (TypecheckedModule -> Ghc a) -- ^ the action
         -> [String] -- ^ the GHC options
         -> IO (Maybe a)
 withAST f fp base_dir modul options= do
-        (a,_)<-withASTNotes (\_ ->f) id base_dir (SingleFile fp modul) options
+        (a,_)<-withASTNotes (const f) id base_dir (SingleFile fp modul) options
         return $ listToMaybe a
 
 -- | perform an action on the GHC JSON AST
@@ -491,6 +498,54 @@ getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (J
                                                     ) ns
                                     RunException e ->return [EvalResult Nothing Nothing (Just $ show e)]
                                     _->return [])    
+   where 
+    --  A custom Term printer to enable the use of Show instances
+    -- this is a copy of the GHC Debugger.hs code
+    -- except that we force evaluation and always use show
+    showTerm :: GhcMonad m => Term -> m SDoc
+    showTerm term = do
+        cPprTerm (liftM2 (++) (\_y->[cPprShowable]) cPprTermBase) term
+    cPprShowable prec Term{ty=ty, val=val} =
+       do
+          hsc_env <- getSession
+          dflags  <- GHC.getSessionDynFlags
+          do
+             (new_env, bname) <- bindToFreshName hsc_env ty "showme"
+             setSession new_env
+             let exprS = "show " ++ showPpr dflags bname
+             txt_ <- withExtendedLinkEnv [(bname, val)]
+                                         (GHC.compileExpr exprS)
+             let myprec = 10 -- application precedence. TODO Infix constructors
+             let txt = unsafeCoerce txt_
+             if not (null txt) then
+               return $ Just $ cparen (prec >= myprec && needsParens txt)
+                                      (text (txt))
+              else return Nothing
+           `gfinally` do
+             setSession hsc_env
+    cPprShowable prec NewtypeWrap{ty=new_ty,wrapped_term=t} = 
+        cPprShowable prec t{ty=new_ty}
+    cPprShowable _ _ = return Nothing
+  
+    needsParens ('"':_) = False   -- some simple heuristics to see whether parens
+                                  -- are redundant in an arbitrary Show output
+    needsParens ('(':_) = False
+    needsParens txt = ' ' `elem` txt  
+  
+    bindToFreshName hsc_env ty userName = do
+      name <- newGrimName userName
+      let mkid       = AnId $ mkVanillaGlobal name ty 
+          new_ic   = extendInteractiveContext (hsc_IC hsc_env) [mkid]
+      return (hsc_env {hsc_IC = new_ic }, name)
+      
+    --    Create new uniques and give them sequentially numbered names
+    newGrimName :: GMU.MonadIO m => String -> m Name
+    newGrimName userName  = do
+      us <- liftIO $ mkSplitUniqSupply 'b'
+      let unique  = uniqFromSupply us
+          occname = mkOccName varName userName
+          name    = mkInternalName unique occname noSrcSpan
+      return name  
    
 -- | convert a Name int a NameDef                    
 name2nd :: GhcMonad m=> DynFlags -> Name -> m NameDef
@@ -563,8 +618,7 @@ eval :: String -- ^ the expression
         -> IO ([EvalResult])
 eval expression fp base_dir modul options= do
   mf<-withASTNotes (\_ _->getEvalResults expression) id base_dir (SingleFile fp modul) options
-  let r=concat $!! fst mf  
-  return $!! concat $ fst mf  
+  return $ concat $ fst mf  
   
 -- | convert a GHC SrcSpan to a Span,  ignoring the actual file info
 ghcSpanToLocation ::GHC.SrcSpan
