@@ -265,7 +265,9 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
 #endif             
 #endif                         
                 let fullfp=ff fp
-                opts<-getSessionDynFlags
+                -- use the dyn flags including pragmas from module, etc.
+                let opts=ms_hspp_opts modSum
+                setSessionDynFlags opts
                 env <- getSession
                 -- GMU.liftIO $ putStrLn ("writing " ++ fullfp)
                 GMU.liftIO $ storeGHCInfo opts env fullfp (dm_typechecked_module l)
@@ -478,26 +480,31 @@ getEvalResults :: forall (m :: * -> *).
 getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (Just $ show e)])
                            (do
                             df<-getSessionDynFlags
-                            rr<- runStmt expr RunToCompletion
-                            case rr of
-                                    RunOk ns->do
-                                           
-                                            let q=(qualName &&& qualModule) defaultUserStyle
-                                            mapM (\n->do
-                                                    mty<-lookupName n
-                                                    case mty of
-                                                            Just (AnId aid)->do
-                                                                    let pprTyp    = (pprTypeForUser True . idType) aid
-                                                                    t<-gtry $ GHC.obtainTermFromId maxBound True aid
-                                                                    evalDoc<-case t of
-                                                                        Right term -> showTerm term
-                                                                        Left  exn  -> return (text "*** Exception:" <+>
-                                                                                                text (show (exn :: SomeException)))
-                                                                    return $! EvalResult (Just $! showSDUser q df pprTyp) (Just $! showSDUser neverQualify df evalDoc) Nothing
-                                                            _->return $ EvalResult Nothing Nothing Nothing
-                                                    ) ns
-                                    RunException e ->return [EvalResult Nothing Nothing (Just $ show e)]
-                                    _->return [])    
+                            -- GMU.liftIO $ print $ xopt Opt_OverloadedStrings df
+                            do
+                              -- setSessionDynFlags $ xopt_set df Opt_OverloadedStrings
+                              rr<- runStmt expr RunToCompletion
+                              case rr of
+                                      RunOk ns->do
+                                             
+                                              let q=(qualName &&& qualModule) defaultUserStyle
+                                              mapM (\n->do
+                                                      mty<-lookupName n
+                                                      case mty of
+                                                              Just (AnId aid)->do
+                                                                      let pprTyp    = (pprTypeForUser True . idType) aid
+                                                                      t<-gtry $ GHC.obtainTermFromId maxBound True aid
+                                                                      evalDoc<-case t of
+                                                                          Right term -> showTerm term
+                                                                          Left  exn  -> return (text "*** Exception:" <+>
+                                                                                                  text (show (exn :: SomeException)))
+                                                                      return $! EvalResult (Just $! showSDUser q df pprTyp) (Just $! showSDUser neverQualify df evalDoc) Nothing
+                                                              _->return $ EvalResult Nothing Nothing Nothing
+                                                      ) ns
+                                      RunException e ->return [EvalResult Nothing Nothing (Just $ show e)]
+                                      _->return []   
+                             `gfinally` do
+                                     setSessionDynFlags df)
    where 
     --  A custom Term printer to enable the use of Show instances
     -- this is a copy of the GHC Debugger.hs code

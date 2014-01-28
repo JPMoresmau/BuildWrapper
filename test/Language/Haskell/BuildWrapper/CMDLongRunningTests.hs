@@ -20,26 +20,13 @@ import Data.ByteString.Lazy ()
 import Data.ByteString.Lazy.Char8()
 
 import Data.Maybe
-import Data.Char
-
-import System.Directory
-import System.FilePath
-import System.Info
-
-import Control.Monad
-
-
-import Data.Attoparsec
-import Data.Aeson
-import Data.Aeson.Parser
-import qualified Data.ByteString.Char8 as BS
 import Data.List
-import System.Exit
-import System.Process
+
+import System.FilePath
+
 
 import Test.Framework
 import Test.HUnit (Assertion)
-import System.IO (Handle, hPutStrLn, hFlush)
 import Control.Concurrent (threadDelay)
 
 test_NameDefsInScopeLongRunning :: Assertion
@@ -188,6 +175,7 @@ test_EvalTextLongRunning = do
         configure api root Source        
         let rel="src"</>"Main.hs"
         writeFile (root </> rel) $ unlines [  
+                  "{-# LANGUAGE OverloadedStrings #-}",
                   "module Main where",
                   "import qualified Data.Text as T",
                   "t=T.pack \"test\""
@@ -201,6 +189,10 @@ test_EvalTextLongRunning = do
         evalLR inp "t" 
         (s1,_)<- readResult out :: IO (OpResult [EvalResult])
         assertEqual [EvalResult (Just "Data.Text.Internal.Text") (Just "\"test\"") Nothing] s1
+        evalLR inp "T.breakOnEnd \"/\" \"a/b\"" 
+        (s2,_)<- readResult out :: IO (OpResult [EvalResult])
+        assertEqual [EvalResult (Just "(Data.Text.Internal.Text, Data.Text.Internal.Text)") (Just "(\"a/\",\"b\")") Nothing] s2
+        
         end inp    
       
 test_TokenTypesLongRunning :: Assertion
