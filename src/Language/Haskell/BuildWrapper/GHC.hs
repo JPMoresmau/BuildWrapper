@@ -83,7 +83,6 @@ import Data.Time.Calendar (Day(ModifiedJulianDay))
 import Control.Exception (SomeException)
 import Exception (gtry)
 import Control.Arrow ((&&&))
-import Control.DeepSeq (($!!))
 import Unsafe.Coerce (unsafeCoerce)
 import OccName (mkOccName, varName)
 
@@ -422,7 +421,7 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
                                 'e':' ':expr->do
                                       s<-getEvalResults expr
                                       GMU.liftIO $ do
-                                          let js=encode $!! (s,[]::[BWNote])
+                                          let js=encode (s,[]::[BWNote])
                                           -- ensure streams are flushed, and prefix and start of the line
                                           hFlush stdout
                                           hFlush stderr
@@ -498,7 +497,7 @@ getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (J
                                                                           Right term -> showTerm term
                                                                           Left  exn  -> return (text "*** Exception:" <+>
                                                                                                   text (show (exn :: SomeException)))
-                                                                      return $! EvalResult (Just $! showSDUser q df pprTyp) (Just $! showSDUser neverQualify df evalDoc) Nothing
+                                                                      return $ EvalResult (Just $ showSDUser q df pprTyp) (Just $ showSDUser neverQualify df evalDoc) Nothing
                                                               _->return $ EvalResult Nothing Nothing Nothing
                                                       ) ns
                                       RunException e ->return [EvalResult Nothing Nothing (Just $ show e)]
