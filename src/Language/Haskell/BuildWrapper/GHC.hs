@@ -31,6 +31,7 @@ import qualified Data.HashMap.Lazy as HM
 
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BSC
+import Data.List.Split
 
 import DynFlags
 #if __GLASGOW_HASKELL__ > 704
@@ -871,7 +872,7 @@ generateTokens' :: FilePath                        -- ^ The project's root direc
                -> Ghc (Either BWNote a)
 generateTokens' projectRoot contents literate xform filterFunc =do
      let (ppTs, ppC) = preprocessSource contents literate
-     -- putStrLn ppC
+     -- GMU.liftIO $ putStrLn ppC
      result<-  ghctokensArbitrary' projectRoot ppC
      case result of 
        Right toks ->do
@@ -898,7 +899,9 @@ preprocessSource contents literate=
                         | (Continue _)<-f = addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f)
                         | (ContinuePragma f2) <-f= addPPToken "P" (l,c) (ts2,"":l2,pragmaBehavior l f2)
                         | ('#':_)<-l =addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f) 
-                        | "{-# " `List.isPrefixOf` l=addPPToken "P" (l,c) (ts2,"":l2,pragmaBehavior l f) 
+                        | Just (l',s,e,f2)<-pragmaExtract l f=
+                          (TokenDef "P" (mkFileSpan c s c e) : ts2 ,l':l2,f2)
+                        -- | "{-# " `List.isPrefixOf` l=addPPToken "P" (l,c) (ts2,"":l2,pragmaBehavior l f) 
                         | (Indent n)<-f=(ts2,l:(replicate n (takeWhile (== ' ') l) ++ l2),Start)
                         | otherwise =(ts2,l:l2,Start)
                 ppSLit :: ([TokenDef],[String],PPBehavior) -> (String,Int) -> ([TokenDef],[String],PPBehavior)
@@ -922,6 +925,25 @@ preprocessSource contents literate=
                 pragmaBehavior l f
                         | "-}" `List.isInfixOf` l = f
                         | otherwise = ContinuePragma f
+                pragmaExtract :: String -> PPBehavior -> Maybe (String,Int,Int,PPBehavior)
+                pragmaExtract l f=
+                  let
+                    splits1=split (onSublist "{-# ") l
+                  in if length splits1>1
+                    then 
+                      let 
+                        startIdx= length $ head splits1
+                        (st,rest)=splitAt startIdx l
+                        splits2=split (onSublist "-}") rest
+                      in if length splits2>1
+                        then 
+                          let 
+                            endIdx=(length $ head splits2)+2
+                            (_, rest2)=splitAt endIdx rest
+                            len=endIdx
+                          in Just (st++(replicate len ' ')++rest2,startIdx+1,startIdx+len+1,f)
+                        else Just (st,startIdx+1,length l+1,ContinuePragma f)
+                    else Nothing
 
 -- | preprocessor behavior data
 data PPBehavior=Continue Int | Indent Int | Start | ContinuePragma PPBehavior

@@ -1043,6 +1043,44 @@ test_PreviewTokenTypesLine = do
         assertBool (null nsErrors1)
         let expectedS="[{\"P\":[1,1,26]},{\"C\":[2,1,13]},{\"K\":[3,1,7]},{\"IC\":[3,8,12]},{\"K\":[3,13,18]},{\"IV\":[5,1,5]},{\"S\":[5,6,8]},{\"IC\":[5,9,11]},{\"SS\":[5,12]},{\"IC\":[5,13,16]},{\"SS\":[5,16]},{\"IV\":[6,1,5]},{\"S\":[6,6]},{\"K\":[6,8,10]},{\"IV\":[7,9,15]},{\"SS\":[7,16]},{\"LC\":[7,17,20]},{\"S\":[7,20]},{\"LS\":[7,21,34]},{\"SS\":[7,34]},{\"IV\":[8,9,15]},{\"SS\":[8,16]},{\"LI\":[8,17]},{\"VS\":[8,19]},{\"LI\":[8,21]},{\"SS\":[8,22]},{\"PP\":[10,1,11]},{\"TH\":[11,1,3]},{\"IV\":[11,4,10]},{\"IV\":[11,11,23]},{\"TH\":[11,24,26]},{\"IC\":[11,26,35]},{\"SS\":[11,36]},{\"PP\":[12,1,7]}]"
         assertEqual expectedS (encode $ toJSON tts)
+        write api root rel $ unlines [
+                "-- a comment",
+                "module Main where", 
+                "{-# LINE 2 \"d:\\\\toot\\\\titi\\\\Foo.vhs\" #-}",
+                "",
+                "main :: IO (Int)",
+                "main = do" ,
+                "        putStr ('h':\"ello Prefs!\")",
+                "        return (2 + 2)",
+                "",
+                "#if USE_TH",
+                "$( derive makeTypeable ''Extension )",
+                "#endif",
+                ""
+                ]
+        (tts2,nsErrors2)<-getTokenTypes api root rel
+        assertBool (null nsErrors2)
+        let expectedS2="[{\"C\":[1,1,13]},{\"K\":[2,1,7]},{\"IC\":[2,8,12]},{\"K\":[2,13,18]},{\"P\":[3,1,41]},{\"IV\":[5,1,5]},{\"S\":[5,6,8]},{\"IC\":[5,9,11]},{\"SS\":[5,12]},{\"IC\":[5,13,16]},{\"SS\":[5,16]},{\"IV\":[6,1,5]},{\"S\":[6,6]},{\"K\":[6,8,10]},{\"IV\":[7,9,15]},{\"SS\":[7,16]},{\"LC\":[7,17,20]},{\"S\":[7,20]},{\"LS\":[7,21,34]},{\"SS\":[7,34]},{\"IV\":[8,9,15]},{\"SS\":[8,16]},{\"LI\":[8,17]},{\"VS\":[8,19]},{\"LI\":[8,21]},{\"SS\":[8,22]},{\"PP\":[10,1,11]},{\"TH\":[11,1,3]},{\"IV\":[11,4,10]},{\"IV\":[11,11,23]},{\"TH\":[11,24,26]},{\"IC\":[11,26,35]},{\"SS\":[11,36]},{\"PP\":[12,1,7]}]"
+        assertEqual expectedS2 (encode $ toJSON tts2)
+        write api root rel $ unlines [
+                "-- a comment",
+                "module Main ({-# LINE 24 \"d:\\\\toot\\\\titi\\\\Foo.vhs\" #-})", 
+                "where",
+                "",
+                "main :: IO (Int)",
+                "main = do" ,
+                "        putStr ('h':\"ello Prefs!\")",
+                "        return (2 + 2)",
+                "",
+                "#if USE_TH",
+                "$( derive makeTypeable ''Extension )",
+                "#endif",
+                ""
+                ]
+        (tts3,nsErrors3)<-getTokenTypes api root rel
+        assertBool (null nsErrors3)
+        let expectedS3="[{\"C\":[1,1,13]},{\"K\":[2,1,7]},{\"IC\":[2,8,12]},{\"SS\":[2,13]},{\"P\":[2,14,55]},{\"SS\":[2,55]},{\"K\":[3,1,6]},{\"IV\":[5,1,5]},{\"S\":[5,6,8]},{\"IC\":[5,9,11]},{\"SS\":[5,12]},{\"IC\":[5,13,16]},{\"SS\":[5,16]},{\"IV\":[6,1,5]},{\"S\":[6,6]},{\"K\":[6,8,10]},{\"IV\":[7,9,15]},{\"SS\":[7,16]},{\"LC\":[7,17,20]},{\"S\":[7,20]},{\"LS\":[7,21,34]},{\"SS\":[7,34]},{\"IV\":[8,9,15]},{\"SS\":[8,16]},{\"LI\":[8,17]},{\"VS\":[8,19]},{\"LI\":[8,21]},{\"SS\":[8,22]},{\"PP\":[10,1,11]},{\"TH\":[11,1,3]},{\"IV\":[11,4,10]},{\"IV\":[11,11,23]},{\"TH\":[11,24,26]},{\"IC\":[11,26,35]},{\"SS\":[11,36]},{\"PP\":[12,1,7]}]"
+        assertEqual expectedS3 (encode $ toJSON tts3)
    
 test_PreviewTokenTypesHaddock :: Assertion
 test_PreviewTokenTypesHaddock = do

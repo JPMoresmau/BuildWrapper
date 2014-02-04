@@ -62,7 +62,17 @@ test_PreprocPragma=
         assertEqual (TokenDef "PP" (mkLocation 1 1 1 20)) t1
         assertEqual (TokenDef "P" (mkLocation 2 1 2 35)) t2
         assertEqual (TokenDef "PP" (mkLocation 3 1 3 7)) t3
-        assertEqual "\n\n\nmodule Main\n" s2
+        assertEqual "                                  \n\n\nmodule Main\n" s2
+
+test_PreprocPragmaInside:: Assertion
+test_PreprocPragmaInside=
+        do
+        let s="module Main({-# LANGUAGE OverloadedStrings #-})\n"
+        let (tt,s2)=preprocessSource s False
+        assertEqual 1 (length tt)
+        let (t1:[])=tt
+        assertEqual (TokenDef "P" (mkLocation 1 13 1 47)) t1
+        assertEqual "module Main(                                  )\n" s2
 
 test_PreprocPragma2Lines:: Assertion
 test_PreprocPragma2Lines=
