@@ -505,7 +505,7 @@ setOptions dist_dir tgs=do
                 ,""
                 ,"result :: IO (DM.Map String [String])"
                 ,"result=do"
-                ,"lbi<-liftM (read . Prelude.unlines . drop 1 . lines) $ Prelude.readFile \""++setup_config ++"\""
+                ,"lbi<-liftM (read . Prelude.unlines . drop 1 . lines) $ Prelude.readFile "++show setup_config
                 ,"let pkg=localPkgDescr lbi"
                 ,"r<-newIORef DM.empty"
                 ,"let fmp=DM."++ show fmp 
