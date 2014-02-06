@@ -31,7 +31,6 @@ import qualified Data.HashMap.Lazy as HM
 
 import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BSC
-import Data.List.Split
 
 import DynFlags
 #if __GLASGOW_HASKELL__ > 704
@@ -928,21 +927,19 @@ preprocessSource contents literate=
                 pragmaExtract :: String -> PPBehavior -> Maybe (String,Int,Int,PPBehavior)
                 pragmaExtract l f=
                   let
-                    splits1=split (onSublist "{-# ") l
-                  in if length splits1>1
+                    (spl1,spl2)=splitString "{-# " l
+                  in if not $ null spl2
                     then 
                       let 
-                        startIdx= length $ head splits1
-                        (st,rest)=splitAt startIdx l
-                        splits2=split (onSublist "-}") rest
-                      in if length splits2>1
+                        startIdx= length $ spl1
+                        (spl3,spl4)=splitString "-}" spl2
+                      in if not $ null spl4
                         then 
                           let 
-                            endIdx=(length $ head splits2)+2
-                            (_, rest2)=splitAt endIdx rest
+                            endIdx=(length spl3)+2
                             len=endIdx
-                          in Just (st++(replicate len ' ')++rest2,startIdx+1,startIdx+len+1,f)
-                        else Just (st,startIdx+1,length l+1,ContinuePragma f)
+                          in Just (spl1++(replicate len ' ')++(drop 2 spl4),startIdx+1,startIdx+len+1,f)
+                        else Just (spl1,startIdx+1,length l+1,ContinuePragma f)
                     else Nothing
 
 -- | preprocessor behavior data

@@ -819,3 +819,13 @@ instance FromJSON EvalResult where
                 v .: "e"
         parseJSON _=mzero
         
+-- | splits a string at the first occurence of prefix       
+splitString :: Eq a => [a] -> [a] -> ([a],[a])
+splitString prf str=go str []
+  where 
+    go [] a=(reverse a,[])
+    go s@(x:xs) a=
+            if isPrefixOf prf s
+              then (reverse a,s) 
+              else go xs (x:a)
+              
