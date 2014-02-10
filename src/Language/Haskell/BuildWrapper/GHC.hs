@@ -190,7 +190,7 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
 --                        SingleFile{lmModule=m}->LoadUpTo $ mkModuleName m
 --                        MultipleFile{}->LoadAllTargets
                 let howMuch=LoadAllTargets
-                --GMU.liftIO $ putStrLn "Loading..."
+                -- GMU.liftIO $ putStrLn "Loading..."
                 sf<-load howMuch
                            `gcatch` (\(e :: SourceError) -> handle_error ref e)
                            `gcatch` (\(ae :: GhcApiError) -> do
@@ -253,7 +253,7 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
                 d <- desugarModule t -- to get warnings
                 l <- loadModule d
                 --c3<-GMU.liftIO getClockTime
-                --GMU.liftIO $ putStrLn "Set context..."
+                -- GMU.liftIO $ putStrLn "Set context..."
 #if __GLASGOW_HASKELL__ < 704
                 setContext [ms_mod modSum] []
 #else
@@ -270,6 +270,7 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
                 env <- getSession
                 -- GMU.liftIO $ putStrLn ("writing " ++ fullfp)
                 GMU.liftIO $ storeGHCInfo opts env fullfp (dm_typechecked_module l)
+                -- GMU.liftIO $ putStrLn ("written " ++ fullfp)
                 --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
                 f2 fp $ dm_typechecked_module l                
         

@@ -1,4 +1,4 @@
-{-# LANGUAGE CPP,OverloadedStrings,PatternGuards,RankNTypes #-}
+{-# LANGUAGE CPP,OverloadedStrings,PatternGuards,RankNTypes, ScopedTypeVariables #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.GHCStorage
 -- Copyright   : (c) JP Moresmau 2012
@@ -281,7 +281,8 @@ dataToJSON  df env tcm=
         bagVar     = liftM (simpleV "Bag(Located (HsBind Var))") . list . bagToList 
         exprVar    :: HsExpr Var ->IO Value
         exprVar ev  = do
-                mt<- getType env tcm (L noSrcSpan ev)
+                -- https://github.com/JPMoresmau/BuildWrapper/issues/23 : catch panics
+                mt<- getType env tcm (L noSrcSpan ev) `gcatch` (\(_::(GhcException))->return Nothing)
                 case mt of
                         Just t->  case identOfExpr ev of
                                 (Just v)->do
@@ -324,6 +325,8 @@ dataToJSON  df env tcm=
 
 -- | get type of an expression, inspired by the code in ghc-mod
 getType ::  HscEnv -> TypecheckedModule -> LHsExpr Var -> IO(Maybe Type)
+--getType _ _ (L _ (HsDo ArrowExpr _ _))=return Nothing
+--getType _ _ (L _ (HsArrApp {}))=return Nothing
 getType hs_env tcm e = do
       (_, mbe) <- GMU.liftIO $ deSugarExpr hs_env modu rn_env ty_env e
       return $ fmap (CoreUtils.exprType) mbe
