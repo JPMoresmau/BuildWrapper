@@ -24,6 +24,7 @@ import System.Directory
 import System.FilePath
 import System.Info
 
+import Control.Applicative ((<$>))
 import Control.Monad
 
 
@@ -60,7 +61,7 @@ class APIFacade a where
         getCabalComponents :: a -> FilePath -> IO (OpResult [CabalComponent])
         generateUsage :: a -> FilePath -> Bool -> CabalComponent -> IO (OpResult (Maybe [FilePath]))
         cleanImports :: a -> FilePath -> FilePath -> Bool -> IO (OpResult [ImportClean])
-        clean :: a -> FilePath -> Bool -> IO(Bool)
+        clean :: a -> FilePath -> Bool -> IO Bool
 
 
 data CMDAPI=CMDAPI {
@@ -71,10 +72,10 @@ data CMDAPI=CMDAPI {
 
 
 instance APIFacade CMDAPI where
-        synchronize (CMDAPI c o) r ff= runAPI c r "synchronize" (["--force="++ show ff ] ++ cmdOpts o)
+        synchronize (CMDAPI c o) r ff= runAPI c r "synchronize" (("--force="++ show ff) : cmdOpts o)
         synchronize1 (CMDAPI c o) r ff fp= runAPI c r "synchronize1" (["--force="++show ff,"--file="++fp]++ cmdOpts o)
         write (CMDAPI c _) r fp s= runAPI c r "write" ["--file="++fp,"--contents="++s]
-        configure (CMDAPI c o) r t= runAPI c r "configure" (["--cabaltarget="++ show t]++ cmdOpts o)
+        configure (CMDAPI c o) r t= runAPI c r "configure" (("--cabaltarget="++ show t) : cmdOpts o)
         configureWithFlags (CMDAPI c o) r t fgs= runAPI c r "configure" (["--cabaltarget="++ show t,"--cabalflags="++ fgs]++ cmdOpts o)
         build (CMDAPI c o) r b wc= runAPI c r "build" (["--output="++ show b,"--cabaltarget="++ show wc]++ cmdOpts o)
         build1 (CMDAPI c _) r fp= runAPI c r "build1" ["--file="++fp]
@@ -83,18 +84,18 @@ instance APIFacade CMDAPI where
         getOutline (CMDAPI c _) r fp= runAPI c r "outline" ["--file="++fp]
         getTokenTypes (CMDAPI c _) r fp= runAPI c r "tokentypes" ["--file="++fp]
         getOccurrences (CMDAPI c _) r fp s= runAPI c r "occurrences" ["--file="++fp,"--token="++s]
-        getThingAtPoint (CMDAPI c _) r fp l cl= fmap removeLayoutTAP $ runAPI c r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show cl]
+        getThingAtPoint (CMDAPI c _) r fp l cl= removeLayoutTAP <$> runAPI c r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show cl]
         getLocals (CMDAPI c _) r fp sl sc el ec= runAPI c r "locals" ["--file="++fp,"--sline="++ show sl,"--scolumn="++ show sc,"--eline="++ show el,"--ecolumn="++ show ec]
         eval (CMDAPI c _) r fp ex= runAPI c r "eval" ["--file="++fp,"--expression="++ ex]
         getNamesInScope (CMDAPI c _) r fp= runAPI c r "namesinscope" ["--file="++fp]
-        getCabalDependencies (CMDAPI c o) r mfp= runAPI c r "dependencies" ((maybe [] (\x->["--sandbox="++x]) mfp)++ cmdOpts o)
+        getCabalDependencies (CMDAPI c o) r mfp= runAPI c r "dependencies" (maybe [] (\x->["--sandbox="++x]) mfp ++ cmdOpts o)
         getCabalComponents (CMDAPI c _) r= runAPI c r "components" []
         generateUsage (CMDAPI c _) r retAll cc=runAPI c r "generateusage" ["--returnall="++ show retAll,"--cabalcomponent="++ cabalComponentName cc]
         cleanImports (CMDAPI c _) r fp fo= runAPI c r "cleanimports" ["--file="++fp,"--format="++ show fo]
         clean (CMDAPI c _) r e=runAPI c r "clean" ["--everything="++show e]
         
 build1lr :: FilePath
-                       -> [Char] -> IO (Handle, Handle, Handle, ProcessHandle)
+                       -> String -> IO (Handle, Handle, Handle, ProcessHandle)
 build1lr r fp= startAPIProcess r "build1" ["--file="++fp,"--longrunning=true"]
    
 cabalAPI= CMDAPI "cabal" []     
@@ -585,7 +586,7 @@ test_Outline = do
                         ]
                 ]
         assertEqual  (length expected) (length defs)
-        mapM_ (uncurry (assertEqual)) (zip expected defs)
+        mapM_ (uncurry assertEqual) (zip expected defs)
         assertEqual  [] es
         assertEqual  [ImportDef "Data.Char" Nothing (InFileSpan (InFileLoc 5 1)(InFileLoc 5 17)) False False "" Nothing] is
   
@@ -655,7 +656,7 @@ test_OutlineComments= do
                         ] Nothing (Just "Type1 haddock")  (Just 29)       
                 ]
         assertEqual (length expected) (length defs)
-        mapM_ (uncurry (assertEqual )) (zip expected defs)
+        mapM_ (uncurry assertEqual) (zip expected defs)
         assertEqual [] es
         assertEqual [ImportDef "Data.Char" Nothing (InFileSpan (InFileLoc 5 1)(InFileLoc 5 17)) False False "" Nothing] is
          
@@ -697,7 +698,7 @@ test_OutlineComments142= do
                         ] Nothing (Just "This is the documentation for the FV") (Just 7) 
                 ] Nothing (Just "Type for an entry in file") (Just 3)]
         assertEqual (length expected) (length defs)
-        mapM_ (uncurry (assertEqual )) (zip expected defs)
+        mapM_ (uncurry assertEqual) (zip expected defs)
         
 test_OutlinePreproc :: Assertion
 test_OutlinePreproc =  do
@@ -737,7 +738,7 @@ test_OutlinePreproc =  do
                 mkOutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25))
                 ]
         assertEqual (length expected1) (length defs1)
-        mapM_ (uncurry (assertEqual )) (zip expected1 defs1)
+        mapM_ (uncurry assertEqual) (zip expected1 defs1)
         write api root rel $ unlines [
                 "{-# LANGUAGE CPP #-}",
                 "",
@@ -762,7 +763,7 @@ test_OutlinePreproc =  do
                   ]
                 ] 
         assertEqual (length expected2) (length defs2)
-        mapM_ (uncurry (assertEqual )) (zip expected2 defs2)
+        mapM_ (uncurry assertEqual) (zip expected2 defs2)
         write api root rel $ unlines [
                 "{-# LANGUAGE CPP #-}",
                 "",
@@ -781,7 +782,7 @@ test_OutlinePreproc =  do
                 mkOutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 1)(InFileLoc 6 25)) 
                 ]
         assertEqual (length expected3) (length defs3)
-        mapM_ (uncurry (assertEqual )) (zip expected3 defs3)
+        mapM_ (uncurry assertEqual) (zip expected3 defs3)
   
                        
        
@@ -810,7 +811,7 @@ test_OutlineLiterate = do
                 mkOutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 6 3)(InFileLoc 6 27)) 
                 ]
         assertEqual (length expected1) (length defs1)
-        mapM_ (uncurry (assertEqual)) (zip expected1 defs1)
+        mapM_ (uncurry assertEqual) (zip expected1 defs1)
    
        
 test_OutlineImportExport :: Assertion
@@ -837,14 +838,14 @@ test_OutlineImportExport = do
                 ExportDef "Data.Char" IEModule (InFileSpan (InFileLoc 1 23)(InFileLoc 1 39)) [],
                 ExportDef "MkTest" IEThingAll (InFileSpan (InFileLoc 1 40)(InFileLoc 1 50)) []
                 ]
-        mapM_ (uncurry (assertEqual)) (zip exps es)
+        mapM_ (uncurry assertEqual) (zip exps es)
         let imps=[
                 ImportDef "Data.Char" Nothing (InFileSpan (InFileLoc 3 1)(InFileLoc 3 17)) False False "" Nothing,
                 ImportDef "Data.Map" Nothing (InFileSpan (InFileLoc 4 1)(InFileLoc 4 30)) False False "DM" (Just [ImportSpecDef "empty" IEVar (InFileSpan (InFileLoc 4 24)(InFileLoc 4 29)) []]),
                 ImportDef "Data.List" Nothing (InFileSpan (InFileLoc 5 1)(InFileLoc 5 42)) False True "" (Just [ImportSpecDef "orderBy" IEVar (InFileSpan (InFileLoc 5 26)(InFileLoc 5 33)) [],ImportSpecDef "groupBy" IEVar (InFileSpan (InFileLoc 5 34)(InFileLoc 5 41)) []]),
                 ImportDef "Data.Maybe" Nothing (InFileSpan (InFileLoc 6 1)(InFileLoc 6 42)) True False "" (Just [ImportSpecDef "Maybe" IEThingWith (InFileSpan (InFileLoc 6 30)(InFileLoc 6 41)) ["Just"]])
                 ] 
-        mapM_ (uncurry (assertEqual)) (zip imps is)
+        mapM_ (uncurry assertEqual) (zip imps is)
         
     
             
@@ -1413,8 +1414,8 @@ test_Locals = do
         assertBool (null nsErrors1)
         assertBool (not $ null loc1)
         let names=map tapName loc1
-        assertBool (elem "l2" names)
-        assertBool (elem "l1" names)
+        assertBool ("l2" `elem` names)
+        assertBool ("l1" `elem` names)
         write api root rel $ unlines [  
                   "module Main where",
                   "main=return $ map id \"toto\"",
@@ -1429,8 +1430,8 @@ test_Locals = do
         assertBool (null nsErrors2)
         assertBool (not $ null loc2)
         let namesM=map tapName loc2
-        assertBool (elem "l2" namesM)
-        assertBool (elem "l1" namesM)
+        assertBool ("l2" `elem` namesM)
+        assertBool ("l1" `elem` namesM)
         return ()
 
 test_Eval :: Assertion
@@ -1996,7 +1997,7 @@ testCabalContents = unlines ["name: "++testProjectName,
         ]        
      
 testCabalFile :: FilePath -> FilePath
-testCabalFile root =root </> ((last $ splitDirectories root) <.> ".cabal") 
+testCabalFile root =root </> (last (splitDirectories root) <.> ".cabal") 
      
 testAContents :: String     
 testAContents=unlines ["module A where","fA=undefined"]
@@ -2082,8 +2083,7 @@ runAPI cabal root command args= do
                                 a->do
                                         assertFailure (show a) 
                                         error ""
-                a->do
-                        assertFailure (show a)  
+                a-> assertFailure (show a)  
                         
 startAPIProcess :: FilePath -> String -> [String] -> IO (Handle, Handle, Handle, ProcessHandle)
 startAPIProcess  root command args= do
@@ -2097,7 +2097,7 @@ readResult :: (FromJSON a,Show a) => Handle -> IO a
 readResult h= do
         l<-BS.hGetLine h
         BS.putStrLn l
-        if BS.isPrefixOf "build-wrapper-json:" l
+        if "build-wrapper-json:" `BS.isPrefixOf` l
            then do
               let r=parse value $ BS.drop (BS.length "build-wrapper-json:") l
               -- print r
@@ -2106,10 +2106,8 @@ readResult h= do
                         let r1= fromJSON js
                         case r1 of 
                                 Data.Aeson.Success fin->return fin
-                                a->do
-                                        assertFailure (show a) 
-                a->do
-                        assertFailure (show a) 
+                                a-> assertFailure (show a) 
+                a-> assertFailure (show a) 
            else
                 readResult h    
          
@@ -2147,5 +2145,5 @@ cmdOpts :: [String] -> [String]
 cmdOpts =map ("--cabaloption=" ++)   
    
 notesInError :: [BWNote] -> Bool
-notesInError ns=not $ null $ filter (\x->BWError == bwnStatus x) ns
+notesInError = any (\ x -> BWError == bwnStatus x)
  

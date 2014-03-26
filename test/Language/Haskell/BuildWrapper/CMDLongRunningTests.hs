@@ -45,7 +45,7 @@ test_NameDefsInScopeLongRunning = do
         build api root True Source
         synchronize api root False
         (inp,out,_,_)<-build1lr root rel
-        (mtts,ns)<-(readResult out) :: IO (OpResult (Maybe [NameDef]))
+        (mtts,ns)<- readResult out :: IO (OpResult (Maybe [NameDef]))
         assertBool (isJust mtts)
         assertBool (not $ notesInError ns)
         let tts=fromJust mtts
@@ -113,7 +113,7 @@ test_EvalLongRunning = do
         build api root True Source
         synchronize api root False
         (inp,out,_,_)<-build1lr root rel
-        (mtts,ns)<-(readResult out) :: IO (OpResult (Maybe [NameDef]))
+        (mtts,ns)<- readResult out :: IO (OpResult (Maybe [NameDef]))
         assertBool (isJust mtts)
         assertBool (not $ notesInError ns) 
         evalLR inp "reverse \"toto\"" 
@@ -183,7 +183,7 @@ test_EvalTextLongRunning = do
         build api root True Source
         synchronize api root False
         (inp,out,_,_)<-build1lr root rel
-        (mtts,ns)<-(readResult out) :: IO (OpResult (Maybe [NameDef]))
+        (mtts,ns)<- readResult out :: IO (OpResult (Maybe [NameDef]))
         assertBool (isJust mtts)
         assertBool (not $ notesInError ns) 
         evalLR inp "t" 
@@ -211,7 +211,7 @@ test_TokenTypesLongRunning = do
         build api root True Source
         synchronize api root False
         (inp,out,_,_)<-build1lr root rel
-        (mtts,ns)<-(readResult out) :: IO (OpResult (Maybe [NameDef]))
+        (mtts,ns)<- readResult out :: IO (OpResult (Maybe [NameDef]))
         assertBool (isJust mtts)
         assertBool (not $ notesInError ns) 
         tokenTypesLR inp
@@ -240,7 +240,7 @@ test_ThingAtPointLongRunning = do
         build api root True Source
         synchronize api root False
         (inp,out,_,_)<-build1lr root rel
-        (mtts,ns)<-(readResult out) :: IO (OpResult (Maybe [NameDef]))
+        (mtts,ns)<- readResult out :: IO (OpResult (Maybe [NameDef]))
         assertBool (isJust mtts)
         assertBool (not $ notesInError ns) 
         tokenTypesLR inp
@@ -276,15 +276,15 @@ test_LocalsLongRunning = do
         build api root True Source
         synchronize api root False
         (inp,out,_,_)<-build1lr root rel
-        (mtts,ns)<-(readResult out) :: IO (OpResult (Maybe [NameDef]))
+        (mtts,ns)<- readResult out :: IO (OpResult (Maybe [NameDef]))
         assertBool (isJust mtts)
         assertBool (not $ notesInError ns) 
         localsLR inp 4 1 6 10
-        (tap1,nsErrorsTap)<-readResult out :: IO (OpResult ([ThingAtPoint]))
+        (tap1,nsErrorsTap)<-readResult out :: IO (OpResult [ThingAtPoint])
         assertBool (null nsErrorsTap)
         let namesM=map tapName tap1
-        assertBool (elem "l2" namesM)
-        assertBool (elem "l1" namesM)
+        assertBool ("l2" `elem` namesM)
+        assertBool ("l1" `elem` namesM)
         continue inp
         (mtts2,ns2)<-readResult out :: IO (OpResult (Maybe [NameDef]))  
         assertBool (not $ notesInError ns2)
