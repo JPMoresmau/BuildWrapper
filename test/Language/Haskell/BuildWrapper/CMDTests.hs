@@ -97,7 +97,8 @@ instance APIFacade CMDAPI where
 build1lr :: FilePath
                        -> String -> IO (Handle, Handle, Handle, ProcessHandle)
 build1lr r fp= startAPIProcess r "build1" ["--file="++fp,"--longrunning=true"]
-   
+
+cabalAPI :: CMDAPI
 cabalAPI= CMDAPI "cabal" []     
 
 exeExtension :: String

@@ -176,7 +176,7 @@ cmdMain = cmdArgs
                 handle c@Locals{file=fi,sline=sl,scolumn=scol,eline=el,ecolumn=ecol,component=mcomp}=runCmd c (getLocals fi sl scol el ecol mcomp)
                 handle c@Eval{file=fi,expression=expr,component=mcomp}=runCmd c (evalExpression fi expr mcomp)
                 handle c@NamesInScope{file=fi,component=mcomp}=runCmd c (getNamesInScope fi mcomp)
-                handle c@Dependencies{sandbox=sd}=runCmd c (getCabalDependencies sd)
+                handle c@Dependencies{sandbox=sd'}=runCmd c (getCabalDependencies sd')
                 handle c@Components{}=runCmd c getCabalComponents
                 handle c@GenerateUsage{returnAll=reta,cabalComponent=comp}=runCmd c (generateUsage reta comp)
                 handle c@Clean{everything=e}=runCmd c (clean e)
