@@ -791,11 +791,11 @@ readFile n =  do
 
 -- | write string to file
 writeFile :: FilePath -> String -> IO ()
-writeFile n s = withBinaryFile n WriteMode (\ h -> hPutStr h s)      
+writeFile n s = withBinaryFile n WriteMode (`hPutStr` s)      
 
 -- | perform operation on a binary opened file
 withBinaryFile :: FilePath -> IOMode -> (Handle -> IO a) -> IO a
-withBinaryFile n m f = bracket (openBinaryFile n m) hClose f
+withBinaryFile n m = bracket (openBinaryFile n m) hClose
 
 -- | Evaluation of result
 -- using String since we get them from GHC API
@@ -825,7 +825,7 @@ splitString prf str=go str []
   where 
     go [] a=(reverse a,[])
     go s@(x:xs) a=
-            if isPrefixOf prf s
+            if prf `isPrefixOf` s
               then (reverse a,s) 
               else go xs (x:a)
               

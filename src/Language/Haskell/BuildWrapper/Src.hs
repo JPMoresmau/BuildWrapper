@@ -26,7 +26,7 @@ import Control.Monad.Trans.State.Lazy (State, get, evalState, put)
 -- | get the AST
 getHSEAST :: String -- ^ input text
         -> [String] -- ^ options
-        -> (ParseResult (Module SrcSpanInfo, [Comment]))
+        -> ParseResult (Module SrcSpanInfo, [Comment])
 getHSEAST input options=do
         -- we add MultiParamTypeClasses because we may need it if the module we're parsing uses a type class with multiple parameters, which doesn't require the PRAGMA (only in the module DEFINING the type class)
         -- we add PatternGuards since GHC only gives a warning if not explicit
@@ -40,9 +40,9 @@ getHSEAST input options=do
             optionsPragmas = [ optionsPragma | S.OptionsPragma _ _ optionsPragma <- topPragmas ]
             optionsFromPragmas = concatMap words optionsPragmas
 #if MIN_VERSION_haskell_src_exts(1,14,0)   
-            exts=EnableExtension MultiParamTypeClasses : EnableExtension PatternGuards : (map (\x->classifyExtension $ if "-X" `isPrefixOf` x then tail $ tail x else x) $ options ++ optionsFromPragmas)
+            exts=EnableExtension MultiParamTypeClasses : EnableExtension PatternGuards : map (\x->classifyExtension $ if "-X" `isPrefixOf` x then tail $ tail x else x) (options ++ optionsFromPragmas)
 #else
-            exts=MultiParamTypeClasses : PatternGuards : (map (\x->classifyExtension $ if "-X" `isPrefixOf` x then tail $ tail x else x) $ options ++ optionsFromPragmas)
+            exts=MultiParamTypeClasses : PatternGuards : map (\x->classifyExtension $ if "-X" `isPrefixOf` x then tail $ tail x else x) (options ++ optionsFromPragmas)
 #endif
             extsFull=if "-fglasgow-exts" `elem` options ++ optionsFromPragmas
                 then exts ++ glasgowExts

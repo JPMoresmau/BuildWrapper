@@ -52,7 +52,7 @@ import Data.List (sortBy)
 --import GHC.SYB.Utils (Stage(..), showData)
 import qualified MonadUtils as GMU
 import TcRnTypes (tcg_type_env,tcg_rdr_env)
-import qualified CoreUtils as CoreUtils (exprType)
+import qualified CoreUtils (exprType)
 import Desugar (deSugarExpr)
 import Control.Monad (liftM)
 import Data.Aeson.Types (Pair)
@@ -145,7 +145,7 @@ storeGHCInfo ::
         -> FilePath -- ^ the source file
         -> TypecheckedModule -- ^ the GHC AST
         -> IO()
-storeGHCInfo df env fp tcm=  do
+storeGHCInfo df env fp tcm =
 --        putStrLn $ showData TypeChecker 4 $ typecheckedSource tcm
 --        putStrLn "Typechecked"
 --        BSC.putStrLn $ encode $ dataToJSON $ typecheckedSource tcm
@@ -285,8 +285,7 @@ dataToJSON  df env tcm=
                 mt<- getType env tcm (L noSrcSpan ev) `gcatch` (\(_::(GhcException))->return Nothing)
                 case mt of
                         Just t->  case identOfExpr ev of
-                                (Just v)->do
-                                        return $ typedVar v t
+                                Just v -> return $ typedVar v t
                                 Nothing->generic ev
                                         --do
                                         --val<-generic ev
@@ -329,7 +328,7 @@ getType ::  HscEnv -> TypecheckedModule -> LHsExpr Var -> IO(Maybe Type)
 --getType _ _ (L _ (HsArrApp {}))=return Nothing
 getType hs_env tcm e = do
       (_, mbe) <- GMU.liftIO $ deSugarExpr hs_env modu rn_env ty_env e
-      return $ fmap (CoreUtils.exprType) mbe
+      return $ fmap CoreUtils.exprType mbe
       where
         modu = ms_mod $ pm_mod_summary $ tm_parsed_module tcm
         rn_env = tcg_rdr_env $ fst $ tm_internals_ tcm

@@ -425,9 +425,9 @@ getOutline fp mccn=do
           then do
                mv<-liftIO $ getUsageInfo tgt
                return $ case mv of
-                        (Array arr) | V.length arr==5->let
+                        Array arr | V.length arr==5->let
                                 (Success r)= fromJSON (arr V.! 4)
-                                in (Just r) 
+                                in Just r
                         _->Nothing
           else return Nothing
        case mods of
@@ -489,7 +489,7 @@ getLocals :: FilePath -- ^ the source file
         -> Int -- ^ the end line
         -> Int -- ^ the end column
         -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
-        -> BuildWrapper (OpResult ([ThingAtPoint]))
+        -> BuildWrapper (OpResult [ThingAtPoint])
 getLocals fp sline scol eline ecol mccn=
         liftM (first (fromMaybe [])) $ withGHCAST fp mccn $ BwGHC.getLocalsJSON sline scol eline ecol
  
@@ -497,7 +497,7 @@ getLocals fp sline scol eline ecol mccn=
 evalExpression :: FilePath -- ^ the source file
         -> String -- ^ expression
         -> Maybe String -- ^ the cabal component to use, or Nothing if not specified 
-        -> BuildWrapper (OpResult ([EvalResult]))
+        -> BuildWrapper (OpResult [EvalResult])
 evalExpression fp expression mccn=
         liftM (first (fromMaybe [])) $ withGHCAST fp mccn $ BwGHC.eval expression
 
