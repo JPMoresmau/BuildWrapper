@@ -15,6 +15,7 @@ import Language.Haskell.BuildWrapper.Base hiding (Target,ImportExportType(..))
 import Language.Haskell.BuildWrapper.GHCStorage
 
 import Prelude hiding (readFile, writeFile)
+import Control.Applicative ((<$>))
 import Data.Char
 import Data.Generics hiding (Fixity, typeOf, empty)
 import Data.Maybe
@@ -33,11 +34,14 @@ import qualified Data.ByteString.Lazy as BS
 import qualified Data.ByteString.Lazy.Char8 as BSC
 
 import DynFlags
+import ErrUtils
+    ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,WarningMessages
 #if __GLASGOW_HASKELL__ > 704
-import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,WarningMessages,MsgDoc)
+    , MsgDoc
 #else
-import ErrUtils ( ErrMsg(..), WarnMsg, mkPlainErrMsg,Messages,ErrorMessages,WarningMessages,Message)
+    , Message
 #endif
+    )
 import GHC
 import GHC.Paths ( libdir )
 import HscTypes (srcErrorMessages, SourceError, GhcApiError, extendInteractiveContext, hsc_IC)
@@ -74,8 +78,6 @@ import System.IO (hFlush, stdout, stderr)
 import System.Directory (getModificationTime)
 #if __GLASGOW_HASKELL__ < 706
 import System.Time (ClockTime(TOD))
-import Unsafe.Coerce (unsafeCoerce)
-
 #else
 import Data.Time.Clock (UTCTime(UTCTime))
 import Data.Time.Calendar (Day(ModifiedJulianDay))
@@ -139,7 +141,7 @@ withASTNotes ::  GHCApplyFunction a -- ^ the final action to perform on the resu
         ->  LoadContents -- ^ what to load
         -> [String] -- ^ the GHC options 
         -> IO (OpResult [a])
-withASTNotes f ff base_dir contents options=initGHC (ghcWithASTNotes f ff base_dir contents True) options
+withASTNotes f ff base_dir contents =initGHC (ghcWithASTNotes f ff base_dir contents True)
 
 -- | init GHC session
 initGHC ::  Ghc a  
@@ -208,9 +210,9 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
                 -- GMU.liftIO $ print fps
                 a<-case sf of
                         Failed-> return []
-                        _  ->fmap catMaybes $ mapM (\(fp,m)->(do
+                        _  -> catMaybes <$> mapM (\(fp,m)->(do
                                 modSum <- getModSummary $ mkModuleName m
-                                fmap Just $ workOnResult f fp modSum)
+                                Just <$> workOnResult f fp modSum)
                                `gcatch` (\(se :: SourceError) -> do
                                         dumpError ref contents se
                                         return Nothing)
@@ -227,7 +229,7 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
                 df <- getSessionDynFlags
                 return (a,List.nub $ notes ++ reverse (ghcMessagesToNotes df base_dir (warns, emptyBag)))
 #else
-                return $ (a,List.nub $ notes)
+                return (a,List.nub notes)
 #endif
         where
             processError :: LoadContents -> String -> Bool
@@ -366,32 +368,28 @@ getGhcNameDefsInScopeLongRunning  :: FilePath -- ^ source path
         -> String -- ^ module name
         -> [String] -- ^ build options
         -> IO ()
-getGhcNameDefsInScopeLongRunning fp base_dir modul options=do
+getGhcNameDefsInScopeLongRunning fp base_dir modul =
 
 #if __GLASGOW_HASKELL__ < 706
-        initGHC (go (TOD 0 0)) options
-        where 
-                go :: 
-                        ClockTime
-                        -> Ghc ()
-                go t1 = do
-                        t2<- GMU.liftIO $ getModificationTime fp
-                        let hasLoaded=case t1 of
-                                TOD 0 _ -> False
-                                _ -> True
+        initGHC (go (TOD 0 0))
 #else
-        initGHC (go (UTCTime (ModifiedJulianDay 0) 0)) options
-        where 
-                go :: 
-                        UTCTime
-                        -> Ghc ()
-                go t1 = do
-                        t2<- GMU.liftIO $ getModificationTime fp
-                        let hasLoaded=case t1 of
-                                UTCTime (ModifiedJulianDay 0) _ -> False
-                                _ -> True
+        initGHC (go (UTCTime (ModifiedJulianDay 0) 0))
 #endif
-
+        where 
+#if __GLASGOW_HASKELL__ < 706
+                go :: ClockTime -> Ghc ()
+#else
+                go :: UTCTime -> Ghc ()
+#endif
+                go t1 = do
+                        let hasLoaded=case t1 of
+#if __GLASGOW_HASKELL__ < 706
+                                TOD 0 _ -> False
+#else
+                                UTCTime (ModifiedJulianDay 0) _ -> False
+#endif
+                                _ -> True
+                        t2<- GMU.liftIO $ getModificationTime fp
                         (ns1,add2)<-if hasLoaded && t2==t1 then -- modification time is only precise to the second in GHC 7.6 or above, see http://hackage.haskell.org/trac/ghc/ticket/7473
                                 (do 
                                         -- GMU.liftIO $ print "reloading"
@@ -503,15 +501,15 @@ getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (J
                                                       ) ns
                                       RunException e ->return [EvalResult Nothing Nothing (Just $ show e)]
                                       _->return []   
-                             `gfinally` do
+                             `gfinally`
                                      setSessionDynFlags df)
    where 
     --  A custom Term printer to enable the use of Show instances
     -- this is a copy of the GHC Debugger.hs code
     -- except that we force evaluation and always use show
     showTerm :: GhcMonad m => Term -> m SDoc
-    showTerm term = do
-        cPprTerm (liftM2 (++) (\_y->[cPprShowable]) cPprTermBase) term
+    showTerm =
+        cPprTerm (liftM2 (++) (const [cPprShowable]) cPprTermBase)
     cPprShowable prec Term{ty=ty, val=val} =
        do
           hsc_env <- getSession
@@ -524,11 +522,11 @@ getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (J
                                          (GHC.compileExpr exprS)
              let myprec = 10 -- application precedence. TODO Infix constructors
              let txt = unsafeCoerce txt_
-             if not (null txt) then
-               return $ Just $ cparen (prec >= myprec && needsParens txt)
-                                      (text (txt))
-              else return Nothing
-           `gfinally` do
+             return $ if not (null txt)
+                then Just $ cparen (prec >= myprec && needsParens txt)
+                                      (text txt)
+                else Nothing
+           `gfinally`
              setSession hsc_env
     cPprShowable prec NewtypeWrap{ty=new_ty,wrapped_term=t} = 
         cPprShowable prec t{ty=new_ty}
@@ -622,7 +620,7 @@ eval :: String -- ^ the expression
         -> FilePath -- ^ base directory
         -> String  -- ^ module name
         -> [String] -- ^  build flags
-        -> IO ([EvalResult])
+        -> IO [EvalResult]
 eval expression fp base_dir modul options= do
   mf<-withASTNotes (\_ _->getEvalResults expression) id base_dir (SingleFile fp modul) options
   return $ concat $ fst mf  
@@ -707,7 +705,7 @@ ghctokensArbitrary base_dir contents options= do
 #endif
                 let prTS = lexTokenStreamH sb lexLoc dflags1
                 case prTS of
-                        POk _ toks      -> do
+                        POk _ toks      ->
                                 -- GMU.liftIO $ print $ map (show . unLoc) toks
                                 return $ Right $ filter ofInterest toks
                         PFailed loc msg -> return $ Left $ ghcErrMsgToNote dflags1 base_dir $ 
@@ -736,7 +734,7 @@ ghctokensArbitrary' base_dir contents= do
 #endif        
         let prTS = lexTokenStreamH sb lexLoc dflags1
         case prTS of
-                POk _ toks      -> do
+                POk _ toks      ->
                         -- GMU.liftIO $ print $ map (show . unLoc) toks
                         return $ Right $ filter ofInterest toks
                 PFailed loc msg -> return $ Left $ ghcErrMsgToNote dflags1 base_dir $ 
@@ -932,14 +930,14 @@ preprocessSource contents literate=
                   in if not $ null spl2
                     then 
                       let 
-                        startIdx= length $ spl1
+                        startIdx= length spl1
                         (spl3,spl4)=splitString "-}" spl2
                       in if not $ null spl4
                         then 
                           let 
-                            endIdx=(length spl3)+2
+                            endIdx= length spl3 + 2
                             len=endIdx
-                          in Just (spl1++(replicate len ' ')++(drop 2 spl4),startIdx+1,startIdx+len+1,f)
+                          in Just (spl1++ replicate len ' ' ++ drop 2 spl4,startIdx+1,startIdx+len+1,f)
                         else Just (spl1,startIdx+1,length l+1,ContinuePragma f)
                     else Nothing
 
@@ -1348,7 +1346,7 @@ ghcImportMap l@(L _ imp)=(do
                                                 then  mmx 
                                                 else DM.insertWith (\(_,xs1) (_,xs2)->(l,xs1++xs2)) expM (l,[nT]) mmx
         return $ if ideclImplicit imp
-                then DM.insert "" (l,(concatMap snd $ DM.elems fullM)) fullM
+                then DM.insert "" (l, concatMap snd $ DM.elems fullM) fullM
                 else fullM
         )
         `gcatch` (\(se :: SourceError) -> do
@@ -1409,7 +1407,7 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                         (Array vs)<- GMU.liftIO $ generateGHCInfo df env tm
                         impMaps<-mapM ghcImportMap imps
                         -- let impMap=DM.unions impMaps
-                        let implicit=DS.fromList $ concatMap (maybe [] snd . (DM.lookup "")) impMaps
+                        let implicit=DS.fromList $ concatMap (maybe [] snd . DM.lookup "") impMaps
                         let allImps=concatMap DM.assocs impMaps
                         -- GMU.liftIO $ putStrLn $ show $ map (\(n,(_,ns))->(n,ns)) allImps
                         -- GMU.liftIO $ print vs
@@ -1488,7 +1486,7 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                         | DS.null cs=pprName n
                         | otherwise =let
                                 nameList= T.intercalate ", " $ List.sortBy (comparing T.toLower) $ map pprName $ DS.toList cs
-                                in (pprName n) `mappend` " (" `mappend` nameList `mappend` ")" 
+                                in pprName n `mappend` " (" `mappend` nameList `mappend` ")" 
                 getRemovedImports :: [(T.Text,(LImportDecl Name,[T.Text]))] -> FinalImportMap -> [ImportClean]
                 getRemovedImports allImps ftm= let 
                         cleanedLines=DS.fromList $ map (\(L l _,_)->iflLine $ifsStart $ ghcSpanToLocation l) $ DM.elems ftm

@@ -39,7 +39,7 @@ test_CabalDev2Projects= do
         assertBool (null dels) 
         configure api root2 Source
         (BuildResult bool1b _,nsErrors1b)<-build api root2 True Source
-        assertBool (bool1b)
+        assertBool bool1b
         assertEqual 0 (length nsErrors1b)
         let relB="src"</>"B.hs"
         (mtts1,nsErrors1)<-getNamesInScope api root2 relB
@@ -59,7 +59,7 @@ test_CabalDev2Projects= do
         synchronize api root2 False
         configure api root2 Source    
         (BuildResult bool2b _,nsErrors2b)<-build api root2 True Source
-        assertBool (bool2b)
+        assertBool bool2b
         assertEqual 0 (length nsErrors2b)
         (mtts2,nsErrors2)<-getNamesInScope api root2 relB
         assertBool (null nsErrors2)
@@ -81,7 +81,7 @@ test_CabalDevDependencies= do
         assertBool (null dels) 
         configure api root2 Source
         (BuildResult bool1b _,nsErrors1b)<-build api root2 True Source
-        assertBool (bool1b)
+        assertBool bool1b
         assertEqual 0 (length nsErrors1b)
         (cps,nsOK)<-getCabalDependencies api root2 (Just "./.dist-buildwrapper/cabal-dev")
         assertBool (null nsOK)

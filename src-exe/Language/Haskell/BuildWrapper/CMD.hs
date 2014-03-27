@@ -176,7 +176,7 @@ cmdMain = cmdArgs
                 handle c@Locals{file=fi,sline=sl,scolumn=scol,eline=el,ecolumn=ecol,component=mcomp}=runCmd c (getLocals fi sl scol el ecol mcomp)
                 handle c@Eval{file=fi,expression=expr,component=mcomp}=runCmd c (evalExpression fi expr mcomp)
                 handle c@NamesInScope{file=fi,component=mcomp}=runCmd c (getNamesInScope fi mcomp)
-                handle c@Dependencies{sandbox=sd}=runCmd c (getCabalDependencies sd)
+                handle c@Dependencies{sandbox=sd'}=runCmd c (getCabalDependencies sd')
                 handle c@Components{}=runCmd c getCabalComponents
                 handle c@GenerateUsage{returnAll=reta,cabalComponent=comp}=runCmd c (generateUsage reta comp)
                 handle c@Clean{everything=e}=runCmd c (clean e)
@@ -184,7 +184,7 @@ cmdMain = cmdArgs
                 runCmd=runCmdV Normal
                 runCmdV:: (ToJSON a) => Verbosity -> BWCmd -> StateT BuildWrapperState IO a -> IO ()
                 runCmdV vb  cmd f=
-                 do { cabalFile' <- (canonicalizePath $ cabalFile cmd) `catch` ((\_->return $ cabalFile cmd)::(IOException -> IO String)) -- canonicalize cabal-file path because Eclipse does not correctly keep track of case changes on the project path, but for preview the file does not exist!
+                 do { cabalFile' <- canonicalizePath (cabalFile cmd) `catch` ((\_->return $ cabalFile cmd)::(IOException -> IO String)) -- canonicalize cabal-file path because Eclipse does not correctly keep track of case changes on the project path, but for preview the file does not exist!
                     ; resultJson <- evalStateT f (BuildWrapperState (tempFolder cmd) (cabalPath cmd) cabalFile' vb (cabalFlags cmd) (cabalOption cmd) (logCabal cmd))
                     ;  hFlush stdout; hFlush stderr;  BSC.putStrLn "" -- ensure streams are flushed, and prefix and start of the line
                     ; BSC.putStrLn . BS.append "build-wrapper-json:" . encode $ resultJson

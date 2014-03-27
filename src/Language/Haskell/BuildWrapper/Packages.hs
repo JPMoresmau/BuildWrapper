@@ -119,8 +119,7 @@ getPkgInfos msandbox=
         Just sd->do
                 r <- lookForPackageDBIn sd
                 case r of
-                           Nothing ->do
-                             return []
+                           Nothing -> return []
                            Just pkgs -> return pkgs
     -- Process GHC_PACKAGE_PATH, if present:
     e_pkg_path <- Exc.try (getEnv "GHC_PACKAGE_PATH")
@@ -159,7 +158,7 @@ readContents pkgdb =
       -- fix the encoding to UTF-8
       hSetEncoding h utf8
       Exc.catch (hGetContents h) (\(err :: Exc.IOException)->do
-         putStrLn $ show err
+         print err
          hClose h
          h' <- openFile file ReadMode
          hSetEncoding h' localeEncoding

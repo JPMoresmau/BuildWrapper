@@ -175,9 +175,9 @@ cabalConfigure srcOrTgt= do
                                                 let tgsF=dist_dir </> targetFile
                                                 Prelude.writeFile tgsF $ show tgs'
                                                 return (Just tgs',msgs)
-                                ExitFailure ec -> if null msgs
-                                                then return (Nothing,[BWNote BWError ("Cabal configure returned error code " ++ show ec) (mkEmptySpan cf 1 1)])   
-                                                else return (Nothing, msgs)
+                                ExitFailure ec -> return $ if null msgs
+                                                then (Nothing,[BWNote BWError ("Cabal configure returned error code " ++ show ec) (mkEmptySpan cf 1 1)])   
+                                                else (Nothing, msgs)
                         setCurrentDirectory cd
                         return ret
             else do
@@ -261,7 +261,7 @@ parseCabalMessages cf cabalExe s=let
                                         then dropWhile isSpace $ drop (length cf + 1) msg
                                         else msg
                                 in (Just (BWNote BWWarning "" (mkEmptySpan cf (extractLine msg2) 1),[msg2]),addCurrent currentNote ls)
-                        | Just (bw,n)<- cabalErrorLine cf cabalExe l (null $ filter isBWNoteError ls)=(Just (bw,n),addCurrent currentNote ls)
+                        | Just (bw,n)<- cabalErrorLine cf cabalExe l (not (any isBWNoteError ls))=(Just (bw,n),addCurrent currentNote ls)
                         | Just (jcn,msgs)<-currentNote=
                                 if not $ null l
                                         then (Just (jcn,l:msgs),ls)
@@ -314,7 +314,7 @@ cabalErrorLine cf cabalExe l fstErr
                                                         let
                                                                 (loc1,_)=span (/= '\'') s2
                                                                 (loc2,rest2)=span (/= ':') s2
-                                                                (loc,rest)=if (length loc1<length loc2) then (s2,"") else (loc2,rest2)
+                                                                (loc,rest)=if length loc1<length loc2 then (s2,"") else (loc2,rest2)
                                                                 (realloc,line,msg)=if null rest || ":"==rest
                                                                         then    (cf,"1",s2)
                                                                         else 
@@ -350,7 +350,7 @@ parseBuildMessages cf cabalExe distDir s=let
                                        else (Nothing,ls++[makeNote jcn msgs])
                         --  | Just fp<-getBuiltPath l=(currentNote,ls,fp:fps)
                         | Just n<-extractLocation l=(Just (n,[bwnTitle n]),ls)
-                        | Just (bw,n)<- cabalErrorLine cf cabalExe l (null $ filter isBWNoteError ls)=(Just (bw,n),addCurrent currentNote ls)
+                        | Just (bw,n)<- cabalErrorLine cf cabalExe l (not (any isBWNoteError ls))=(Just (bw,n),addCurrent currentNote ls)
                         | otherwise =(Nothing,ls)
                 extractLocation el=let
                         (_,_,aft,ls)=el =~ "(.+):([0-9]+):([0-9]+):" :: (String,String,String,[String])   
@@ -441,7 +441,7 @@ onModulePaths f =runIdentity . onModulePathsM (return . f)
 getBuildInfo ::  FilePath  -- ^ the source file
         -> Maybe String -- ^ the cabal component to use, or Nothing if not specified
         -> BuildWrapper (OpResult (Maybe ([DCD.Target],CabalBuildInfo)))
-getBuildInfo fp mccn=do
+getBuildInfo fp mccn=
         case mccn of
                 Nothing -> do
                         (mmr,bwns)<-go getReferencedFiles Nothing
@@ -475,7 +475,7 @@ getBuildInfo fp mccn=do
                 return $ filter (\cbi->cabalComponentName (cbiComponent cbi) == ccn) fps
  
 -- | set the GHC options on targets
-setOptions :: FilePath -> [DCD.Target] -> IO([DCD.Target] )
+setOptions :: FilePath -> [DCD.Target] -> IO [DCD.Target]
 setOptions dist_dir tgs=do
   let setup_config = DSC.localBuildInfoFile dist_dir
   cv<-DCD.getCabalVersion setup_config
@@ -750,7 +750,7 @@ dependencies pd pkgs=let
                         mns=map display (ems++hms)
                         in getDep m xs ((fp,CabalPackage (display $ pkgName i) (display $ pkgVersion i) e cps mns): acc) -- build CabalPackage structure
                 splitMatching pkgId comp deps (s,m)=let
-                         (ds,_)=partition (\(n,mv)->(pkgName pkgId == PackageName n) && isJust mv && (pkgVersion pkgId) == fromJust mv) deps
+                         (ds,_)=partition (\(n,mv)->(pkgName pkgId == PackageName n) && isJust mv && pkgVersion pkgId == fromJust mv) deps
                          s'=if null ds 
                                 then s
                                 else DS.insert comp s
@@ -765,9 +765,9 @@ cabalComponentsFromDescription = map cabalComponentFromTarget
 -- | get dependencies for all stanzas            
 cabalComponentsDependencies :: [DCD.Target] -- ^ the package description
         -> DM.Map CabalComponent [(String, Maybe Version)]
-cabalComponentsDependencies tgs=foldr f DM.empty tgs
+cabalComponentsDependencies =foldr f DM.empty
         where 
-                f tg m=DM.insert (cabalComponentFromTarget tg) (DCD.dependencies tg) m
+                f tg =DM.insert (cabalComponentFromTarget tg) (DCD.dependencies tg)
 --        let
 --        mLib=case  PD.library pd of
 --                Nothing -> DM.empty
@@ -795,16 +795,16 @@ cabalComponentFromLibrary =CCLibrary . DCD.buildable
 cabalComponentFromExecutable :: DCD.Target -> CabalComponent
 cabalComponentFromExecutable e =let
         DCD.Executable exeName' _=DCD.info e
-        in CCExecutable (exeName') (DCD.buildable e)
+        in CCExecutable exeName' (DCD.buildable e)
 
 -- | transform a test suite target into a CabalComponent
 cabalComponentFromTestSuite :: DCD.Target -> CabalComponent
 cabalComponentFromTestSuite ts=let
         DCD.TestSuite testName' _=DCD.info ts
-        in CCTestSuite (testName') (DCD.buildable ts)
+        in CCTestSuite testName' (DCD.buildable ts)
 
 -- | transform a benchmark target into a CabalComponent
 cabalComponentFromBenchmark :: DCD.Target -> CabalComponent
 cabalComponentFromBenchmark ts=let
         DCD.BenchSuite benchName' _=DCD.info ts
-        in CCBenchmark (benchName') (DCD.buildable ts)
+        in CCBenchmark benchName' (DCD.buildable ts)
