@@ -51,6 +51,10 @@ import Lexer hiding (loc)
 import Bag
 import Linker
 import RtClosureInspect
+#if __GLASGOW_HASKELL__ >= 707
+import ConLike
+import PatSyn (patSynType)
+#endif
 
 import GhcMonad
 import Id
@@ -490,7 +494,11 @@ getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (J
                                                       mty<-lookupName n
                                                       case mty of
                                                               Just (AnId aid)->do
+#if __GLASGOW_HASKELL__ >= 707
+                                                                      let pprTyp    = (pprTypeForUser . idType) aid
+#else                                                              
                                                                       let pprTyp    = (pprTypeForUser True . idType) aid
+#endif
                                                                       t<-gtry $ GHC.obtainTermFromId maxBound True aid
                                                                       evalDoc<-case t of
                                                                           Right term -> showTerm term
@@ -555,9 +563,15 @@ getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (J
 -- | convert a Name int a NameDef                    
 name2nd :: GhcMonad m=> DynFlags -> Name -> m NameDef
 name2nd df n=do
+#if __GLASGOW_HASKELL__ >= 707
+        m<- getInfo False n  -- filters like the old function if False, all info if True
+        let ty=case m of
+                Just (tyt,_,_,_)->ty2t tyt
+#else
         m<- getInfo n
         let ty=case m of
                 Just (tyt,_,_)->ty2t tyt
+#endif                
                 Nothing->Nothing
         return $ NameDef (T.pack $ showSDDump df $ ppr n) (name2t n) ty
         where         
@@ -569,8 +583,14 @@ name2nd df n=do
                         | isVarName n2 = [Function]
                         | otherwise =[]
               ty2t :: TyThing -> Maybe T.Text
+#if __GLASGOW_HASKELL__ >= 707
+              ty2t (AnId aid)=Just $ T.pack $ showSD False df $ pprTypeForUser $ varType aid
+              ty2t (AConLike(RealDataCon dc))=Just $ T.pack $ showSD False df $ pprTypeForUser $ dataConUserType dc
+              ty2t (AConLike(PatSynCon ps))=Just $ T.pack $ showSD False df $ pprTypeForUser $ patSynType ps
+#else
               ty2t (AnId aid)=Just $ T.pack $ showSD False df $ pprTypeForUser True $ varType aid
               ty2t (ADataCon dc)=Just $ T.pack $ showSD False df $ pprTypeForUser True $ dataConUserType dc
+#endif
               ty2t _ = Nothing
 
 
@@ -747,7 +767,11 @@ ghctokensArbitrary' base_dir contents= do
 -- | like lexTokenStream, but keep Haddock flag
 lexTokenStreamH :: StringBuffer -> RealSrcLoc -> DynFlags -> ParseResult [Located Token]
 lexTokenStreamH buf loc dflags = unP go initState
+#if __GLASGOW_HASKELL__ >= 707
+    where dflags' = gopt_set (gopt_set dflags Opt_KeepRawTokenStream) Opt_Haddock
+#else
     where dflags' = dopt_set (dopt_set dflags Opt_KeepRawTokenStream) Opt_Haddock
+#endif  
           initState = mkPState dflags' buf loc
           go = do
             ltok <- lexer return
@@ -964,7 +988,11 @@ ghcMsgToNote df note_kind base_dir msg =
          , bwnTitle = removeBaseDir base_dir $ removeStatus note_kind $ show_msg (errMsgShortDoc msg)
          }
   where
+#if __GLASGOW_HASKELL__ >= 707
+    loc | s <- errMsgSpan msg = s
+#else
     loc | (s:_) <- errMsgSpans msg = s
+#endif  
         | otherwise                    = GHC.noSrcSpan
     unqual = errMsgContext msg
     show_msg = showSDUser unqual df
@@ -1033,7 +1061,9 @@ tokenType  ITqualified = "K"
 tokenType  ITthen = "K"
 tokenType  ITtype = "K"
 tokenType  ITwhere = "K"
+#if __GLASGOW_HASKELL__ < 707
 tokenType  ITscc = "K"                       -- ToDo: remove (we use {-# SCC "..." #-} now)
+#endif
 
 tokenType  ITforall = "EK"                    -- GHC extension keywords
 tokenType  ITforeign = "EK"

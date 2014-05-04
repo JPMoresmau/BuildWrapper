@@ -303,11 +303,20 @@ dataToJSON  df env tcm=
         fixity  = const Null :: GHC.Fixity -> Value --simple "Fixity" . showSDoc . ppr 
 
         typeToJSON :: Type -> [(T.Text,Value)]
-        typeToJSON t =  
+        typeToJSON t =
+#if __GLASGOW_HASKELL__ >= 707         
+                ["Type" .= string (showSD False df $ pprTypeForUser t),
+                "QType" .= string (showSD True df $ pprTypeForUser t)]
+#else
                 ["Type" .= string (showSD False df $ pprTypeForUser True t),
-                "QType" .= string (showSD True df $ pprTypeForUser True t)]
+                "QType" .= string (showSD True df $ pprTypeForUser True t)]                
+#endif                 
         hsBind :: HsBindLR Name Name -> IO Value
+#if __GLASGOW_HASKELL__ >= 707
+        hsBind (FunBind fid _ (MG matches _ _) _ _ _) =do
+#else
         hsBind (FunBind fid _ (MatchGroup matches _) _ _ _) =do
+#endif        
                 d2<-dataToJSON df env tcm $ unLoc fid
                 liftM arr $ mapM (\m->do
                         d1<-dataToJSON df env tcm $ getLoc m
@@ -327,7 +336,11 @@ getType ::  HscEnv -> TypecheckedModule -> LHsExpr Var -> IO(Maybe Type)
 --getType _ _ (L _ (HsDo ArrowExpr _ _))=return Nothing
 --getType _ _ (L _ (HsArrApp {}))=return Nothing
 getType hs_env tcm e = do
+#if __GLASGOW_HASKELL__ >= 707
+      (_, mbe) <- GMU.liftIO $ deSugarExpr hs_env e
+#else
       (_, mbe) <- GMU.liftIO $ deSugarExpr hs_env modu rn_env ty_env e
+#endif      
       return $ fmap CoreUtils.exprType mbe
       where
         modu = ms_mod $ pm_mod_summary $ tm_parsed_module tcm
