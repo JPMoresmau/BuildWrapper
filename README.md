@@ -14,17 +14,21 @@ BuildWrapper uses a temporary work folder inside the project to store both a cop
 You can run `buildwrapper --help` to get a feel for the different options you can call buildwrapper with. You can also run EclipseFP with the debug mode preference on to see the BuildWrapper interaction in an Eclipse console view.
 
 ## Generic options
-These options apply to all commands
+These options are available to all commands.
 
-- tempFolder: the name of the temporary folder, relative to the location of the project cabal file. Usually .dist-buildwrapper
+- tempfolder: the name of the temporary folder, relative to the location of the project cabal file. Usually .dist-buildwrapper
 - cabalpath: the location of the cabal executable
 - cabalfile: the location of the project cabal file
-- cabalFlags: the flags to pass to cabal when configuring
+- cabalflags: the flags to pass to cabal when configuring
+- logcabal: should the call to the cabal executable be logged?
 
 ## synchronize
 Synchronize ensures that all the files in the temporary work folder represent the up to date version of the source files. It returns the list of files actually copied from the main folder to the work folder. 
 
 - force: true/false: copies files even if destination (in temporary folder) is newer
+
+Example: `buildwrapper synchronize --force=false --tempfolder=.dist-buildwrapper --cabalpath=/home/myuser/.cabal/bin/cabal --cabalfile=/home/myuser/myproject/myproject.cabal --cabalflags= --logcabal=true`
+
 
 ## synchronize1
 Synchronizes only one file.
@@ -43,15 +47,18 @@ Runs cabal configure on the project. This command usually is not needed, as the 
 Returns the errors encountered, if any.
 
 - verbosity: the verbosity of Cabal output
-- whichcabal: Source|Target: use the original cabal file or the one in the work folder
+- cabaltarget: Source|Target: use the original cabal file or the one in the work folder
 
 ## build
 Runs cabal build on the project.
 Returns the errors encountered, if any, and the files processed during that build.
 
 - verbosity: the verbosity of Cabal output
-- whichcabal: Source/Target: use the original cabal file or the one in the work folder
-- output: true/false: should we actually run the linker and generates output
+- cabaltarget: Source|Target: use the original cabal file or the one in the work folder
+- output: true|false: should we actually run the linker and generates output
+
+Example: `buildwrapper build --output=true --cabaltarget=Source --tempfolder=.dist-buildwrapper --cabalpath=/home/myuser/.cabal/bin/cabal --cabalfile=/home/myuser/myproject/myproject.cabal --cabalflags= --logcabal=true`
+
 
 ## build1
 Build one file using the GHC API. BuildWrapper takes care of calling the API with the proper flags from the cabal file.
