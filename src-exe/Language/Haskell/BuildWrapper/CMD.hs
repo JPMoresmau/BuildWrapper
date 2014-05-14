@@ -162,9 +162,9 @@ cmdMain = cmdArgs
                 handle c@Synchronize{force=f}=runCmd c (synchronize f)
                 handle c@Synchronize1{force=f,file=fi}=runCmd c (synchronize1 f fi)
                 handle c@Write{file=fi,contents=s}=runCmd c (write fi s)
-                handle c@Configure{cabalTarget=w}=runCmd c (configure w)
+                handle c@Configure{verbosity=ve,cabalTarget=w}=runCmdV ve c (configure w)
                 handle c@Build{verbosity=ve,output=o,cabalTarget=w}=runCmdV ve c (build o w)
-                handle c@Build1{file=fi,component=mcomp}=if longRunning c
+                handle c@Build1{file=fi,component=mcomp}= if longRunning c
                                 then runCmd c $ build1LongRunning fi mcomp 
                                 else runCmd c $ build1 fi mcomp
                 handle c@GetBuildFlags{file=fi,component=mcomp}=runCmd c (getBuildFlags fi mcomp)
