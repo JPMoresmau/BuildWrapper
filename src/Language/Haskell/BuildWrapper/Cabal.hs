@@ -479,9 +479,9 @@ setOptions :: FilePath -> [DCD.Target] -> IO [DCD.Target]
 setOptions dist_dir tgs=do
   let setup_config = DSC.localBuildInfoFile dist_dir
   cv<-DCD.getCabalVersion setup_config
-  let optStr=if cv>=Version [1,15,0] []
-               then "       let opts=renderGhcOptions ((fst $ head $ readP_to_S  parseVersion  \""++VERSION_ghc++"\") :: Version) $ componentGhcOptions V.silent lbi{withOptimization=NoOptimisation} b clbi fp"
-               else "       let opts=ghcOptions lbi{withOptimization=NoOptimisation} b clbi fp"
+  let optStr | cv>=Version [1,19,0] [] ="renderGhcOptions compiler $ componentGhcOptions V.silent lbi{withOptimization=NoOptimisation} b clbi fp"
+             | cv>=Version [1,15,0] [] ="renderGhcOptions ((fst $ head $ readP_to_S  parseVersion  \""++VERSION_ghc++"\") :: Version) $ componentGhcOptions V.silent lbi{withOptimization=NoOptimisation} b clbi fp"
+             | otherwise               ="ghcOptions lbi{withOptimization=NoOptimisation} b clbi fp"
   let withStr=if cv>=Version [1,17,0] []
                 then "withAllComponentsInBuildOrder"
                 else "withComponentsLBI"
@@ -501,6 +501,8 @@ setOptions dist_dir tgs=do
                 ,"import Distribution.Version"
                 ,"import Control.Monad"
                 ,"import Distribution.Simple.Compiler(OptimisationLevel(..))"
+                ,"import Distribution.Simple.Program.Db(defaultProgramDb)"
+                ,"import Distribution.Verbosity(normal)"
                 ,"import Data.Maybe"
                 ,""
                 ,"result :: IO (DM.Map String [String])"
@@ -509,11 +511,12 @@ setOptions dist_dir tgs=do
                 ,"let pkg=localPkgDescr lbi"
                 ,"r<-newIORef DM.empty"
                 ,"let fmp=DM."++ show fmp 
+                ,"(compiler,_ ,_)<-configure normal Nothing Nothing defaultProgramDb"
                 ,withStr++" pkg lbi (\\c clbi->do"
                 ,"       let b=componentBuildInfo c"
                 ,"       let n=foldComponent (const \"\") exeName testName benchmarkName c"
                 ,"       let fp=fromJust $ DM.lookup n fmp"
-                , optStr
+                ,"       let opts=" ++ optStr
                 ,"       modifyIORef r (DM.insert n opts)"
                 ,"       return ()"
                 ,"       )"
