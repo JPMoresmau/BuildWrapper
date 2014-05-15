@@ -51,6 +51,7 @@ class APIFacade a where
         build1c :: a -> FilePath -> FilePath -> String -> IO (OpResult (Maybe [NameDef]))
         getBuildFlags :: a -> FilePath -> FilePath -> IO (OpResult BuildFlags)
         getOutline :: a -> FilePath ->  FilePath -> IO (OpResult OutlineResult)
+        getOutlineNC :: a -> FilePath ->  FilePath -> IO (OpResult OutlineResult)
         getTokenTypes :: a -> FilePath -> FilePath -> IO (OpResult [TokenDef])
         getOccurrences :: a -> FilePath -> FilePath -> String -> IO (OpResult [TokenDef])
         getThingAtPoint :: a -> FilePath -> FilePath -> Int -> Int -> IO (OpResult (Maybe ThingAtPoint))
@@ -82,6 +83,7 @@ instance APIFacade CMDAPI where
         build1c (CMDAPI c _) r fp ccn= runAPI c r "build1" ["--file="++fp,"--component="++ccn]
         getBuildFlags (CMDAPI c _) r fp= runAPI c r "getbuildflags" ["--file="++fp]
         getOutline (CMDAPI c _) r fp= runAPI c r "outline" ["--file="++fp]
+        getOutlineNC (CMDAPI c _) r fp= runAPI' False c r "outline" ["--file="++fp]
         getTokenTypes (CMDAPI c _) r fp= runAPI c r "tokentypes" ["--file="++fp]
         getOccurrences (CMDAPI c _) r fp s= runAPI c r "occurrences" ["--file="++fp,"--token="++s]
         getThingAtPoint (CMDAPI c _) r fp l cl= removeLayoutTAP <$> runAPI c r "thingatpoint" ["--file="++fp,"--line="++ show l,"--column="++ show cl]
@@ -506,8 +508,13 @@ test_ModuleNotInCabal  = do
         
       
 test_Outline :: Assertion
-test_Outline = do
-        let api=cabalAPI
+test_Outline = doTestOutline cabalAPI getOutline
+
+test_OutlineNoCabal :: Assertion
+test_OutlineNoCabal = doTestOutline cabalAPI getOutlineNC
+
+doTestOutline :: APIFacade a => a -> (a -> FilePath ->  FilePath -> IO (OpResult OutlineResult)) -> Assertion
+doTestOutline api f = do
         root<-createTestProject
         synchronize api root False
         let rel="src"</>"A.hs"
@@ -556,7 +563,7 @@ test_Outline = do
                 "        }" ]
         (_,nsErrors3f)<-getBuildFlags api root rel
         assertBool (null nsErrors3f)        
-        (OutlineResult defs es is,nsErrors1)<-getOutline api root rel
+        (OutlineResult defs es is,nsErrors1)<-f api root rel
         assertBool  (null nsErrors1)
         let expected=[
                 mkOutlineDefWithChildren "XList" [Data,Family] (InFileSpan (InFileLoc 8 1)(InFileLoc 8 20))  []
@@ -2062,9 +2069,12 @@ removeLayoutTAP res = case res of
 
   
 runAPI:: (FromJSON a,Show a) => FilePath ->  FilePath -> String -> [String] -> IO a
-runAPI cabal root command args= do
+runAPI= runAPI' True
+
+runAPI':: (FromJSON a,Show a) => Bool -> FilePath ->  FilePath -> String -> [String] -> IO a
+runAPI' withCabal cabal root command args= do
         cd<-getCurrentDirectory
-        let fullargs=[command,"--tempfolder=.dist-buildwrapper","--cabalpath="++cabal,"--cabalfile="++ testCabalFile root] ++ args
+        let fullargs=[command,"--tempfolder=.dist-buildwrapper","--cabalpath=" ++ cabal] ++ (if withCabal then ["--cabalfile="++ testCabalFile root] else []) ++ args
         exePath<-filterM doesFileExist [".dist-buildwrapper/dist/build/buildwrapper/buildwrapper" <.> exeExtension,"dist/build/buildwrapper/buildwrapper" <.> exeExtension]
         assertBool (0<length exePath)
         setCurrentDirectory root

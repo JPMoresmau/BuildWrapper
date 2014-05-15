@@ -325,32 +325,36 @@ getBuildFlags :: FilePath -- ^ the source file
 getBuildFlags fp mccn=do
         tgt<-getTargetPath fp
         src<-getCabalFile Source
-        modSrc<-liftIO $ getModificationTime src
-        mbf<-liftIO $ readBuildFlagsInfo tgt modSrc
-        case filterBuildFlags mbf of
-                Just bf-> return bf
-                Nothing -> do
-                        (mcbi,bwns)<-getBuildInfo fp mccn
-                        --liftIO $ print mcbi
-                        ret<-case mcbi of
-                                Just cbi->do
-                                        opts2<-fileGhcOptions $ snd cbi
-                                        -- liftIO $ Prelude.print fp
-                                        -- liftIO $ Prelude.print $ cbiModulePaths $ snd cbi
-                                        -- liftIO $ Prelude.print opts2
-                                        let 
-                                                fullFp=takeDirectory src </> fp
-                                                modName=listToMaybe $ mapMaybe fst (filter (\ (_, f) -> f == fullFp) $ cbiModulePaths $ snd cbi)
-                                                -- (modName,_)=cabalExtensions $ snd cbi
-                                                cppo=fileCppOptions (snd cbi) ++ unlitF
-                                                modS=fmap moduleToString modName
-                                        -- liftIO $ Prelude.print opts
-                                        -- ghcOptions is sufficient, contains extensions and such
-                                        -- opts ++
-                                        return (BuildFlags opts2 cppo modS (Just $ cabalComponentName $ cbiComponent $ snd cbi),bwns)
-                                Nothing -> return (BuildFlags [] unlitF Nothing Nothing,[])
-                        liftIO $ storeBuildFlagsInfo tgt ret
-                        return ret
+        ex <- liftIO $ doesFileExist src
+        if ex 
+          then do
+            modSrc<-liftIO $ getModificationTime src
+            mbf<-liftIO $ readBuildFlagsInfo tgt modSrc
+            case filterBuildFlags mbf of
+                    Just bf-> return bf
+                    Nothing -> do
+                            (mcbi,bwns)<-getBuildInfo fp mccn
+                            --liftIO $ print mcbi
+                            ret<-case mcbi of
+                                    Just cbi->do
+                                            opts2<-fileGhcOptions $ snd cbi
+                                            -- liftIO $ Prelude.print fp
+                                            -- liftIO $ Prelude.print $ cbiModulePaths $ snd cbi
+                                            -- liftIO $ Prelude.print opts2
+                                            let 
+                                                    fullFp=takeDirectory src </> fp
+                                                    modName=listToMaybe $ mapMaybe fst (filter (\ (_, f) -> f == fullFp) $ cbiModulePaths $ snd cbi)
+                                                    -- (modName,_)=cabalExtensions $ snd cbi
+                                                    cppo=fileCppOptions (snd cbi) ++ unlitF
+                                                    modS=fmap moduleToString modName
+                                            -- liftIO $ Prelude.print opts
+                                            -- ghcOptions is sufficient, contains extensions and such
+                                            -- opts ++
+                                            return (BuildFlags opts2 cppo modS (Just $ cabalComponentName $ cbiComponent $ snd cbi),bwns)
+                                    Nothing -> return (BuildFlags [] unlitF Nothing Nothing,[])
+                            liftIO $ storeBuildFlagsInfo tgt ret
+                            return ret
+           else return (BuildFlags [] unlitF Nothing Nothing,[])             
         where 
                 unlitF=let
                         lit=".lhs" == takeExtension fp
