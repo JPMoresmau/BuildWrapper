@@ -511,8 +511,7 @@ setOptions dist_dir tgs=do
                 ,"let pkg=localPkgDescr lbi"
                 ,"r<-newIORef DM.empty"
                 ,"let fmp=DM."++ show fmp 
-                ,"(compiler,_ ,_)<-configure normal Nothing Nothing defaultProgramDb"
-                ,withStr++" pkg lbi (\\c clbi->do"
+                 ,withStr++" pkg lbi (\\c clbi->do"
                 ,"       let b=componentBuildInfo c"
                 ,"       let n=foldComponent (const \"\") exeName testName benchmarkName c"
                 ,"       let fp=fromJust $ DM.lookup n fmp"
