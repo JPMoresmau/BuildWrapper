@@ -443,6 +443,17 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul =
                                                 BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode ret
                                                 hFlush stdout
                                        r1 t2  
+                                -- occurrences
+                                'o':xs->do
+                                       input<- GMU.liftIO $ readFile fp
+                                       ett<-occurrences' fp input (T.pack xs) (".lhs" == takeExtension fp)
+                                       let ret= case ett of
+                                                Right tt-> (tt,[])
+                                                Left bw -> ([],[bw])
+                                       GMU.liftIO $ do
+                                                BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode ret
+                                                hFlush stdout
+                                       r1 t2 
                                 -- thing at point
                                 'p':xs->do
                                        GMU.liftIO $ do
@@ -865,6 +876,24 @@ occurrences projectRoot contents query literate options =
       matchingVal (TokenDef v _)=query==v
       mkToken (L sp t)=TokenDef (tokenValue qualif t) (ghcSpanToLocation sp)
   in generateTokens projectRoot contents literate options (map mkToken) tokensMatching        
+        
+        
+-- | Extract occurrences based on lexing  
+occurrences' :: FilePath     -- ^ Project root or base directory for absolute path conversion
+            -> String    -- ^ Contents to be parsed
+            -> T.Text    -- ^ Token value to find
+            -> Bool      -- ^ Literate source flag (True = literate, False = ordinary)
+            -> Ghc (Either BWNote [TokenDef])
+occurrences' projectRoot contents query literate = 
+  let 
+      qualif = isJust $ T.find (=='.') query
+      -- Get the list of tokens matching the query for relevant token types
+      tokensMatching :: [TokenDef] -> [TokenDef]
+      tokensMatching = filter matchingVal
+      matchingVal :: TokenDef -> Bool
+      matchingVal (TokenDef v _)=query==v
+      mkToken (L sp t)=TokenDef (tokenValue qualif t) (ghcSpanToLocation sp)
+  in generateTokens' projectRoot contents literate (map mkToken) tokensMatching           
         
 -- | Parse the current document, generating a TokenDef list, filtered by a function
 generateTokens :: FilePath                        -- ^ The project's root directory
