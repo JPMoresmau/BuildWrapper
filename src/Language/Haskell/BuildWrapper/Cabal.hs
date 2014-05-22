@@ -479,6 +479,8 @@ setOptions :: FilePath -> [DCD.Target] -> IO [DCD.Target]
 setOptions dist_dir tgs=do
   let setup_config = DSC.localBuildInfoFile dist_dir
   cv<-DCD.getCabalVersion setup_config
+  let optStr1 | cv>=Version [1,19,0] [] ="(compiler,_ ,_)<-configure normal Nothing Nothing defaultProgramDb"
+              | otherwise =""
   let optStr | cv>=Version [1,19,0] [] ="renderGhcOptions compiler $ componentGhcOptions V.silent lbi{withOptimization=NoOptimisation} b clbi fp"
              | cv>=Version [1,15,0] [] ="renderGhcOptions ((fst $ head $ readP_to_S  parseVersion  \""++VERSION_ghc++"\") :: Version) $ componentGhcOptions V.silent lbi{withOptimization=NoOptimisation} b clbi fp"
              | otherwise               ="ghcOptions lbi{withOptimization=NoOptimisation} b clbi fp"
@@ -511,7 +513,8 @@ setOptions dist_dir tgs=do
                 ,"let pkg=localPkgDescr lbi"
                 ,"r<-newIORef DM.empty"
                 ,"let fmp=DM."++ show fmp 
-                 ,withStr++" pkg lbi (\\c clbi->do"
+                , optStr1
+                ,withStr++" pkg lbi (\\c clbi->do"
                 ,"       let b=componentBuildInfo c"
                 ,"       let n=foldComponent (const \"\") exeName testName benchmarkName c"
                 ,"       let fp=fromJust $ DM.lookup n fmp"
