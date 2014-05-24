@@ -543,7 +543,11 @@ fileGhcOptions (CabalBuildInfo tgt _ isLib _ _)=do
         let pkg
                   | isLib =
                     ["-package-name",n]
+#if __GLASGOW_HASKELL__ < 706                    
                   | inplaceExist = ["-package-conf", inplace]
+#else
+                  | inplaceExist = ["-package-db", inplace]
+#endif
                   | otherwise = []
         return (pkg ++ DCD.ghcOptions tgt)
 
