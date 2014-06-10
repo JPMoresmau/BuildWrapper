@@ -298,7 +298,7 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
             logAction :: IORef [BWNote] -> DynFlags -> Severity -> SrcSpan -> PprStyle -> Message -> IO ()
 #endif
             logAction ref df s loc style msg
-                | (Just status)<-bwSeverity s=do
+                | (Just status)<-bwSeverity df s=do
                         let n=BWNote { bwnLocation = ghcSpanToBWLocation base_dir loc
                                  , bwnStatus = status
                                  , bwnTitle = removeBaseDir base_dir $ removeStatus status $ showSDUser (qualName style,qualModule style) df msg
@@ -306,11 +306,11 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
                         modifyIORef ref $  \ ns -> ns ++ [n]
                 | otherwise=return ()
             
-            bwSeverity :: Severity -> Maybe BWNoteStatus
-            bwSeverity SevWarning = Just BWWarning       
-            bwSeverity SevError   = Just BWError
-            bwSeverity SevFatal   = Just BWError
-            bwSeverity _          = Nothing
+            bwSeverity :: DynFlags -> Severity -> Maybe BWNoteStatus
+            bwSeverity df SevWarning = Just (if dopt Opt_WarnIsError df then BWError else BWWarning)     
+            bwSeverity _  SevError   = Just BWError
+            bwSeverity _  SevFatal   = Just BWError
+            bwSeverity _ _           = Nothing
             
    
 -- | Convert 'GHC.Messages' to '[BWNote]'.
@@ -1004,7 +1004,7 @@ ghcErrMsgToNote df= ghcMsgToNote df BWError
 
 -- | convert a GHC warning message to our note type
 ghcWarnMsgToNote :: DynFlags -> FilePath -> WarnMsg -> BWNote
-ghcWarnMsgToNote df= ghcMsgToNote df BWWarning
+ghcWarnMsgToNote df= ghcMsgToNote df (if dopt Opt_WarnIsError df then BWError else BWWarning)
 
 -- | convert a GHC message to our note type
 -- Note that we do *not* include the extra info, since that information is
