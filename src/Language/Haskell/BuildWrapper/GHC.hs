@@ -307,11 +307,18 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
                 | otherwise=return ()
             
             bwSeverity :: DynFlags -> Severity -> Maybe BWNoteStatus
-            bwSeverity df SevWarning = Just (if dopt Opt_WarnIsError df then BWError else BWWarning)     
+            bwSeverity df SevWarning = Just (if isWarnIsError df then BWError else BWWarning)     
             bwSeverity _  SevError   = Just BWError
             bwSeverity _  SevFatal   = Just BWError
             bwSeverity _ _           = Nothing
             
+-- | do we have -Werror 
+isWarnIsError :: DynFlags -> Bool
+#if __GLASGOW_HASKELL__ >= 707
+isWarnIsError df = gopt Opt_WarnIsError df
+#else
+isWarnIsError df = dopt Opt_WarnIsError df
+#endif
    
 -- | Convert 'GHC.Messages' to '[BWNote]'.
 --
@@ -1004,7 +1011,7 @@ ghcErrMsgToNote df= ghcMsgToNote df BWError
 
 -- | convert a GHC warning message to our note type
 ghcWarnMsgToNote :: DynFlags -> FilePath -> WarnMsg -> BWNote
-ghcWarnMsgToNote df= ghcMsgToNote df (if dopt Opt_WarnIsError df then BWError else BWWarning)
+ghcWarnMsgToNote df= ghcMsgToNote df (if isWarnIsError df then BWError else BWWarning)
 
 -- | convert a GHC message to our note type
 -- Note that we do *not* include the extra info, since that information is
