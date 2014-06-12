@@ -1,5 +1,5 @@
 name:           buildwrapper
-version:        0.8.6
+version:        0.8.7
 cabal-version:  >= 1.8
 build-type:     Simple
 license:        BSD3
@@ -24,7 +24,7 @@ library
                    mtl,
                    directory,
                    Cabal,
-                   dynamic-cabal >=0.3 && <0.4,
+                   dynamic-cabal >=0.3.1 && <0.4,
                    process,
                    regex-tdfa,
                    ghc,
@@ -86,6 +86,10 @@ executable buildwrapper
                    bytestring,
                    transformers
   ghc-options:     -Wall -fno-warn-unused-do-bind -optl -s
+  -- see https://ghc.haskell.org/trac/ghc/ticket/8376
+  if impl(ghc >= 7.8) && impl(ghc < 7.8.3)
+    ghc-options: 
+                   -dynamic
   other-modules:   Language.Haskell.BuildWrapper.CMD
   if impl(ghc >= 7.6)
     build-depends: 
