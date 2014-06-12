@@ -32,7 +32,7 @@ import GHC.SYB.Instances
 #endif 
 
 import qualified Data.ByteString.Lazy as BS
--- import qualified Data.ByteString.Lazy.Char8 as BSC (putStrLn)
+--import qualified Data.ByteString.Lazy.Char8 as BSC (putStrLn)
 import qualified Data.ByteString as BSS
 import Data.Aeson
 import Data.Maybe
@@ -45,6 +45,9 @@ import Data.Attoparsec.Number (Number(I))
 import System.Time (ClockTime)
 #else
 import Data.Time.Clock (UTCTime)
+#endif
+#if __GLASGOW_HASKELL__ >= 708
+import ConLike
 #endif
 import Type (splitFunTys)
 import Unique (getUnique)
@@ -90,7 +93,7 @@ generateGHCInfo :: DynFlags -> HscEnv -> TypecheckedModule -> IO Value
 generateGHCInfo df env tcm=do
         -- extract usages from typechecked source
         tcvals<-liftM extractUsages $ dataToJSON df env tcm $ typecheckedSource tcm
-        -- print tcvals
+        print tcvals
         -- store objects with type annotations in a map keyed by module, name, line and column
         let tcByNameLoc=foldr buildMap DM.empty tcvals
         -- print tcByNameLoc
@@ -238,6 +241,9 @@ dataToJSON :: Data a => DynFlags -> HscEnv -> TypecheckedModule -> a -> IO Value
 dataToJSON  df env tcm= 
   generic `ext1Q` list `extQ` (return . string) `extQ` (return . fastString) `extQ` (return . srcSpanToJSON) 
           `extQ` (return . name) `extQ` (return . ocName) `extQ` (return . modName) `extQ` var `extQ` exprVar `extQ` (return . dataCon)
+#if __GLASGOW_HASKELL__ >= 708
+          `extQ` (return . rDataCon)
+#endif
           `extQ` bagName `extQ` bagRdrName `extQ` bagVar `extQ` (return . nameSet)
           `extQ` (return . postTcType) `extQ` (return . fixity)  `extQ` hsBind
   where generic :: Data a => a -> IO Value
@@ -265,6 +271,10 @@ dataToJSON  df env tcm=
 
         var ::  Var -> IO Value
         var  v     = return $ typedVar v (varType v)
+#if __GLASGOW_HASKELL__ >= 708
+        rDataCon (RealDataCon dc)=dataCon dc
+        rDataCon_ = Null
+#endif        
         dataCon ::  DataCon -> Value
         dataCon  d  = let
                 t=dataConUserType d

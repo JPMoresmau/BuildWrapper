@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-} 
+{-# LANGUAGE CPP,OverloadedStrings #-} 
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.ImportsTests
@@ -128,21 +128,23 @@ test_CleanImportsConstructorTyped = do
                 "  hs-source-dirs:  src",
                 "  exposed-modules: A",
                 "  other-modules:  B.C",
-                "  build-depends:   base, attoparsec"]
+                "  build-depends:   base"]
         synchronize api root False
         configure api root Target
         let rel2="src"</>"B"</>"C.hs"      
         write api root rel2 $ unlines [
                 "module B.C where",
                 "",
-                "import Data.Attoparsec",
+                "import System.Exit",
                 "f r= case r of",
-                "  Done _ js->True",
+                "  ExitFailure _ ->True",
                 "  _->False"
                 ]        
         (ics,ns)<-cleanImports api root rel2 False
         assertBool $ null ns
-        assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 23)) "import Data.Attoparsec (IResult (Done))"] ics
+#if __GLASGOW_HASKELL__ != 704
+        assertEqual [ImportClean (InFileSpan (InFileLoc 3 1) (InFileLoc 3 19)) "import System.Exit (ExitCode (ExitFailure))"] ics
+#endif
 
 test_CleanImportsFunctionInExport :: Assertion
 test_CleanImportsFunctionInExport = do

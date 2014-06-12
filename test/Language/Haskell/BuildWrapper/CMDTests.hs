@@ -291,7 +291,7 @@ test_ConfigureWarnings  = do
         assertBool bool1
         assertEqual 1 (length ns1)
         let (nsWarning1:[])=ns1
-        assertEqual  (BWNote BWWarning "Unknown fields: field1 (line 5)\nFields allowed in this section:\nname, version, cabal-version, build-type, license, license-file,\ncopyright, maintainer, build-depends, stability, homepage,\npackage-url, bug-reports, synopsis, description, category, author,\ntested-with, data-files, data-dir, extra-source-files,\nextra-tmp-files, extra-doc-files\n" (mkEmptySpan cfn 5 1)) nsWarning1
+        assertEqualNotesStart  (BWNote BWWarning "Unknown fields: field1 (line 5)" (mkEmptySpan cfn 5 1)) nsWarning1
         writeFile cf $ unlines ["name: "++testProjectName,
                 "version:0.1",
                 "build-type:     Simple",
@@ -407,8 +407,13 @@ test_BuildWarnings  = do
         assertBool (not $ null nsErrors1)
         assertBool (rel `elem` fps1)
         let (nsError1:nsError2:[])=nsErrors1
+#if __GLASGOW_HASKELL__ >=708
+        let notype="Top-level binding with no type signature:\n               fA :: forall t. t"
+#else
+        let notype="Top-level binding with no type signature:\n               fA :: forall a. a"
+#endif        
         assertEqualNotesWithoutSpaces "not proper error 1" (BWNote BWWarning "The import of `Data.List' is redundant\n               except perhaps to import instances from `Data.List'\n             To import instances alone, use: import Data.List()\n" (mkEmptySpan rel 2 1)) nsError1
-        assertEqualNotesWithoutSpaces "not proper error 2" (BWNote BWWarning "Top-level binding with no type signature:\n               fA :: forall a. a\n" (mkEmptySpan rel 3 1)) nsError2
+        assertEqualNotesWithoutSpaces "not proper error 2" (BWNote BWWarning notype (mkEmptySpan rel 3 1)) nsError2
         (_,nsErrors3f)<-getBuildFlags api root rel
         assertBool  (null nsErrors3f)
         (bool3,nsErrors3)<-build1 api root rel
@@ -416,7 +421,7 @@ test_BuildWarnings  = do
         assertEqual  2 (length nsErrors3)
         let (nsError3:nsError4:[])=nsErrors3
         assertEqualNotesWithoutSpaces "not proper error 3" (BWNote BWWarning "The import of `Data.List' is redundant\n           except perhaps to import instances from `Data.List'\n         To import instances alone, use: import Data.List()" (mkEmptySpan rel 2 1)) nsError3
-        assertEqualNotesWithoutSpaces "not proper error 4" (BWNote BWWarning "Top-level binding with no type signature:\n           fA :: forall a. a" (mkEmptySpan rel 3 1)) nsError4
+        assertEqualNotesWithoutSpaces "not proper error 4" (BWNote BWWarning notype (mkEmptySpan rel 3 1)) nsError4
         writeFile (root </> rel) $ unlines ["module A where","pats:: String -> String","pats a=reverse a","fB:: String -> Char","fB pats=head pats"] 
         mf3<-synchronize1 api root True rel
         assertBool (isJust mf3)
@@ -1512,8 +1517,13 @@ test_NameDefsInScope = do
         (mtts,_)<-build1 api root rel
         assertBool (isJust mtts)
         let tts=fromJust mtts
+#if __GLASGOW_HASKELL__ >=708
+        let functype="t"
+#else
+        let functype="forall a. a"
+#endif            
         assertBool (NameDef "Main.main" [Function] (Just "IO [Char]") `elem` tts)
-        assertBool (NameDef "B.D.fD" [Function] (Just "forall a. a") `elem` tts)
+        assertBool (NameDef "B.D.fD" [Function] (Just functype) `elem` tts)
         assertBool (NameDef "Main.Type1" [Type] Nothing `elem` tts)
         assertBool (NameDef "Main.MkType1_1" [Constructor] (Just "Int -> Type1") `elem` tts)
         assertBool (NameDef "GHC.Types.Char" [Type] Nothing `elem` tts)
@@ -1994,6 +2004,7 @@ testCabalContents = unlines ["name: "++testProjectName,
         "  main-is:         Main.hs",
         "  other-modules:  B.D",
         "  build-depends:  base",
+        "  ghc-options: -dynamic",
         "",
         "test-suite BWTest-test",
         "  type:            exitcode-stdio-1.0",
@@ -2050,7 +2061,12 @@ createTestProject = do
         return root
         
 removeSpaces :: String -> String
-removeSpaces = filter (/= ':') . filter (not . isSpace)
+removeSpaces = filter (not . flip elem [':','\'','`','\CAN','\EM']) . filter (not . isSpace)
+
+assertEqualNotesStart :: BWNote -> BWNote -> IO()
+assertEqualNotesStart n1 n2=do
+        let n2'=n1{bwnTitle=Data.List.take (length $ bwnTitle n1) $ bwnTitle n2}
+        assertEqual n1 n2'
 
 assertEqualNotesWithoutSpaces :: String -> BWNote -> BWNote -> IO()
 assertEqualNotesWithoutSpaces msg n1 n2=do

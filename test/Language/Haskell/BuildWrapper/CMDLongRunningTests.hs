@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE CPP, OverloadedStrings #-}
 {-# OPTIONS_GHC -F -pgmF htfpp #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.CMDTests
@@ -49,8 +49,14 @@ test_NameDefsInScopeLongRunning = do
         assertBool (isJust mtts)
         assertBool (not $ notesInError ns)
         let tts=fromJust mtts
+#if __GLASGOW_HASKELL__ >=708
+        let functype="t"
+#else
+        let functype="forall a. a"
+#endif                
+        print $ NameDef "B.D.fD" [Function] (Just functype)
         assertBool (NameDef "Main.main" [Function] (Just "IO [Char]") `elem` tts)
-        assertBool (NameDef "B.D.fD" [Function] (Just "forall a. a") `elem` tts)
+        assertBool (NameDef "B.D.fD" [Function] (Just functype) `elem` tts)
         assertBool (NameDef "Main.Type1" [Type] Nothing `elem` tts)
         assertBool (NameDef "Main.MkType1_1" [Constructor] (Just "Int -> Type1") `elem` tts)
         assertBool (NameDef "GHC.Types.Char" [Type] Nothing `elem` tts)          
