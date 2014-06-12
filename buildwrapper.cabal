@@ -15,6 +15,7 @@ maintainer:     JP Moresmau <jpmoresmau@gmail.com>
 author:         JP Moresmau <jpmoresmau@gmail.com>, based on the work of Thomas Schilling and others
 homepage:       https://github.com/JPMoresmau/BuildWrapper
 extra-source-files: README.md
+                    CHANGELOG
 
 library
   hs-source-dirs:  src

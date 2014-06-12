@@ -1,0 +1,2 @@
+0.8.7
+	- support GHC 7.8: ConLike structure, different error messages, requirement for -dynamic
