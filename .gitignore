@@ -1,4 +1,3 @@
-
 /.dist-buildwrapper
 /dist
 /.project
@@ -6,3 +5,10 @@
 /SourceGraph
 /.externalToolBuilders
 /cabal.sandbox.config
+/.cabal-sandbox/
+
+# From profiling:
+*.aux
+*.hp
+*.ps
+*.summary
