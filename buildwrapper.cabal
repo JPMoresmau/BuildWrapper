@@ -88,9 +88,9 @@ executable buildwrapper
                    transformers
   ghc-options:     -Wall -fno-warn-unused-do-bind -optl -s
   -- see https://ghc.haskell.org/trac/ghc/ticket/8376
-  if impl(ghc >= 7.8) && impl(ghc < 7.8.3)
-    ghc-options: 
-                   -dynamic
+  --  if impl(ghc >= 7.8) && impl(ghc < 7.8.3)
+  --    ghc-options: 
+  --                   -dynamic
   other-modules:   Language.Haskell.BuildWrapper.CMD
   if impl(ghc >= 7.6)
     build-depends: 
