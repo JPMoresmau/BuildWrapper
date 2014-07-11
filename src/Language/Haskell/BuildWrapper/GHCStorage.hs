@@ -323,7 +323,8 @@ dataToJSON  df env tcm=
 #endif                 
         hsBind :: HsBindLR Name Name -> IO Value
 #if __GLASGOW_HASKELL__ >= 707
-        hsBind (FunBind fid _ (MG matches _ _) _ _ _) =do
+        hsBind (FunBind fid _ mg _ _ _) =do
+                let matches = mg_alts mg
 #else
         hsBind (FunBind fid _ (MatchGroup matches _) _ _ _) =do
 #endif        
