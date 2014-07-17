@@ -147,16 +147,18 @@ cabalConfigure srcOrTgt= do
                 uf<-gets cabalFlags
                 logC<-gets logCabalArgs
                 copts<-gets cabalOpts
+                let sb = (takeDirectory cf) </> "cabal.sandbox.config"
+                hasSb <- liftIO $ doesFileExist sb
                 let args=[
                         "configure",
                         "--verbose=" ++ show (fromEnum v),
-                        "--user",
                         "--enable-tests",
                         "--enable-benchmarks",
                         "--builddir="++dist_dir
                         ] 
                         ++ (if null uf then [] else ["--flags="++uf])
                         ++ copts
+                        ++ if hasSb then [] else ["--user"]
                 liftIO $ do
                         when logC (putStrLn $ showCommandForUser cp args)
                         cd<-getCurrentDirectory
