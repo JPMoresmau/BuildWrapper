@@ -170,10 +170,11 @@ cabalConfigure srcOrTgt= do
                                 ExitSuccess  -> if any isBWNoteError msgs 
                                         then return (Nothing,msgs)
                                         else do 
+                                                let mghcp=fmap (tail . dropWhile (/= '=')) $ listToMaybe $ filter ("--with-ghc=" `isPrefixOf`) copts
                                                 --lbi<-DSC.getPersistBuildConfig dist_dir
                                                 let setup_config = DSC.localBuildInfoFile dist_dir
                                                 tgs <- DCD.runQuery (DCD.on DCD.localPkgDesc DCD.targets) setup_config
-                                                tgs'<- setOptions dist_dir tgs
+                                                tgs'<- setOptions dist_dir mghcp tgs
                                                 let tgsF=dist_dir </> targetFile
                                                 Prelude.writeFile tgsF $ show tgs'
                                                 return (Just tgs',msgs)
@@ -477,11 +478,15 @@ getBuildInfo fp mccn=
                 return $ filter (\cbi->cabalComponentName (cbiComponent cbi) == ccn) fps
  
 -- | set the GHC options on targets
-setOptions :: FilePath -> [DCD.Target] -> IO [DCD.Target]
-setOptions dist_dir tgs=do
+setOptions 
+  :: FilePath -- ^ dist directory
+  -> Maybe FilePath -- ^ path to GHC if explicitely specified
+  -> [DCD.Target]  -- ^ targets to set options onto
+  -> IO [DCD.Target]
+setOptions dist_dir mghcp tgs=do
   let setup_config = DSC.localBuildInfoFile dist_dir
   cv<-DCD.getCabalVersion setup_config
-  let optStr1 | cv>=Version [1,19,0] [] ="(compiler,_ ,_)<-configure normal Nothing Nothing defaultProgramDb"
+  let optStr1 | cv>=Version [1,19,0] [] ="(compiler,_ ,_)<-configure normal ("++ (show mghcp) ++ ") Nothing defaultProgramDb"
               | otherwise =""
   let optStr | cv>=Version [1,19,0] [] ="renderGhcOptions compiler $ componentGhcOptions V.silent lbi{withOptimization=NoOptimisation} b clbi fp"
              | cv>=Version [1,15,0] [] ="renderGhcOptions ((fst $ head $ readP_to_S  parseVersion  \""++VERSION_ghc++"\") :: Version) $ componentGhcOptions V.silent lbi{withOptimization=NoOptimisation} b clbi fp"
