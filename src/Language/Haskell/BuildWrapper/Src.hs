@@ -70,13 +70,25 @@ getHSEOutline (Module _ _ _ _ decls,comments)=evalState (mapM addComment $ conca
                         n=matchDecl $ head matches
                         (ty,l2)=addTypeInfo n l
                         in [OutlineDef n [Function] (makeSpan l2) [] ty Nothing Nothing]
+#if MIN_VERSION_haskell_src_exts(1,16,0)
+                declOutline (PatBind l (PVar _ n) _ _)=let
+#else       
                 declOutline (PatBind l (PVar _ n) _ _ _)=let
+#endif
                         nd=nameDecl n
                         (ty,l2)=addTypeInfo nd l
                         in [OutlineDef nd [Function] (makeSpan l2)  [] ty Nothing Nothing]
+#if MIN_VERSION_haskell_src_exts(1,16,0)
+                declOutline (InstDecl l _ h idecls)=[mkOutlineDefWithChildren (iheadRule h) [Instance] (makeSpan l) (maybe [] (concatMap instDecl) idecls)]
+#else                        
                 declOutline (InstDecl l _ h idecls)=[mkOutlineDefWithChildren (iheadDecl h) [Instance] (makeSpan l) (maybe [] (concatMap instDecl) idecls)]
+#endif
                 declOutline (SpliceDecl l e)=[mkOutlineDef (spliceDecl e) [Splice] (makeSpan l)]
                 declOutline _ = []
+#if MIN_VERSION_haskell_src_exts(1,16,0)
+                iheadRule (IRule _ _ _ h) =iheadDecl h
+                iheadRule (IParen _ r)=iheadRule r
+#endif                
                 qualConDeclOutline :: QualConDecl SrcSpanInfo-> OutlineDef
                 qualConDeclOutline (QualConDecl l _ _ con)=let
                         (n,defs)=conDecl con
@@ -85,10 +97,16 @@ getHSEOutline (Module _ _ _ _ decls,comments)=evalState (mapM addComment $ conca
                 declOutlineInClass (TypeSig l ns _)=map (\n->mkOutlineDef (nameDecl n) [Function] (makeSpan l)) ns
                 declOutlineInClass o=declOutline o
                 headDecl :: DeclHead  a -> T.Text
+#if MIN_VERSION_haskell_src_exts(1,16,0)       
+                headDecl (DHead _ n )=nameDecl n     
+                headDecl (DHInfix _ _ n)=nameDecl n     
+                headDecl (DHApp _ h _)=headDecl h     
+#else
                 headDecl (DHead _ n  _)=nameDecl n
                 headDecl (DHInfix _ _ n _)=nameDecl n
+#endif       
                 headDecl (DHParen _ h)=headDecl h
-                typeDecl :: Type a -> T.Text
+                typeDecl :: Type SrcSpanInfo -> T.Text
 --                typeDecl (TyForall _ mb mc t)=typeDecl t
 --                typeDecl (TyVar _ n )=nameDecl n
 --                typeDecl (TyCon _ qn )=qnameDecl qn
@@ -100,9 +118,16 @@ getHSEOutline (Module _ _ _ _ decls,comments)=evalState (mapM addComment $ conca
                 matchDecl :: Match a -> T.Text
                 matchDecl (Match _ n _ _ _)=nameDecl n     
                 matchDecl (InfixMatch _ _ n _ _ _)=nameDecl n    
-                iheadDecl :: InstHead a -> T.Text
+                iheadDecl :: InstHead SrcSpanInfo -> T.Text
+#if MIN_VERSION_haskell_src_exts(1,16,0) 
+                iheadDecl (IHCon _ qn)= qnameDecl qn
+                iheadDecl (IHApp _ i t)= T.concat [iheadDecl i, " ",typeDecl t]
+                iheadDecl (IHInfix _ t1 qn)= T.concat  [typeDecl t1, " ", qnameDecl qn]
+#else                
                 iheadDecl (IHead _ qn ts)= T.concat  [qnameDecl qn, " ", T.intercalate " " (map typeDecl ts)]
                 iheadDecl (IHInfix _ t1 qn t2)= T.concat  [typeDecl t1, " ", qnameDecl qn, " ", typeDecl t2]
+#endif
+
                 iheadDecl (IHParen _ i)=iheadDecl i
                 conDecl :: ConDecl SrcSpanInfo -> (T.Text,[OutlineDef])
                 conDecl (ConDecl _ n _)=(nameDecl n,[])
@@ -203,7 +228,11 @@ getHSEImportExport (Module _ mhead _ imps _,_)=(headExp mhead,impDefs imps)
                 headExp (Just (ModuleHead  _ _ _ (Just (ExportSpecList _ exps))))=map expExp exps
                 headExp _ = [] 
                 expExp :: ExportSpec SrcSpanInfo -> ExportDef
+#if MIN_VERSION_haskell_src_exts(1,16,0)  
+                expExp (EVar l _ qn) = ExportDef (qnameDecl qn) IEVar (makeSpan l) []
+#else                
                 expExp (EVar l qn) = ExportDef (qnameDecl qn) IEVar (makeSpan l) []
+#endif
                 expExp (EAbs l qn) = ExportDef (qnameDecl qn) IEAbs (makeSpan l) []
                 expExp (EThingAll l qn) = ExportDef (qnameDecl qn) IEThingAll (makeSpan l) []
                 expExp (EThingWith l qn cns) = ExportDef (qnameDecl qn) IEThingWith (makeSpan l) (map cnameDecl cns)
@@ -211,7 +240,11 @@ getHSEImportExport (Module _ mhead _ imps _,_)=(headExp mhead,impDefs imps)
                 impDefs :: [ImportDecl SrcSpanInfo] -> [ImportDef]
                 impDefs=map impDef
                 impDef :: ImportDecl SrcSpanInfo -> ImportDef
+#if MIN_VERSION_haskell_src_exts(1,16,0)  
+                impDef (ImportDecl l m qual _ _ pkg al specs)=ImportDef (mnnameDecl m) (fmap T.pack pkg) (makeSpan l) qual (hide specs) (alias al) (children specs)
+#else               
                 impDef (ImportDecl l m qual _ pkg al specs)=ImportDef (mnnameDecl m) (fmap T.pack pkg) (makeSpan l) qual (hide specs) (alias al) (children specs)
+#endif            
                 hide :: Maybe (ImportSpecList a)-> Bool
                 hide  (Just (ImportSpecList _ b _))=b
                 hide _=False
@@ -222,7 +255,11 @@ getHSEImportExport (Module _ mhead _ imps _,_)=(headExp mhead,impDefs imps)
                 children (Just (ImportSpecList _ _ ss))=Just $ map child ss
                 children Nothing = Nothing
                 child :: ImportSpec SrcSpanInfo -> ImportSpecDef
+#if MIN_VERSION_haskell_src_exts(1,16,0) 
+                child (IVar l _ n)=ImportSpecDef (nameDecl n) IEVar (makeSpan l) []
+#else                
                 child (IVar l n)=ImportSpecDef (nameDecl n) IEVar (makeSpan l) []
+#endif
                 child (IAbs l n)=ImportSpecDef (nameDecl n) IEAbs (makeSpan l) []
                 child (IThingAll l n) = ImportSpecDef (nameDecl n) IEThingAll (makeSpan l) []
                 child (IThingWith l n cns) = ImportSpecDef (nameDecl n) IEThingWith (makeSpan l) (map cnameDecl cns)

@@ -581,7 +581,7 @@ doTestOutline api f = do
                 ,OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 17 1)(InFileLoc 18 25)) [] (Just "[Char]") Nothing Nothing
                 ,OutlineDef "testfunc1bis" [Function] (InFileSpan (InFileLoc 20 1)(InFileLoc 22 25)) [] (Just "String -> [Char]") Nothing Nothing      
                 ,OutlineDef "testMethod" [Function] (InFileSpan (InFileLoc 24 1)(InFileLoc 27 13))  [] (Just "forall a . (Num a) => a -> a -> a") Nothing Nothing 
-                ,mkOutlineDefWithChildren "ToString" [Class] (InFileSpan (InFileLoc 29 1)(InFileLoc 32 0))  [
+                ,mkOutlineDefWithChildren "ToString" [Class] (InFileSpan (InFileLoc 29 1)(InFileLoc 30 28))  [
                         mkOutlineDef "toString" [Function] (InFileSpan (InFileLoc 30 5)(InFileLoc 30 28))
                         ]          
                 ,mkOutlineDefWithChildren "ToString String" [Instance] (InFileSpan (InFileLoc 32 1)(InFileLoc 35 0))  [
@@ -654,7 +654,7 @@ test_OutlineComments= do
                 OutlineDef "testfunc1" [Function] (InFileSpan (InFileLoc 8 1)(InFileLoc 9 25)) [] (Just "[Char]") Nothing Nothing
                 ,OutlineDef "testfunc1bis" [Function] (InFileSpan (InFileLoc 12 1)(InFileLoc 14 25)) [] (Just "String -> [Char]") (Just "testFunc1bis haddock")  (Just 11)           
                 ,OutlineDef "testMethod" [Function] (InFileSpan (InFileLoc 18 1)(InFileLoc 21 13))  [] (Just "forall a . (Num a) => a -> a -> a")   (Just "testMethod\n haddock") (Just 16)     
-                ,mkOutlineDefWithChildren "ToString" [Class] (InFileSpan (InFileLoc 23 1)(InFileLoc 27 0))  [
+                ,mkOutlineDefWithChildren "ToString" [Class] (InFileSpan (InFileLoc 23 1)(InFileLoc 24 28))  [
                         OutlineDef "toString" [Function] (InFileSpan (InFileLoc 24 5)(InFileLoc 24 28)) [] Nothing (Just "toString comment") Nothing
                         ]          
                 ,OutlineDef "Str" [Type] (InFileSpan (InFileLoc 27 1)(InFileLoc 27 16)) [] (Just "String") (Just "Str haddock") (Just 26)             

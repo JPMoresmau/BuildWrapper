@@ -1,5 +1,5 @@
 name:           buildwrapper
-version:        0.8.7
+version:        0.8.8
 cabal-version:  >= 1.8
 build-type:     Simple
 license:        BSD3
@@ -34,7 +34,7 @@ library
                    text,
                    containers,
                    vector >= 0.8,
-                   haskell-src-exts >= 1.12 && <1.16,
+                   haskell-src-exts >= 1.12 && <1.17,
                    cpphs,
                    old-time,
                    aeson >=0.7 && <0.8,
@@ -74,7 +74,7 @@ executable buildwrapper
                    mtl,
                    ghc,
                    cpphs,
-                   haskell-src-exts >= 1.12 && <1.16,
+                   haskell-src-exts,
                    old-time,
                    ghc-paths,
                    vector >= 0.8,
