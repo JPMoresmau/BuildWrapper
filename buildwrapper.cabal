@@ -1,7 +1,7 @@
 name:           buildwrapper
-version:        0.8.8
+version:        0.8.9
 cabal-version:  >= 1.8
-build-type:     Simple
+build-type:     Custom
 license:        BSD3
 license-file:   LICENSE
 synopsis:       A library and an executable that provide an easy API for a Haskell IDE
