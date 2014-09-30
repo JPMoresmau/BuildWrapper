@@ -1275,6 +1275,18 @@ tokenType ITlcase= "S"
 tokenType (ITqQuasiQuote {}) = "TH" -- [Qual.quoter| quote |]
 #endif
 
+-- 7.8 new token types 
+#if __GLASGOW_HASKELL__ >= 708
+tokenType ITjavascriptcallconv = "EK" --  javascript
+tokenType ITrole               = "EK" --  role
+tokenType ITpattern            = "EK" --  pattern
+tokenType ITminimal_prag       = "EK" --  minimal
+tokenType ITopenTExpQuote      = "TH" --  [||
+tokenType ITcloseTExpQuote     = "TH" --  ||]
+tokenType (ITidTyEscape {})    = "TH" --  $$x
+tokenType ITparenTyEscape      = "TH" --  $$(
+#endif
+
 -- | a dot as a FastString
 dotFS :: FastString
 dotFS = fsLit "."
