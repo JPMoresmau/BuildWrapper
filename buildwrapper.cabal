@@ -37,7 +37,7 @@ library
                    haskell-src-exts >= 1.12 && <1.17,
                    cpphs,
                    old-time,
-                   aeson >=0.7 && <0.8,
+                   aeson >=0.7 && <0.9,
                    unordered-containers,
                    utf8-string,
                    bytestring,
