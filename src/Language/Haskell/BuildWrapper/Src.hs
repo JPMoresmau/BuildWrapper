@@ -11,6 +11,7 @@
 -- Use haskell-src-exts to get a module outline
 module Language.Haskell.BuildWrapper.Src where
 
+import Data.Maybe (isNothing)
 import Language.Haskell.BuildWrapper.Base
 
 import Language.Haskell.Exts.Annotated
@@ -21,7 +22,7 @@ import qualified Data.Map as DM
 import qualified Data.Text as T
 import Data.Char (isSpace)
 import Data.List (foldl', isPrefixOf)
-import Control.Monad.Trans.State.Lazy (State, get, evalState, put)
+import Control.Monad.Trans.State.Lazy (State, get, evalState, put, runState)
 
 -- | get the AST
 getHSEAST :: String -- ^ input text
@@ -54,7 +55,10 @@ getHSEAST input options=do
 -- | get the ouline from the AST        
 getHSEOutline :: (Module SrcSpanInfo, [Comment]) -- ^ the commented AST
         -> [OutlineDef]
-getHSEOutline (Module _ _ _ _ decls,comments)=evalState (mapM addComment $ concatMap declOutline decls) commentMap
+getHSEOutline (Module _ _ _ _ decls,comments)=let
+  odecls = concatMap declOutline decls
+  (d2,m2) = runState (mapM (addComment False) odecls) $ commentMap
+  in evalState (mapM (addComment True) d2) m2
         where 
                 declOutline :: Decl SrcSpanInfo -> [OutlineDef]
                 declOutline (DataFamDecl l _ h _) = [mkOutlineDef (headDecl h) [Data,Family] (makeSpan l)]
@@ -168,27 +172,32 @@ getHSEOutline (Module _ _ _ _ decls,comments)=evalState (mapM addComment $ conca
                                 Just (ty,ss2)->if srcSpanEndLine (srcInfoSpan ss2) == (srcSpanStartLine (srcInfoSpan ss1) - 1)
                                         then (Just ty,combSpanInfo ss2 ss1)
                                         else (Just ty,ss1)
-                commentMap:: DM.Map Int (Int,Int,T.Text)
+                commentMap:: DM.Map Int (Int,Int,Bool,T.Text)
                 commentMap = foldl' buildCommentMap DM.empty comments     
-                addComment:: OutlineDef -> State (DM.Map Int (Int,Int,T.Text)) OutlineDef
-                addComment od=do
+                addComment:: Bool -> OutlineDef -> State (DM.Map Int (Int,Int,Bool,T.Text)) OutlineDef
+                addComment checkNext od =do
                         cm<-get
                         let
                                 st=iflLine $ ifsStart$ odLoc od
                                 -- search for comment before declaration (line above, same column)
-                                pl=DM.lookup (st-1) cm
-                                (cm2,od2)= case pl of
+                                pl=map (flip DM.lookup cm) [st-1,st,st+1]
+                                (cm2,od2)= if isNothing $ odComment od
+                                  then case (pl,checkNext) of
                                         --  | stc <= iflColumn (ifsStart $ odLoc od) 
                                         -- stc ) 
-                                        Just (_,stl,t)-> ( DM.delete (st-1) cm,od{odComment=Just t,odStartLineComment=Just stl})
-                                        _ -> let
-                                                -- search  for comment after declaration (same line)
-                                                pl2=DM.lookup st cm
-                                             in case pl2 of
-                                                        Just (_,_,t)-> (DM.delete st cm,od{odComment=Just t})
-                                                        Nothing -> (cm,od)
-                                children=evalState (mapM addComment $ odChildren od2) cm2
-                        put cm2
+                                        ((Just (_,stl,True,t):_),_)-> ( DM.delete (st-1) cm,od{odComment=Just t,odStartLineComment=Just stl})
+                                        ((_:Just (_,_,False,t):_),_) -> (DM.delete st cm,od{odComment=Just t})
+                                        ((_:_:Just (_,_,False,t):_),True) -> (DM.delete (st+1) cm,od{odComment=Just t})
+                                        _ ->  (cm,od)
+--                                        _ -> let
+--                                                -- search  for comment after declaration (same line)
+--                                                pl2=DM.lookup st cm
+--                                             in case pl2 of
+--                                                        Just (_,_,False,t)-> (DM.delete st cm,od{odComment=Just t})
+--                                                        Nothing -> (cm,od)
+                                  else (cm,od)
+                                (children,cm3)=runState (mapM (addComment checkNext) $ odChildren od2) cm2
+                        put cm3
                         return od2{odChildren=children}
 getHSEOutline _ = []
 
@@ -201,21 +210,21 @@ getModuleLocation _=Nothing
 
 
 -- | build the comment map
-buildCommentMap ::  DM.Map Int (Int,Int,T.Text) -- ^ the map: key is line, value is start column, start line and comment text
+buildCommentMap ::  DM.Map Int (Int,Int,Bool,T.Text) -- ^ the map: key is line, value is start column, start line, comment is for after/before, and comment text
         -> Comment -- ^  the comment
-        -> DM.Map Int (Int,Int,T.Text)
+        -> DM.Map Int (Int,Int,Bool,T.Text)
 buildCommentMap m (Comment _ ss txt)=let
         txtTrimmed=dropWhile isSpace txt
         st=srcSpanStartLine ss
         stc=srcSpanStartColumn ss
         in case txtTrimmed of
-                ('|':rest)->DM.insert (srcSpanEndLine ss) (stc,srcSpanStartLine ss,T.pack $ dropWhile isSpace rest) m
-                ('^':rest)->DM.insert st (-1,st,T.pack $ dropWhile isSpace rest) m
+                ('|':rest)->DM.insert (srcSpanEndLine ss) (stc,srcSpanStartLine ss,True,T.pack $ dropWhile isSpace rest) m
+                ('^':rest)->DM.insert st (-1,st,False,T.pack $ dropWhile isSpace rest) m
                 _-> let
                         pl=DM.lookup (st-1) m
                     in case pl of
                                 -- we merge the comment text with the comment before it
-                                Just (stc2,sl,t)->DM.insert st (stc2,sl,T.concat [t,"\n",T.pack txt]) (DM.delete st m) 
+                                Just (stc2,sl,pos,t)->DM.insert st (stc2,sl,pos,T.concat [t,"\n",T.pack txt]) (DM.delete st m) 
                                 Nothing-> m
 
 
