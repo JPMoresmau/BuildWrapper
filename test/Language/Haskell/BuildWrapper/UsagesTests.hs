@@ -21,7 +21,7 @@ import Test.HUnit (Assertion)
 import System.Directory
 import System.FilePath
 
-import System.Time
+--import System.Time
 
 import qualified Data.ByteString.Lazy as BS
 -- import qualified Data.ByteString.Lazy.Char8 as BSC (putStrLn)

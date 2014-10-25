@@ -28,7 +28,7 @@ import Control.Applicative ((<$>))
 import Control.Monad
 
 
-import Data.Attoparsec
+import Data.Attoparsec.ByteString
 import Data.Aeson
 import Data.Aeson.Parser
 import qualified Data.ByteString.Char8 as BS

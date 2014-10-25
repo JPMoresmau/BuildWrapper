@@ -40,7 +40,6 @@ import qualified Data.Text as T
 import qualified Data.HashMap.Lazy as HM
 import qualified Data.Map as DM
 import qualified Data.Vector as V
-import Data.Attoparsec.Number (Number(I))
 #if __GLASGOW_HASKELL__ < 706
 import System.Time (ClockTime)
 #else
@@ -54,7 +53,9 @@ import Unique (getUnique)
 import Data.List (sortBy)
 --import GHC.SYB.Utils (Stage(..), showData)
 import qualified MonadUtils as GMU
+#if __GLASGOW_HASKELL__ < 707
 import TcRnTypes (tcg_type_env,tcg_rdr_env)
+#endif
 import qualified CoreUtils (exprType)
 import Desugar (deSugarExpr)
 import Control.Monad (liftM)
@@ -273,7 +274,7 @@ dataToJSON  df env tcm=
         var  v     = return $ typedVar v (varType v)
 #if __GLASGOW_HASKELL__ >= 708
         rDataCon (RealDataCon dc)=dataCon dc
-        rDataCon_ = Null
+        rDataCon _ = Null
 #endif        
         dataCon ::  DataCon -> Value
         dataCon  d  = let
@@ -346,17 +347,17 @@ dataToJSON  df env tcm=
 getType ::  HscEnv -> TypecheckedModule -> LHsExpr Var -> IO(Maybe Type)
 --getType _ _ (L _ (HsDo ArrowExpr _ _))=return Nothing
 --getType _ _ (L _ (HsArrApp {}))=return Nothing
-getType hs_env tcm e = do
 #if __GLASGOW_HASKELL__ >= 707
+getType hs_env _ e = do
       (_, mbe) <- GMU.liftIO $ deSugarExpr hs_env e
 #else
+getType hs_env tcm e = do
+      modu = ms_mod $ pm_mod_summary $ tm_parsed_module tcm
+      rn_env = tcg_rdr_env $ fst $ tm_internals_ tcm
+      ty_env = tcg_type_env $ fst $ tm_internals_ tcm  
       (_, mbe) <- GMU.liftIO $ deSugarExpr hs_env modu rn_env ty_env e
 #endif      
       return $ fmap CoreUtils.exprType mbe
-      where
-        modu = ms_mod $ pm_mod_summary $ tm_parsed_module tcm
-        rn_env = tcg_rdr_env $ fst $ tm_internals_ tcm
-        ty_env = tcg_type_env $ fst $ tm_internals_ tcm  
 
 -- | show SDoc wrapper
 showSD :: Bool
