@@ -1,4 +1,4 @@
-{-# LANGUAGE TypeSynonymInstances,OverloadedStrings,CPP #-}
+{-# LANGUAGE TypeSynonymInstances,OverloadedStrings,CPP, PatternGuards #-}
 -- |
 -- Module      : Language.Haskell.BuildWrapper.Src
 -- Copyright   : (c) JP Moresmau 2011
@@ -220,12 +220,12 @@ buildCommentMap m (Comment _ ss txt)=let
         in case txtTrimmed of
                 ('|':rest)->DM.insert (srcSpanEndLine ss) (stc,srcSpanStartLine ss,True,T.pack $ dropWhile isSpace rest) m
                 ('^':rest)->DM.insert st (-1,st,False,T.pack $ dropWhile isSpace rest) m
-                _-> let
-                        pl=DM.lookup (st-1) m
-                    in case pl of
-                                -- we merge the comment text with the comment before it
-                                Just (stc2,sl,pos,t)->DM.insert st (stc2,sl,pos,T.concat [t,"\n",T.pack txt]) (DM.delete st m) 
-                                Nothing-> m
+                 -- we merge the comment text with the comment before it
+                _ | Just (stc2,sl,pos,t) <- DM.lookup (st-1) m -> let
+                  -- to lookup properly we use the last line for pre comment and the first for post comments
+                  key = if pos then st else st-1
+                  in DM.insert key (stc2,sl,pos,T.concat [t,"\n",T.pack txt]) $ DM.delete (st-1) m
+                _ -> m
 
 
 -- | get the import/export declarations

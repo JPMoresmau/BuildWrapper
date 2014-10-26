@@ -731,6 +731,7 @@ test_OutlineCommentsNextLine= do
                 "  | CblFieldValue { ",
                 "    cblFldName :: String",
                 "       -- ^ name of the field",
+                "       --   continued on a second line",
                 "    ,cblFldValues :: [String]",
                 "       -- ^ values of the field",
                 "    } -- ^ field-values pair"                ]
@@ -741,15 +742,15 @@ test_OutlineCommentsNextLine= do
         assertEqual [] es
         assertEqual [] is
         let expected=[
-                OutlineDef "CblEntry" [Data] (InFileSpan (InFileLoc 4 1)(InFileLoc 13 6)) [
+                OutlineDef "CblEntry" [Data] (InFileSpan (InFileLoc 4 1)(InFileLoc 14 6)) [
                     OutlineDef "CblCondition" [Constructor] (InFileSpan (InFileLoc 6 3) (InFileLoc 6 42))
                         [
                             OutlineDef "cblCondition" [Field] (InFileSpan (InFileLoc 6 18) (InFileLoc 6 40)) [] Nothing Nothing Nothing
                         ] Nothing (Just "This is the documentation for the 1. constructor") (Just 5) 
-                    , OutlineDef "CblFieldValue" [Constructor] (InFileSpan (InFileLoc 8 5) (InFileLoc 13 6))
+                    , OutlineDef "CblFieldValue" [Constructor] (InFileSpan (InFileLoc 8 5) (InFileLoc 14 6))
                         [
-                            OutlineDef "cblFldName" [Field] (InFileSpan (InFileLoc 9 5) (InFileLoc 9 25)) [] Nothing (Just "name of the field") Nothing
-                            ,OutlineDef "cblFldValues" [Field] (InFileSpan (InFileLoc 11 6) (InFileLoc 11 30)) [] Nothing (Just "values of the field") Nothing
+                            OutlineDef "cblFldName" [Field] (InFileSpan (InFileLoc 9 5) (InFileLoc 9 25)) [] Nothing (Just "name of the field\n   continued on a second line") Nothing
+                            ,OutlineDef "cblFldValues" [Field] (InFileSpan (InFileLoc 12 6) (InFileLoc 12 30)) [] Nothing (Just "values of the field") Nothing
                         ] Nothing (Just "This is the documentation for the FV") (Just 7) 
                 ] Nothing (Just "Type for an entry in file") (Just 3)]
         assertEqual (length expected) (length defs)
