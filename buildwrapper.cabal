@@ -1,5 +1,5 @@
 name:           buildwrapper
-version:        0.8.11
+version:        0.8.12
 cabal-version:  >= 1.8
 build-type:     Custom
 license:        BSD3
@@ -43,7 +43,8 @@ library
                    bytestring,
                    attoparsec>=0.11 && <0.13,
                    transformers,
-                   deepseq
+                   deepseq,
+                   ghc-pkg-lib
   ghc-options:     -Wall -fno-warn-unused-do-bind
   exposed-modules: 
                    Language.Haskell.BuildWrapper.API,
@@ -53,7 +54,6 @@ library
   extensions:      CPP
   other-modules:   
                    Language.Haskell.BuildWrapper.GHCStorage,
-                   Language.Haskell.BuildWrapper.Packages,
                    Language.Haskell.BuildWrapper.Src
   if impl(ghc >= 7.6)
     build-depends: 
@@ -85,7 +85,8 @@ executable buildwrapper
                    text,
                    aeson,
                    bytestring,
-                   transformers
+                   transformers,
+                   ghc-pkg-lib
   ghc-options:     -Wall -fno-warn-unused-do-bind -optl -s
   -- see https://ghc.haskell.org/trac/ghc/ticket/8376
   if impl(ghc >= 7.8) && impl(ghc < 7.8.4)
@@ -118,7 +119,8 @@ test-suite buildwrapper-test
                    transformers,
                    vector,
                    unordered-containers,
-                   containers
+                   containers,
+                   ghc-pkg-lib
   main-is:         Main.hs
   ghc-options:     -Wall -fno-warn-unused-do-bind -optl -s
   other-modules:   

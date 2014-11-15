@@ -12,7 +12,7 @@
 module Language.Haskell.BuildWrapper.Cabal where
 
 import Language.Haskell.BuildWrapper.Base
-import Language.Haskell.BuildWrapper.Packages
+import Language.Haskell.Packages
 
 import Control.Monad.State
 
