@@ -1,5 +1,5 @@
 name:           buildwrapper
-version:        0.8.12
+version:        0.8.11
 cabal-version:  >= 1.8
 build-type:     Custom
 license:        BSD3
