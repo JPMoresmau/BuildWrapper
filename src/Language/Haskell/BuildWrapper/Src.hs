@@ -169,9 +169,14 @@ getHSEOutline (Module _ _ _ _ decls,comments)=let
                         in case m of
                                 Nothing->(Nothing,ss1)
                                 -- the type ends just before us: merge src info
-                                Just (ty,ss2)->if srcSpanEndLine (srcInfoSpan ss2) == (srcSpanStartLine (srcInfoSpan ss1) - 1)
+                                Just (ty,ss2)->let
+                                  end  = lastEnd $ srcSpanEndLine (srcInfoSpan ss2)
+                                  in if end == (srcSpanStartLine (srcInfoSpan ss1) - 1)
                                         then (Just ty,combSpanInfo ss2 ss1)
                                         else (Just ty,ss1)
+                lastEnd end 
+                  | (end+1) `DM.member` commentMap= lastEnd $ end+1
+                  | otherwise = end
                 commentMap:: DM.Map Int (Int,Int,Bool,T.Text)
                 commentMap = foldl' buildCommentMap DM.empty comments     
                 addComment:: Bool -> OutlineDef -> State (DM.Map Int (Int,Int,Bool,T.Text)) OutlineDef

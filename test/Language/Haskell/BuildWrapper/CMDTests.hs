@@ -755,7 +755,28 @@ test_OutlineCommentsNextLine= do
                 ] Nothing (Just "Type for an entry in file") (Just 3)]
         assertEqual (length expected) (length defs)
         mapM_ (uncurry assertEqual) (zip expected defs)
-        
+        -- use api to write temp file
+        write api root rel $ unlines [
+                "module Module1 where",
+                "",        
+                "f1",
+                "  :: [a]",
+                "  -> [a]",
+                "     -- ^ The returned list",
+                "f1 a=let",
+                "  f2 = reverse a",
+                "    in reverse f2"                ]
+        (_,nsErrors4f)<-getBuildFlags api root rel
+        assertBool (null nsErrors4f)        
+        (OutlineResult defs2 es2 is2,nsErrors2)<-getOutline api root rel
+        assertBool (null nsErrors2)
+        assertEqual [] es2
+        assertEqual [] is2
+        let expected2=[
+                OutlineDef "f1" [Function] (InFileSpan (InFileLoc 3 1)(InFileLoc 9 18)) [] 
+                  (Just "[a] -> [a]") Nothing Nothing]
+        assertEqual (length expected2) (length defs2)
+        mapM_ (uncurry assertEqual) (zip expected2 defs2)
         
 test_OutlinePreproc :: Assertion
 test_OutlinePreproc =  do
