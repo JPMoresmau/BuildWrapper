@@ -106,8 +106,7 @@ cabalBuild' reRun output srcOrTgt= do
                         when logC (putStrLn $ showCommandForUser cp args)
                         cd<-getCurrentDirectory
                         setCurrentDirectory (takeDirectory cf)
-                        (ex,out,err)<-readProcessWithExitCode cp args ""
-                        putStrLn err
+                        (ex,out,err)<-runAndPrint cp args
                         if isInfixOf "cannot satisfy -package-id" err ||  isInfixOf "re-run the 'configure'" err
                                 then 
                                         return Nothing
@@ -163,8 +162,7 @@ cabalConfigure srcOrTgt= do
                         when logC (putStrLn $ showCommandForUser cp args)
                         cd<-getCurrentDirectory
                         setCurrentDirectory (takeDirectory cf)
-                        (ex,_,err)<-readProcessWithExitCode cp args ""
-                        putStrLn err
+                        (ex,_,err)<-runAndPrint cp args
                         let msgs=parseCabalMessages (takeFileName cf) (takeFileName cp) err -- ++ (parseCabalMessages (takeFileName cf) out)
                         ret<-case ex of
                                 ExitSuccess  -> if any isBWNoteError msgs 

@@ -1,5 +1,5 @@
 name:           buildwrapper
-version:        0.8.11
+version:        0.9.0
 cabal-version:  >= 1.8
 build-type:     Custom
 license:        BSD3
@@ -44,7 +44,10 @@ library
                    attoparsec>=0.11 && <0.13,
                    transformers,
                    deepseq,
-                   ghc-pkg-lib
+                   ghc-pkg-lib,
+                   conduit,
+                   conduit-extra,
+                   async
   ghc-options:     -Wall -fno-warn-unused-do-bind
   exposed-modules: 
                    Language.Haskell.BuildWrapper.API,
@@ -86,10 +89,13 @@ executable buildwrapper
                    aeson,
                    bytestring,
                    transformers,
-                   ghc-pkg-lib
-  ghc-options:     -Wall -fno-warn-unused-do-bind -optl -s
+                   ghc-pkg-lib,
+                   conduit,
+                   conduit-extra,
+                   async
+  ghc-options:     -Wall -fno-warn-unused-do-bind -optl -s -threaded
   -- see https://ghc.haskell.org/trac/ghc/ticket/8376
-  if impl(ghc >= 7.8) && impl(ghc < 7.8.4)
+  if impl(ghc >= 7.8) && impl(ghc < 7.10)
     ghc-options: 
                    -dynamic
   other-modules:   Language.Haskell.BuildWrapper.CMD
@@ -120,9 +126,12 @@ test-suite buildwrapper-test
                    vector,
                    unordered-containers,
                    containers,
-                   ghc-pkg-lib
+                   ghc-pkg-lib,
+                   conduit,
+                   conduit-extra,
+                   async
   main-is:         Main.hs
-  ghc-options:     -Wall -fno-warn-unused-do-bind -optl -s
+  ghc-options:     -Wall -fno-warn-unused-do-bind -optl -s -threaded
   other-modules:   
                    Language.Haskell.BuildWrapper.APITest,
                    Language.Haskell.BuildWrapper.CMDTests,

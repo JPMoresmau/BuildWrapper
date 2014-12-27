@@ -14,7 +14,14 @@ import Control.Applicative
 import Control.Monad
 import Control.Monad.State
 import Control.Exception (bracket)
-
+import           Control.Concurrent.Async (Concurrently (..))
+import qualified Data.ByteString          as BS
+import           Data.Conduit             (($=),($$))
+import qualified Data.Conduit.List        as CL
+import           Data.Conduit.Process     (Inherited (..), proc,
+                                           streamingProcess,
+                                           waitForStreamingProcess)
+import           System.Exit              (ExitCode)
 
 import Data.Data
 import Data.Aeson
@@ -29,7 +36,8 @@ import Data.List (isPrefixOf)
 import Data.Maybe (catMaybes)
 
 import System.IO.UTF8 (hPutStr,hGetContents)
-import System.IO (IOMode, openBinaryFile, IOMode(..), Handle, hClose)
+import           Data.ByteString.UTF8     (toString)
+import System.IO (IOMode, openBinaryFile, IOMode(..), Handle, hClose, hFlush, stdout)
 import Control.DeepSeq (rnf, NFData)
 
 -- | State type
@@ -829,3 +837,20 @@ splitString prf str=go str []
               then (reverse a,s) 
               else go xs (x:a)
               
+-- | run a program, writing the output/error to standard output as we go
+runAndPrint :: FilePath -> [String] -> IO (ExitCode,String,String)
+runAndPrint prog args = do
+  (Inherited,outP,errP,cph) <- streamingProcess (proc prog args)
+  let
+      bsw bs = do
+        BS.putStr bs
+        hFlush stdout
+        return bs
+      output = outP $$ CL.mapM bsw $= CL.consume
+      err    = errP $$ CL.mapM bsw $= CL.consume
+
+  (outb,errb,ec) <- runConcurrently $ (,,)
+      <$> Concurrently output
+      <*> Concurrently err
+      <*> Concurrently (waitForStreamingProcess cph)
+  return (ec,toString $ BS.concat outb,toString $ BS.concat errb)
