@@ -2238,4 +2238,8 @@ cmdOpts =map ("--cabaloption=" ++)
    
 notesInError :: [BWNote] -> Bool
 notesInError = any (\ x -> BWError == bwnStatus x)
- 
+
+changeLR :: Handle -> String -> String -> IO()
+changeLR h fp m=do
+        hPutStrLn h ('c':show (fp,m))  
+        hFlush h   

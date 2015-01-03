@@ -379,20 +379,20 @@ getGhcNameDefsInScopeLongRunning  :: FilePath -- ^ source path
         -> String -- ^ module name
         -> [String] -- ^ build options
         -> IO ()
-getGhcNameDefsInScopeLongRunning fp base_dir modul =
+getGhcNameDefsInScopeLongRunning fp0 base_dir modul0 =
 
 #if __GLASGOW_HASKELL__ < 706
-        initGHC (go (TOD 0 0))
+        initGHC (go (fp0,modul0) (TOD 0 0))
 #else
-        initGHC (go (UTCTime (ModifiedJulianDay 0) 0))
+        initGHC (go (fp0,modul0) (UTCTime (ModifiedJulianDay 0) 0))
 #endif
         where 
 #if __GLASGOW_HASKELL__ < 706
-                go :: ClockTime -> Ghc ()
+                go :: (FilePath,String) -> ClockTime -> Ghc ()
 #else
-                go :: UTCTime -> Ghc ()
+                go :: (FilePath,String) -> UTCTime -> Ghc ()
 #endif
-                go t1 = do
+                go (fp,modul) t1 = do
                         let hasLoaded=case t1 of
 #if __GLASGOW_HASKELL__ < 706
                                 TOD 0 _ -> False
@@ -422,8 +422,8 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul =
                                 _ -> (Nothing,ns1 ++ ns)
                         GMU.liftIO $ BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode res
                         GMU.liftIO $ hFlush stdout
-                        r1 t2
-                r1 t2=do
+                        r1 (fp,modul) t2
+                r1 (fp,modul) t2=do
                         l<- GMU.liftIO getLine 
                         case l of
                                 "q"->return ()
@@ -438,7 +438,7 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul =
                                           BSC.putStrLn ""
                                           BSC.putStrLn $ BS.append "build-wrapper-json:" js
                                           hFlush stdout
-                                      r1 t2       
+                                      r1 (fp,modul) t2       
                                 -- token types
                                 "t"->do
                                        input<- GMU.liftIO $ readFile fp
@@ -449,7 +449,7 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul =
                                        GMU.liftIO $ do
                                                 BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode ret
                                                 hFlush stdout
-                                       r1 t2  
+                                       r1 (fp,modul) t2  
                                 -- occurrences
                                 'o':xs->do
                                        input<- GMU.liftIO $ readFile fp
@@ -460,7 +460,7 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul =
                                        GMU.liftIO $ do
                                                 BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode ret
                                                 hFlush stdout
-                                       r1 t2 
+                                       r1 (fp,modul) t2 
                                 -- thing at point
                                 'p':xs->do
                                        GMU.liftIO $ do
@@ -474,7 +474,7 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul =
                                                         _-> Nothing      
                                                 BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode (mm,[]::[BWNote])
                                                 hFlush stdout
-                                       r1 t2
+                                       r1 (fp,modul) t2
                                 -- locals
                                 'l':xs->do
                                        GMU.liftIO $ do
@@ -489,8 +489,15 @@ getGhcNameDefsInScopeLongRunning fp base_dir modul =
                                                  _-> []      
                                          BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode (mm,[]::[BWNote])
                                          hFlush stdout
-                                       r1 t2
-                                _ ->go t2
+                                       r1 (fp,modul) t2
+                                -- change current
+                                'c':xs -> do
+                                    -- removeTarget (TargetFile fp Nothing)      
+                                    let (fp1,modul1) = read xs
+                                    tgt<-GMU.liftIO $ getTargetPath' fp1 base_dir
+                                    t3<- GMU.liftIO $ getModificationTime tgt
+                                    go (tgt,modul1) t3
+                                _ -> go (fp,modul) t2
     
  
 -- | evaluate expression in the GHC monad

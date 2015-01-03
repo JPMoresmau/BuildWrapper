@@ -487,9 +487,17 @@ getTargetPath :: FilePath  -- ^ relative path of source file
         -> BuildWrapper FilePath
 getTargetPath src=do
         temp<-getFullTempDir
+        liftIO $ getTargetPath' src temp
+
+-- | get full path in temporary folder for source file (i.e. where we're going to write the temporary contents of an edited file)
+getTargetPath' :: FilePath  -- ^ relative path of source file
+        -> FilePath
+        -> IO FilePath
+getTargetPath' src temp=do
         let path=temp </> src
-        liftIO $ createDirectoryIfMissing True (takeDirectory path)
+        createDirectoryIfMissing True (takeDirectory path)
         return path
+
 
 -- | get the full, canonicalized path of a source
 canonicalizeFullPath :: FilePath -- ^ relative path of source file

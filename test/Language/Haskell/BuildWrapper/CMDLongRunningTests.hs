@@ -296,3 +296,49 @@ test_LocalsLongRunning = do
         assertBool (not $ notesInError ns2)
         assertBool (isJust mtts2)
         end inp   
+        
+test_ChangeLongRunning :: Assertion
+test_ChangeLongRunning = do
+        let api=cabalAPI
+        root<-createTestProject
+        synchronize api root False
+        configure api root Source        
+        let rel="src"</>"Main.hs"
+        writeFile (root </> rel) $ unlines [  
+                  "module Main where",
+                  "import B.D",
+                  "main=return $ map id \"toto\"",
+                  "data Type1=MkType1_1 Int"
+                  ] 
+        let rel2="src" </> "B" </> "D.hs"
+        writeFile (root </> rel2) $ unlines ["module B.D where","fD=reverse"]     
+        build api root True Source
+        synchronize api root False
+        (inp,out,_,_)<-build1lr root rel
+        (mtts,ns)<- readResult out :: IO (OpResult (Maybe [NameDef]))
+        assertBool (isJust mtts)
+        assertBool (not $ notesInError ns) 
+        tapLR inp 3 16
+        (tap1,nsErrorsTap)<-readResult out :: IO (OpResult (Maybe ThingAtPoint))
+        assertBool (null nsErrorsTap)
+        assertBool $ isJust tap1
+        assertEqual "map" (tapName $ fromJust tap1)
+        changeLR inp rel2 "B.D"
+        (mtts2,ns2)<- readResult out :: IO (OpResult (Maybe [NameDef]))
+        assertBool (isJust mtts2)
+        assertBool (not $ notesInError ns2) 
+        tapLR inp 2 6
+        (tap2,nsErrorsTap2)<-readResult out :: IO (OpResult (Maybe ThingAtPoint))
+        assertBool (null nsErrorsTap2)
+        assertBool $ isJust tap2
+        assertEqual "reverse" (tapName $ fromJust tap2)
+        changeLR inp rel "Main"
+        (mtts3,ns3)<- readResult out :: IO (OpResult (Maybe [NameDef]))
+        assertBool (isJust mtts3)
+        assertBool (not $ notesInError ns3) 
+        tapLR inp 3 16
+        (tap3,nsErrorsTap3)<-readResult out :: IO (OpResult (Maybe ThingAtPoint))
+        assertBool (null nsErrorsTap3)
+        assertBool $ isJust tap3
+        assertEqual "map" (tapName $ fromJust tap3)
+        
