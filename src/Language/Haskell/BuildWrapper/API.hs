@@ -444,7 +444,9 @@ getOutline fp mccn=do
                                 let ods=getHSEOutline ast
                                 let (es,is)=getHSEImportExport ast
                                 return (OutlineResult ods es is,bwns)
-                        Just (ParseFailed failLoc err)->return (OutlineResult [] [] [],BWNote BWError err (mkEmptySpan fp (srcLine failLoc) (srcColumn failLoc)) :bwns)
+                        Just (ParseFailed failLoc err)->return (OutlineResult [OutlineDef (T.pack " Outline not available") [Function] (mkFileSpan 0 0 0 0) [] Nothing Nothing] [] []
+                                                               ,{-BWNote BWError err (mkEmptySpan fp (srcLine failLoc) (srcColumn failLoc)) : -}
+                                                                bwns)
                         _ -> return (OutlineResult [] [] [],bwns)
  
 -- | get lexer token types for source file 
