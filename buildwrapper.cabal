@@ -17,6 +17,10 @@ homepage:       https://github.com/JPMoresmau/BuildWrapper
 extra-source-files: README.md
                     CHANGELOG
 
+flag lib-Werror
+  default: False
+  manual: True
+
 library
   hs-source-dirs:  src
   build-depends:   
@@ -61,6 +65,8 @@ library
   if impl(ghc >= 7.6)
     build-depends: 
                     time
+  if flag(lib-Werror)
+    ghc-options: -Werror
 
 
 executable buildwrapper
