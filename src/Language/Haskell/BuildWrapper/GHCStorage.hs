@@ -352,9 +352,9 @@ getType hs_env _ e = do
       (_, mbe) <- GMU.liftIO $ deSugarExpr hs_env e
 #else
 getType hs_env tcm e = do
-      modu = ms_mod $ pm_mod_summary $ tm_parsed_module tcm
-      rn_env = tcg_rdr_env $ fst $ tm_internals_ tcm
-      ty_env = tcg_type_env $ fst $ tm_internals_ tcm  
+      let modu   = ms_mod $ pm_mod_summary $ tm_parsed_module tcm
+          rn_env = tcg_rdr_env $ fst $ tm_internals_ tcm
+          ty_env = tcg_type_env $ fst $ tm_internals_ tcm  
       (_, mbe) <- GMU.liftIO $ deSugarExpr hs_env modu rn_env ty_env e
 #endif      
       return $ fmap CoreUtils.exprType mbe
