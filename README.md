@@ -1,5 +1,7 @@
 # BuildWrapper
 
+[![Build Status](https://travis-ci.org/JPMoresmau/BuildWrapper.svg?branch=master)](https://travis-ci.org/JPMoresmau/BuildWrapper)
+
 BuildWrapper is a program designed to help an IDE deal with a Haskell project. It combines several tools under a simple API:
 
 - Cabal to configure and build the project. BuildWrapper works best on project that provide a cabal file.
