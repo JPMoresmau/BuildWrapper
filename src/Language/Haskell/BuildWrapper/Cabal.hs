@@ -498,6 +498,7 @@ setOptions dist_dir mghcp tgs=do
                 "module DynamicCabalQuery where"
                 ,"import Distribution.PackageDescription"
                 ,"import Distribution.Simple.LocalBuildInfo"
+                ,"import Distribution.Simple.Configure (maybeGetPersistBuildConfig)"
                 ,"import Data.IORef"
                 ,"import qualified Data.Map as DM"
                 ,"import qualified Distribution.Verbosity as V"
@@ -514,7 +515,8 @@ setOptions dist_dir mghcp tgs=do
                 ,""
                 ,"result :: IO (DM.Map String [String])"
                 ,"result=do"
-                ,"lbi<-liftM (read . Prelude.unlines . drop 1 . lines) $ Prelude.readFile "++show setup_config
+                --,"lbi<-liftM (read . Prelude.unlines . drop 1 . lines) $ Prelude.readFile "++show setup_config
+                ,"Just lbi <- maybeGetPersistBuildConfig "++show dist_dir
                 ,"let pkg=localPkgDescr lbi"
                 ,"r<-newIORef DM.empty"
                 ,"let fmp=DM."++ show fmp 
@@ -528,9 +530,8 @@ setOptions dist_dir mghcp tgs=do
                 ,"       return ()"
                 ,"       )"
                 ,"readIORef r" ]
-  -- print src
   m::DM.Map String [String]<-liftIO $ DCD.runRawQuery src setup_config
-  return $ map (set m)tgs
+  return $ map (set m) tgs
   where
         set mOpts t=case DM.lookup (DCD.targetName t) mOpts of
                         Just opts->t{DCD.ghcOptions=opts}
