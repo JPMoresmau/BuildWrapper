@@ -544,7 +544,10 @@ fileGhcOptions :: CabalBuildInfo -- ^ the cabal info
 fileGhcOptions (CabalBuildInfo tgt _ isLib _ _)=do
         dist_dir<-getDistDir
         let inplace=dist_dir </> "package.conf.inplace"
-        inplaceExist<-liftIO $ doesFileExist inplace
+        inplaceExist<-liftIO $ do
+          f<-doesFileExist inplace
+          d<-doesDirectoryExist inplace -- in Cabal 1.22
+          return $ f || d
         n<-getPackageName
         let pkg
                   | isLib =
