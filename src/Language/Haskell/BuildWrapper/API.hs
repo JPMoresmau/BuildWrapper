@@ -26,9 +26,6 @@ import Data.List (sortBy)
 import Prelude hiding (readFile, writeFile)
 import qualified Data.Vector as V
 
---import System.IO.UTF8 hiding (readFile, writeFile)
---import Codec.Binary.UTF8.String
-
 import Control.Monad.State
 import Language.Haskell.Exts.Annotated hiding (String)
 import Language.Preprocessor.Cpphs

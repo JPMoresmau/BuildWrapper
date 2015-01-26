@@ -35,9 +35,8 @@ import System.FilePath
 import Data.List (isPrefixOf)
 import Data.Maybe (catMaybes)
 
-import System.IO.UTF8 (hPutStr,hGetContents)
 import           Data.ByteString.UTF8     (toString)
-import System.IO (IOMode, openBinaryFile, IOMode(..), Handle, hClose, hFlush, stdout)
+import System.IO (IOMode, openBinaryFile, IOMode(..), Handle, hClose, hFlush, stdout, hPutStr, hGetContents, hSetEncoding, utf8)
 import Control.DeepSeq (rnf, NFData)
 
 -- | State type
@@ -801,13 +800,14 @@ readFile :: FilePath -> IO String
 -- readFile n=hGetContents =<< openBinaryFile n ReadMode
 readFile n =  do
         inFile<- openBinaryFile n ReadMode
+        hSetEncoding inFile utf8
         contents <- hGetContents inFile
         rnf contents `seq` hClose inFile -- force the whole file to be read, then close http://stackoverflow.com/a/297630/827593
         return contents
 
 -- | write string to file
 writeFile :: FilePath -> String -> IO ()
-writeFile n s = withBinaryFile n WriteMode (`hPutStr` s)      
+writeFile n s = withBinaryFile n WriteMode (\h -> hSetEncoding h utf8 >> h `hPutStr` s)      
 
 -- | perform operation on a binary opened file
 withBinaryFile :: FilePath -> IOMode -> (Handle -> IO a) -> IO a
