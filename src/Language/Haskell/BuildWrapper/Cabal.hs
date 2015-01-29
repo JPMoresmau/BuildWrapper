@@ -182,7 +182,7 @@ cabalConfigure srcOrTgt= do
                         setCurrentDirectory cd
                         return ret
             else do
-                let err="Cabal file"++ cf ++" does not exist"
+                let err="Cabal file "++ cf ++" does not exist"
                 liftIO $ putStrLn err
                 return (Nothing,[BWNote BWError err (mkEmptySpan cf 0 1)])       
 
