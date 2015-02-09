@@ -1,2 +1,8 @@
+0.9.2
+	- use packdeps to generate warnings when a upper bound prevents a newer version of a dependency from being used
+	
+<other versions>
+	- Sorry, forgot to update the changelog. If you're really interested, have a look at https://github.com/JPMoresmau/BuildWrapper/commits/master	
+	
 0.8.7
 	- support GHC 7.8: ConLike structure, different error messages, requirement for -dynamic

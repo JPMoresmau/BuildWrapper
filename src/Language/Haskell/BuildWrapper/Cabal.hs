@@ -35,7 +35,7 @@ import Distribution.Package
 import Distribution.InstalledPackageInfo as IPI
 import Distribution.Version
 import Distribution.Text (display,simpleParse)
-
+import Distribution.PackDeps
                     
 import qualified Distribution.Simple.Configure as DSC
 import qualified Distribution.Verbosity as V
@@ -175,7 +175,8 @@ cabalConfigure srcOrTgt= do
                                                 tgs'<- setOptions dist_dir mghcp tgs
                                                 let tgsF=dist_dir </> targetFile
                                                 Prelude.writeFile tgsF $ show tgs'
-                                                return (Just tgs',msgs)
+                                                pdmsgs <- packDepsMsgs cf
+                                                return (Just tgs',msgs ++ pdmsgs)
                                 ExitFailure ec -> return $ if null msgs
                                                 then (Nothing,[BWNote BWError ("Cabal configure returned error code " ++ show ec) (mkEmptySpan cf 1 1)])   
                                                 else (Nothing, msgs)
@@ -185,6 +186,19 @@ cabalConfigure srcOrTgt= do
                 let err="Cabal file "++ cf ++" does not exist"
                 liftIO $ putStrLn err
                 return (Nothing,[BWNote BWError err (mkEmptySpan cf 0 1)])       
+  where
+    packDepsMsgs cf = do
+      mp <- loadPackage cf
+      case mp of
+        Nothing -> return []
+        Just p  -> do
+          nwst <- loadNewest
+          let (_,_,deps) = checkDeps nwst p
+          case deps of
+            WontAccept pkgs _ -> return $ map (toMsg cf) pkgs
+            _ -> return []
+    toMsg cf (pkg,v)=BWNote BWWarning ("Version " ++ v ++ " of package " ++ pkg ++ " is excluded") (mkEmptySpan cf 1 1)
+        
 
 -- | get the full path to the cabal file
 getCabalFile :: WhichCabal  -- ^ use original cabal or temp cabal file
