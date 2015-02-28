@@ -15,6 +15,9 @@ BuildWrapper uses a temporary work folder inside the project to store both a cop
 
 You can run `buildwrapper --help` to get a feel for the different options you can call buildwrapper with. You can also run EclipseFP with the debug mode preference on to see the BuildWrapper interaction in an Eclipse console view.
 
+## Troubleshooting
+BuildWrapper may fail/crash if cabal-install was built against a different version of Cabal than the version of Cabal that BuildWrapper was built against.
+
 ## Generic options
 These options are available to all commands.
 
