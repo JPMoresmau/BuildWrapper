@@ -225,14 +225,14 @@ cabalInit srcOrTgt= do
    conf'd <- liftIO $ doesFileExist tgtF
    if not conf'd 
         then do
-                liftIO $ putStrLn "configuring because setup_config not present"
+                liftIO $ putStrLn "configuring because persisted build config not present"
                 cabalConfigure srcOrTgt
         else do
              cabal_time <- liftIO $ getModificationTime cabal_file
              conf_time <- liftIO $ getModificationTime tgtF
              if cabal_time > conf_time 
                 then do
-                        liftIO $ putStrLn "configuring because setup_config too old"
+                        liftIO $ putStrLn "configuring because persisted build config too old"
                         cabalConfigure srcOrTgt
                 else do
                         tgs <-liftM tryReadList $ liftIO $ Prelude.readFile tgtF
@@ -240,7 +240,7 @@ cabalInit srcOrTgt= do
                         --mb_lbi <- liftIO $ DSC.maybeGetPersistBuildConfig dist_dir
                         case tgs of
                           [] -> do
-                            liftIO $ putStrLn "configuring because persist build config not present"
+                            liftIO $ putStrLn "configuring because persisted build config not present"
                             cabalConfigure srcOrTgt
                           _ -> return (Just tgs, [])
 
