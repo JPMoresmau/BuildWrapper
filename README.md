@@ -2,13 +2,15 @@
 
 [![Build Status](https://travis-ci.org/JPMoresmau/BuildWrapper.svg?branch=master)](https://travis-ci.org/JPMoresmau/BuildWrapper)
 
+BuildWrapper is currently NOT maintained anymore. Feel free to fork and take up maintainership!
+
 BuildWrapper is a program designed to help an IDE deal with a Haskell project. It combines several tools under a simple API:
 
 - Cabal to configure and build the project. BuildWrapper works best on project that provide a cabal file.
 - GHC to load a particular file or buffer and generate a typechecked AST
 - Haskell-src-exts to parse a particular file and generate an outline
 
-BuildWrapper provides a library and an executable. Intended usage is mostly through the executable. This is how it's used by EclipseFP, the set of Haskell development plugins for the Eclipse IDE. 
+BuildWrapper provides a library and an executable. Intended usage is mostly through the executable. This is how it's used by EclipseFP, the set of Haskell development plugins for the Eclipse IDE.
 This executable is *short-lived*, it is not a running server as scion (the project BuildWrapper is an evolution of) or scion-browser. You launch it with parameters, it perform some work, and returns a JSON result.
 BuildWrapper uses a temporary work folder inside the project to store both a copy of the source files and the result of its operations. In an IDE setting, the content of the temporary folder may contain files representing unsaved data, which allow BuildWrapper to use Cabal and file based operations regardless.
 
@@ -28,7 +30,7 @@ These options are available to all commands.
 - logcabal: should the call to the cabal executable be logged?
 
 ## synchronize
-Synchronize ensures that all the files in the temporary work folder represent the up to date version of the source files. It returns the list of files actually copied from the main folder to the work folder. 
+Synchronize ensures that all the files in the temporary work folder represent the up to date version of the source files. It returns the list of files actually copied from the main folder to the work folder.
 
 - force: true/false: copies files even if destination (in temporary folder) is newer
 
@@ -116,7 +118,7 @@ Returns the list of names defined locally to a point in the source (inside the f
 - ecolumn: the end column of the defining scope
 
 ## cleanimports
-Returns the cleaned imports line: the location and import text for the minimal required imports 
+Returns the cleaned imports line: the location and import text for the minimal required imports
 
 - file: the relative path of the file to update (relative to the project root)
 

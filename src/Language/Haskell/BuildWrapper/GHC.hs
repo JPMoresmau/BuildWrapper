@@ -4,11 +4,11 @@
 -- Module      : Language.Haskell.BuildWrapper.GHC
 -- Copyright   : (c) JP Moresmau 2011
 -- License     : BSD3
--- 
+--
 -- Maintainer  : jpmoresmau@gmail.com
 -- Stability   : beta
 -- Portability : portable
--- 
+--
 -- Load relevant module in the GHC AST and get GHC messages and thing at point info. Also use the GHC lexer for syntax highlighting.
 module Language.Haskell.BuildWrapper.GHC where
 import Language.Haskell.BuildWrapper.Base hiding (Target,ImportExportType(..))
@@ -99,12 +99,12 @@ type GHCApplyFunction a=FilePath -> TypecheckedModule -> Ghc a
 -- | get the GHC typechecked AST
 getAST :: FilePath -- ^ the source file
         -> FilePath -- ^ the base directory
-        ->  String -- ^ the module name 
-        -> [String] -- ^ the GHC options 
+        ->  String -- ^ the module name
+        -> [String] -- ^ the GHC options
         -> IO (OpResult (Maybe TypecheckedSource))
 getAST fp base_dir modul opts=do
         (a,n)<-withASTNotes (\_ -> return . tm_typechecked_source) id base_dir (SingleFile fp modul) opts
-        return (listToMaybe a,n) 
+        return (listToMaybe a,n)
 
 -- | perform an action on the GHC Typechecked module
 withAST ::  (TypecheckedModule -> Ghc a) -- ^ the action
@@ -121,38 +121,38 @@ withAST f fp base_dir modul options= do
 withJSONAST :: (Value -> IO a) -- ^ the action
         -> FilePath -- ^ the source file
         -> FilePath -- ^ the base directory
-        ->  String -- ^ the module name 
+        ->  String -- ^ the module name
         -> [String] -- ^ the GHC options
         -> IO (Maybe a)
 withJSONAST f fp base_dir modul options=do
         mv<-readGHCInfo fp
-        case mv of 
-                Just v-> fmap Just (f v) 
+        case mv of
+                Just v-> fmap Just (f v)
                 Nothing->do
                         mv2<-withAST gen fp base_dir modul options
                         case mv2 of
-                                Just v2->fmap Just (f v2) 
+                                Just v2->fmap Just (f v2)
                                 Nothing-> return Nothing
         where gen tc=do
                 df<-getSessionDynFlags
                 env<-getSession
-                GMU.liftIO $ generateGHCInfo df env tc 
+                GMU.liftIO $ generateGHCInfo df env tc
 
 -- | the main method loading the source contents into GHC
 withASTNotes ::  GHCApplyFunction a -- ^ the final action to perform on the result
         -> (FilePath -> FilePath) -- ^ transform given file path to find bwinfo path
         -> FilePath -- ^ the base directory
         ->  LoadContents -- ^ what to load
-        -> [String] -- ^ the GHC options 
+        -> [String] -- ^ the GHC options
         -> IO (OpResult [a])
 withASTNotes f ff base_dir contents =initGHC (ghcWithASTNotes f ff base_dir contents True)
 
 -- | init GHC session
-initGHC ::  Ghc a  
+initGHC ::  Ghc a
         -> [String] -- ^ the GHC options
-        -> IO a 
+        -> IO a
 initGHC f options=  do
-    -- http://hackage.haskell.org/trac/ghc/ticket/7380#comment:1     : -O2 is removed from the options  
+    -- http://hackage.haskell.org/trac/ghc/ticket/7380#comment:1     : -O2 is removed from the options
     let cleaned=filter (not . List.isInfixOf "-O") options
     let lflags=map noLoc cleaned
     -- print cleaned
@@ -168,23 +168,23 @@ initGHC f options=  do
                 -- if we use CompManager, it's slower for modules with lots of dependencies but we can keep hscTarget= HscNothing which makes it better for bigger modules
                 -- we use target interpreted so that it works with TemplateHaskell
                 -- LinkInMemory needed for evaluation after reload
-                setSessionDynFlags flg' {hscTarget = HscInterpreted, ghcLink = LinkInMemory , ghcMode = CompManager}  
-                f       
-                     
--- | run a GHC action and get results with notes         
-ghcWithASTNotes   ::  
+                setSessionDynFlags flg' {hscTarget = HscInterpreted, ghcLink = LinkInMemory , ghcMode = CompManager}
+                f
+
+-- | run a GHC action and get results with notes
+ghcWithASTNotes   ::
         GHCApplyFunction a -- ^ the final action to perform on the result
         -> (FilePath -> FilePath) -- ^ transform given file path to find bwinfo path
         -> FilePath -- ^ the base directory
         -> LoadContents -- ^ what to load
         -> Bool -- ^ add the target?
-        -> Ghc (OpResult [a])         
-ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do            
+        -> Ghc (OpResult [a])
+ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
                 ref <- GMU.liftIO $ newIORef []
                 cflg <- getSessionDynFlags
-#if __GLASGOW_HASKELL__ > 704  
+#if __GLASGOW_HASKELL__ > 704
                 setSessionDynFlags cflg  {log_action = logAction ref }
-#else                
+#else
                 setSessionDynFlags cflg  {log_action = logAction ref cflg }
 #endif
                 --  $ dopt_set (flg' { ghcLink = NoLink , ghcMode = CompManager }) Opt_ForceRecomp
@@ -204,11 +204,11 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
                                         return Failed)
                             `gcatch` (\(se :: SomeException) -> do
                                         dumpError ref contents se
-                                        return Failed)            
-                -- GMU.liftIO $ putStrLn "Loaded..."           
+                                        return Failed)
+                -- GMU.liftIO $ putStrLn "Loaded..."
                 --(warns, errs) <- GMU.liftIO $ readIORef ref
                 --let notes = ghcMessagesToNotes base_dir (warns, errs)
-                
+
                 --c2<-GMU.liftIO getClockTime
                 --GMU.liftIO $ putStrLn ("load all targets: " ++ (timeDiffToString  $ diffClockTimes c2 c1))
                 -- GMU.liftIO $ print fps
@@ -225,10 +225,10 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
                                         return Nothing)
                                 `gcatch` (\(se :: SomeException) -> do
                                         dumpError ref contents se
-                                        return Nothing)        
+                                        return Nothing)
                                 ) fps
-                notes <- GMU.liftIO $ readIORef ref                
-#if __GLASGOW_HASKELL__ < 702                           
+                notes <- GMU.liftIO $ readIORef ref
+#if __GLASGOW_HASKELL__ < 702
                 warns <- getWarnings
                 df <- getSessionDynFlags
                 return (a,List.nub $ notes ++ reverse (ghcMessagesToNotes df base_dir (warns, emptyBag)))
@@ -242,16 +242,16 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
             dumpError :: (Show a)=> IORef [BWNote] -> LoadContents -> a -> Ghc ()
             dumpError ref conts ae= when (processError conts (show ae)) (do
                                                 GMU.liftIO $ print conts
-                                                GMU.liftIO $ print ae 
+                                                GMU.liftIO $ print ae
                                                 case conts of
                                                         (SingleFile fp _)->do
                                                              let relfp=makeRelative base_dir $ normalise fp
                                                              let notes=[BWNote BWError (show ae) (BWLocation relfp 1 1 1 1)]
                                                              GMU.liftIO $ modifyIORef ref $
                                                                 \ ns -> ns ++ notes
-                                                        _->return () 
+                                                        _->return ()
                                                 )
-       
+
             workOnResult :: GHCApplyFunction a -> FilePath -> ModSummary -> Ghc a
             workOnResult f2 fp modSum= do
                 p <- parseModule modSum
@@ -266,9 +266,9 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
 #if __GLASGOW_HASKELL__ < 706
                 setContext [IIModule $ ms_mod modSum]
 #else
-                setContext [IIModule $ moduleName  $ ms_mod modSum]       
-#endif             
-#endif                         
+                setContext [IIModule $ moduleName  $ ms_mod modSum]
+#endif
+#endif
                 let fullfp=ff fp
                 -- use the dyn flags including pragmas from module, etc.
                 let opts=ms_hspp_opts modSum
@@ -278,21 +278,21 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
                 GMU.liftIO $ storeGHCInfo opts env fullfp (dm_typechecked_module l)
                 -- GMU.liftIO $ putStrLn ("written " ++ fullfp)
                 --GMU.liftIO $ putStrLn ("parse, typecheck load: " ++ (timeDiffToString  $ diffClockTimes c3 c2))
-                f2 fp $ dm_typechecked_module l                
-        
+                f2 fp $ dm_typechecked_module l
+
             add_warn_err :: GhcMonad m => IORef [BWNote] -> WarningMessages -> ErrorMessages -> m()
             add_warn_err ref warns errs = do
               df <- getSessionDynFlags
               let notes = ghcMessagesToNotes df base_dir (warns, errs)
               GMU.liftIO $ modifyIORef ref $
                          \ ns -> ns ++ notes
-        
+
             handle_error :: GhcMonad m => IORef [BWNote] -> SourceError -> m SuccessFlag
             handle_error ref e = do
                let errs = srcErrorMessages e
                add_warn_err ref emptyBag errs
                return Failed
-#if __GLASGOW_HASKELL__ > 704              
+#if __GLASGOW_HASKELL__ > 704
             logAction :: IORef [BWNote] -> DynFlags -> Severity -> SrcSpan -> PprStyle -> MsgDoc -> IO ()
 #else
             logAction :: IORef [BWNote] -> DynFlags -> Severity -> SrcSpan -> PprStyle -> Message -> IO ()
@@ -305,35 +305,35 @@ ghcWithASTNotes  f ff base_dir contents shouldAddTargets= do
                                  }
                         modifyIORef ref $  \ ns -> ns ++ [n]
                 | otherwise=return ()
-            
+
             bwSeverity :: DynFlags -> Severity -> Maybe BWNoteStatus
-            bwSeverity df SevWarning = Just (if isWarnIsError df then BWError else BWWarning)     
+            bwSeverity df SevWarning = Just (if isWarnIsError df then BWError else BWWarning)
             bwSeverity _  SevError   = Just BWError
             bwSeverity _  SevFatal   = Just BWError
             bwSeverity _ _           = Nothing
-            
--- | do we have -Werror 
+
+-- | do we have -Werror
 isWarnIsError :: DynFlags -> Bool
 #if __GLASGOW_HASKELL__ >= 707
 isWarnIsError df = gopt Opt_WarnIsError df
 #else
 isWarnIsError df = dopt Opt_WarnIsError df
 #endif
-   
+
 -- | Convert 'GHC.Messages' to '[BWNote]'.
 --
 -- This will mix warnings and errors, but you can split them back up
 -- by filtering the '[BWNote]' based on the 'bw_status'.
-ghcMessagesToNotes :: DynFlags -> 
+ghcMessagesToNotes :: DynFlags ->
         FilePath -- ^ base directory
         ->  Messages -- ^ GHC messages
         -> [BWNote]
 ghcMessagesToNotes df base_dir (warns, errs) = map_bag2ms (ghcWarnMsgToNote df base_dir) warns ++
         map_bag2ms (ghcErrMsgToNote df base_dir) errs
   where
-    map_bag2ms f =  map f . Bag.bagToList   
-   
-   
+    map_bag2ms f =  map f . Bag.bagToList
+
+
 -- | get all names in scope
 getGhcNamesInScope  :: FilePath -- ^ source path
         -> FilePath -- ^ base directory
@@ -350,7 +350,7 @@ getGhcNamesInScope f base_dir modul options=do
                 return $ map (showSDDump df . ppr ) names)  f base_dir modul options
         return $ fromMaybe[] names
 
-   
+
 -- | get all names in scope, packaged in NameDefs
 getGhcNameDefsInScope  :: FilePath -- ^ source path
         -> FilePath -- ^ base directory
@@ -372,7 +372,7 @@ getGhcNameDefsInScope fp base_dir modul options=do
         return $ case nns of
                 (x:_)->(Just x,ns)
                 _->(Nothing, ns)
-                
+
 -- | get all names in scope, packaged in NameDefs, and keep running a loop listening to commands
 getGhcNameDefsInScopeLongRunning  :: FilePath -- ^ source path
         -> FilePath -- ^ base directory
@@ -386,7 +386,7 @@ getGhcNameDefsInScopeLongRunning fp0 base_dir modul0 =
 #else
         initGHC (go (fp0,modul0) (UTCTime (ModifiedJulianDay 0) 0))
 #endif
-        where 
+        where
 #if __GLASGOW_HASKELL__ < 706
                 go :: (FilePath,String) -> ClockTime -> Ghc ()
 #else
@@ -402,9 +402,9 @@ getGhcNameDefsInScopeLongRunning fp0 base_dir modul0 =
                                 _ -> True
                         t2<- GMU.liftIO $ getModificationTime fp
                         (ns1,add2)<-if hasLoaded && t2==t1 then -- modification time is only precise to the second in GHC 7.6 or above, see http://hackage.haskell.org/trac/ghc/ticket/7473
-                                (do 
+                                (do
                                         -- GMU.liftIO $ print "reloading"
-                                        removeTarget (TargetFile fp Nothing)      
+                                        removeTarget (TargetFile fp Nothing)
                                         load LoadAllTargets
                                         return ([],True)
                                 ) `gcatch` (\(e :: SourceError) -> do
@@ -416,7 +416,7 @@ getGhcNameDefsInScopeLongRunning fp0 base_dir modul0 =
                         (nns,ns)<- ghcWithASTNotes (\_ _->do
                                 names<-getNamesInScope
                                 df<-getSessionDynFlags
-                                mapM (name2nd df) names) id base_dir (SingleFile fp modul) add2    
+                                mapM (name2nd df) names) id base_dir (SingleFile fp modul) add2
                         let res=case nns of
                                 (x:_) -> (Just x,ns1 ++ ns)
                                 _ -> (Nothing,ns1 ++ ns)
@@ -424,7 +424,7 @@ getGhcNameDefsInScopeLongRunning fp0 base_dir modul0 =
                         GMU.liftIO $ hFlush stdout
                         r1 (fp,modul) t2
                 r1 (fp,modul) t2=do
-                        l<- GMU.liftIO getLine 
+                        l<- GMU.liftIO getLine
                         case l of
                                 "q"->return ()
                                 -- eval an expression
@@ -438,7 +438,7 @@ getGhcNameDefsInScopeLongRunning fp0 base_dir modul0 =
                                           BSC.putStrLn ""
                                           BSC.putStrLn $ BS.append "build-wrapper-json:" js
                                           hFlush stdout
-                                      r1 (fp,modul) t2       
+                                      r1 (fp,modul) t2
                                 -- token types
                                 "t"->do
                                        input<- GMU.liftIO $ readFile fp
@@ -449,7 +449,7 @@ getGhcNameDefsInScopeLongRunning fp0 base_dir modul0 =
                                        GMU.liftIO $ do
                                                 BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode ret
                                                 hFlush stdout
-                                       r1 (fp,modul) t2  
+                                       r1 (fp,modul) t2
                                 -- occurrences
                                 'o':xs->do
                                        input<- GMU.liftIO $ readFile fp
@@ -460,18 +460,18 @@ getGhcNameDefsInScopeLongRunning fp0 base_dir modul0 =
                                        GMU.liftIO $ do
                                                 BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode ret
                                                 hFlush stdout
-                                       r1 (fp,modul) t2 
+                                       r1 (fp,modul) t2
                                 -- thing at point
                                 'p':xs->do
                                        GMU.liftIO $ do
                                                 let (line,col)=read xs
                                                 mv<-readGHCInfo fp
-                                                let mm=case mv of 
-                                                        Just v->let 
+                                                let mm=case mv of
+                                                        Just v->let
                                                                         f=overlap line (scionColToGhcCol col)
                                                                         mf=findInJSON f v
-                                                                in findInJSONData mf 
-                                                        _-> Nothing      
+                                                                in findInJSONData mf
+                                                        _-> Nothing
                                                 BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode (mm,[]::[BWNote])
                                                 hFlush stdout
                                        r1 (fp,modul) t2
@@ -480,26 +480,26 @@ getGhcNameDefsInScopeLongRunning fp0 base_dir modul0 =
                                        GMU.liftIO $ do
                                          let (sline,scol,eline,ecol)=read xs
                                          mv<-readGHCInfo fp
-                                         let mm=case mv of 
+                                         let mm=case mv of
                                                  Just v->let
                                                       cont=contains sline (scionColToGhcCol scol) eline (scionColToGhcCol ecol)
                                                       isVar=isGHCType "Var"
                                                       mf=findAllInJSON (\x->cont x && isVar x) v
-                                                    in mapMaybe (findInJSONData . Just) mf  
-                                                 _-> []      
+                                                    in mapMaybe (findInJSONData . Just) mf
+                                                 _-> []
                                          BSC.putStrLn $ BS.append "build-wrapper-json:" $ encode (mm,[]::[BWNote])
                                          hFlush stdout
                                        r1 (fp,modul) t2
                                 -- change current
                                 'c':xs -> do
-                                    -- removeTarget (TargetFile fp Nothing)      
+                                    -- removeTarget (TargetFile fp Nothing)
                                     let (fp1,modul1) = read xs
                                     tgt<-GMU.liftIO $ getTargetPath' fp1 base_dir
                                     t3<- GMU.liftIO $ getModificationTime tgt
                                     go (tgt,modul1) t3
                                 _ -> go (fp,modul) t2
-    
- 
+
+
 -- | evaluate expression in the GHC monad
 getEvalResults :: forall (m :: * -> *).
                     GhcMonad m =>
@@ -513,7 +513,7 @@ getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (J
                               rr<- runStmt expr RunToCompletion
                               case rr of
                                       RunOk ns->do
-                                             
+
                                               let q=(qualName &&& qualModule) defaultUserStyle
                                               mapM (\n->do
                                                       mty<-lookupName n
@@ -521,7 +521,7 @@ getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (J
                                                               Just (AnId aid)->do
 #if __GLASGOW_HASKELL__ >= 707
                                                                       let pprTyp    = (pprTypeForUser . idType) aid
-#else                                                              
+#else
                                                                       let pprTyp    = (pprTypeForUser True . idType) aid
 #endif
                                                                       t<-gtry $ GHC.obtainTermFromId maxBound True aid
@@ -533,10 +533,10 @@ getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (J
                                                               _->return $ EvalResult Nothing Nothing Nothing
                                                       ) ns
                                       RunException e ->return [EvalResult Nothing Nothing (Just $ show e)]
-                                      _->return []   
+                                      _->return []
                              `gfinally`
                                      setSessionDynFlags df)
-   where 
+   where
     --  A custom Term printer to enable the use of Show instances
     -- this is a copy of the GHC Debugger.hs code
     -- except that we force evaluation and always use show
@@ -561,21 +561,21 @@ getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (J
                 else Nothing
            `gfinally`
              setSession hsc_env
-    cPprShowable prec NewtypeWrap{ty=new_ty,wrapped_term=t} = 
+    cPprShowable prec NewtypeWrap{ty=new_ty,wrapped_term=t} =
         cPprShowable prec t{ty=new_ty}
     cPprShowable _ _ = return Nothing
-  
+
     needsParens ('"':_) = False   -- some simple heuristics to see whether parens
                                   -- are redundant in an arbitrary Show output
     needsParens ('(':_) = False
-    needsParens txt = ' ' `elem` txt  
-  
+    needsParens txt = ' ' `elem` txt
+
     bindToFreshName hsc_env ty userName = do
       name <- newGrimName userName
-      let mkid       = AnId $ mkVanillaGlobal name ty 
+      let mkid       = AnId $ mkVanillaGlobal name ty
           new_ic   = extendInteractiveContext (hsc_IC hsc_env) [mkid]
       return (hsc_env {hsc_IC = new_ic }, name)
-      
+
     --    Create new uniques and give them sequentially numbered names
     newGrimName :: GMU.MonadIO m => String -> m Name
     newGrimName userName  = do
@@ -583,9 +583,9 @@ getEvalResults expr=handleSourceError (\e->return [EvalResult Nothing Nothing (J
       let unique  = uniqFromSupply us
           occname = mkOccName varName userName
           name    = mkInternalName unique occname noSrcSpan
-      return name  
-   
--- | convert a Name int a NameDef                    
+      return name
+
+-- | convert a Name int a NameDef
 name2nd :: GhcMonad m=> DynFlags -> Name -> m NameDef
 name2nd df n=do
 #if __GLASGOW_HASKELL__ >= 707
@@ -596,12 +596,12 @@ name2nd df n=do
         m<- getInfo n
         let ty=case m of
                 Just (tyt,_,_)->ty2t tyt
-#endif                
+#endif
                 Nothing->Nothing
         return $ NameDef (T.pack $ showSDDump df $ ppr n) (name2t n) ty
-        where         
+        where
               name2t :: Name -> [OutlineDefType]
-              name2t n2 
+              name2t n2
                         | isTyVarName n2=[Type]
                         | isTyConName n2=[Type]
                         | isDataConName n2 = [Constructor]
@@ -635,10 +635,10 @@ getThingAtPointJSON line col fp base_dir modul options= do
         mmf<-withJSONAST (\v->do
                 let f=overlap line (scionColToGhcCol col)
                 let mf=findInJSON f v
-                return $ findInJSONData mf  
+                return $ findInJSONData mf
             ) fp base_dir modul options
         return $ fromMaybe Nothing mmf
-   
+
 -- | get the "thing" at a particular point (line/column) in the source
 -- this is using the saved JSON info if available
 getLocalsJSON ::Int  -- ^ start line
@@ -655,9 +655,9 @@ getLocalsJSON sline scol eline ecol fp base_dir modul options= do
                 let cont=contains sline (scionColToGhcCol scol) eline (scionColToGhcCol ecol)
                 let isVar=isGHCType "Var"
                 let mf=findAllInJSON (\x->cont x && isVar x) v
-                return $ mapMaybe (findInJSONData . Just) mf  
+                return $ mapMaybe (findInJSONData . Just) mf
             ) fp base_dir modul options
-        return $ fromMaybe [] mmf  
+        return $ fromMaybe [] mmf
 
 -- | evaluate an expression
 eval :: String -- ^ the expression
@@ -668,8 +668,8 @@ eval :: String -- ^ the expression
         -> IO [EvalResult]
 eval expression fp base_dir modul options= do
   mf<-withASTNotes (\_ _->getEvalResults expression) id base_dir (SingleFile fp modul) options
-  return $ concat $ fst mf  
-  
+  return $ concat $ fst mf
+
 -- | convert a GHC SrcSpan to a Span,  ignoring the actual file info
 ghcSpanToLocation ::GHC.SrcSpan
                   -> InFileSpan
@@ -677,15 +677,15 @@ ghcSpanToLocation sp
   | GHC.isGoodSrcSpan sp =let
       (stl,stc)=start sp
       (enl,enc)=end sp
-      in mkFileSpan 
+      in mkFileSpan
                  stl
                  (ghcColToScionCol stc)
                  enl
                  (ghcColToScionCol enc)
   | otherwise = mkFileSpan 0 0 0 0
 
-   
--- | convert a GHC SrcSpan to a BWLocation   
+
+-- | convert a GHC SrcSpan to a BWLocation
 ghcSpanToBWLocation :: FilePath -- ^ Base directory
                   -> GHC.SrcSpan
                   -> BWLocation
@@ -698,19 +698,19 @@ ghcSpanToBWLocation baseDir sp
                  (ghcColToScionCol stc)
                  enl
                  (ghcColToScionCol enc)
-  | otherwise = mkEmptySpan "" 1 1                 
-        where   
-                f c (x:xs) 
+  | otherwise = mkEmptySpan "" 1 1
+        where
+                f c (x:xs)
                         | c=='\\' && x=='\\'=x:xs   -- WHY do we get two slashed after the drive sometimes?
                         | otherwise=c:x:xs
                 f c s=c:s
-#if __GLASGOW_HASKELL__ < 702   
+#if __GLASGOW_HASKELL__ < 702
                 sfile = GHC.srcSpanFile
-#else 
+#else
                 sfile (RealSrcSpan ss)= GHC.srcSpanFile ss
-#endif 
-  
--- | convert a column info from GHC to our system (1 based)                      
+#endif
+
+-- | convert a column info from GHC to our system (1 based)
 ghcColToScionCol :: Int -> Int
 #if __GLASGOW_HASKELL__ < 700
 ghcColToScionCol c=c+1 -- GHC 6.x starts at 0 for columns
@@ -718,14 +718,14 @@ ghcColToScionCol c=c+1 -- GHC 6.x starts at 0 for columns
 ghcColToScionCol c=c -- GHC 7 starts at 1 for columns
 #endif
 
--- | convert a column info from our system (1 based) to GHC      
+-- | convert a column info from our system (1 based) to GHC
 scionColToGhcCol :: Int -> Int
 #if __GLASGOW_HASKELL__ < 700
 scionColToGhcCol c=c-1 -- GHC 6.x starts at 0 for columns
 #else
 scionColToGhcCol c=c -- GHC 7 starts at 1 for columns
-#endif        
-        
+#endif
+
 -- | Get a stream of tokens generated by the GHC lexer from the current document
 ghctokensArbitrary :: FilePath -- ^ The file path to the document
                    -> String -- ^ The document's contents
@@ -742,7 +742,7 @@ ghctokensArbitrary base_dir contents options= do
         runGhc (Just libdir) $ do
                 flg <- getSessionDynFlags
                 (flg', _, _) <- parseDynamicFlags flg _leftovers
-         
+
 #if __GLASGOW_HASKELL__ >= 700
                 let dflags1 = List.foldl' xopt_set flg' lexerFlags
 #else
@@ -753,7 +753,7 @@ ghctokensArbitrary base_dir contents options= do
                         POk _ toks      ->
                                 -- GMU.liftIO $ print $ map (show . unLoc) toks
                                 return $ Right $ filter ofInterest toks
-                        PFailed loc msg -> return $ Left $ ghcErrMsgToNote dflags1 base_dir $ 
+                        PFailed loc msg -> return $ Left $ ghcErrMsgToNote dflags1 base_dir $
 #if __GLASGOW_HASKELL__ < 706
                                 mkPlainErrMsg loc msg
 #else
@@ -776,13 +776,13 @@ ghctokensArbitrary' base_dir contents= do
         let dflags1 = List.foldl' xopt_set flg' lexerFlags
 #else
         let dflags1 = List.foldl' dopt_set flg' lexerFlags
-#endif        
+#endif
         let prTS = lexTokenStreamH sb lexLoc dflags1
         case prTS of
                 POk _ toks      ->
                         -- GMU.liftIO $ print $ map (show . unLoc) toks
                         return $ Right $ filter ofInterest toks
-                PFailed loc msg -> return $ Left $ ghcErrMsgToNote dflags1 base_dir $ 
+                PFailed loc msg -> return $ Left $ ghcErrMsgToNote dflags1 base_dir $
 #if __GLASGOW_HASKELL__ < 706
                                 mkPlainErrMsg loc msg
 #else
@@ -796,7 +796,7 @@ lexTokenStreamH buf loc dflags = unP go initState
     where dflags' = gopt_set (gopt_set dflags Opt_KeepRawTokenStream) Opt_Haddock
 #else
     where dflags' = dopt_set (dopt_set dflags Opt_KeepRawTokenStream) Opt_Haddock
-#endif  
+#endif
           initState = mkPState dflags' buf loc
           go = do
             ltok <- lexer return
@@ -822,11 +822,11 @@ lexerFlags :: [DynFlag]
 lexerFlags =
         [ Opt_ForeignFunctionInterface
         , Opt_Arrows
-#if __GLASGOW_HASKELL__ < 702        
+#if __GLASGOW_HASKELL__ < 702
         , Opt_PArr
 #else
         , Opt_ParallelArrays
-#endif        
+#endif
         , Opt_TemplateHaskell
         , Opt_QuasiQuotes
         , Opt_ImplicitParams
@@ -839,15 +839,15 @@ lexerFlags =
         , Opt_UnboxedTuples
         , Opt_StandaloneDeriving
         , Opt_TransformListComp
-#if __GLASGOW_HASKELL__ < 702          
+#if __GLASGOW_HASKELL__ < 702
         , Opt_NewQualifiedOperators
-#endif        
-#if GHC_VERSION > 611       
+#endif
+#if GHC_VERSION > 611
         , Opt_ExplicitForAll -- 6.12
         , Opt_DoRec -- 6.12
 #endif
-        ]                
-               
+        ]
+
 -- | Filter tokens whose span appears legitimate (start line is less than end line, start column is
 -- less than end column.)
 ofInterest :: Located Token -> Bool
@@ -856,32 +856,32 @@ ofInterest (L loc _) =
        (el,ec) = end loc
   in (sl < el) || (sc < ec)
 
-       
+
 -- | Convert a GHC token to an interactive token (abbreviated token type)
 tokenToType :: Located Token -> TokenDef
-tokenToType (L sp t) = TokenDef (tokenType t) (ghcSpanToLocation sp)       
-        
+tokenToType (L sp t) = TokenDef (tokenType t) (ghcSpanToLocation sp)
+
 -- | Generate the interactive token list used by EclipseFP for syntax highlighting, in the IO monad
 tokenTypesArbitrary :: FilePath -> String -> Bool -> [String] -> IO (Either BWNote [TokenDef])
 tokenTypesArbitrary projectRoot contents literate options = generateTokens projectRoot contents literate options convertTokens id
   where
-    convertTokens = map tokenToType        
+    convertTokens = map tokenToType
 
 -- | Generate the interactive token list used by EclipseFP for syntax highlighting, when already in a GHC session
 tokenTypesArbitrary' :: FilePath -> String -> Bool -> Ghc (Either BWNote [TokenDef])
 tokenTypesArbitrary' projectRoot contents literate  = generateTokens' projectRoot contents literate convertTokens id
   where
-    convertTokens = map tokenToType     
-        
--- | Extract occurrences based on lexing  
+    convertTokens = map tokenToType
+
+-- | Extract occurrences based on lexing
 occurrences :: FilePath     -- ^ Project root or base directory for absolute path conversion
             -> String    -- ^ Contents to be parsed
             -> T.Text    -- ^ Token value to find
             -> Bool      -- ^ Literate source flag (True = literate, False = ordinary)
             -> [String]  -- ^ Options
             -> IO (Either BWNote [TokenDef])
-occurrences projectRoot contents query literate options = 
-  let 
+occurrences projectRoot contents query literate options =
+  let
       qualif = isJust $ T.find (=='.') query
       -- Get the list of tokens matching the query for relevant token types
       tokensMatching :: [TokenDef] -> [TokenDef]
@@ -889,17 +889,17 @@ occurrences projectRoot contents query literate options =
       matchingVal :: TokenDef -> Bool
       matchingVal (TokenDef v _)=query==v
       mkToken (L sp t)=TokenDef (tokenValue qualif t) (ghcSpanToLocation sp)
-  in generateTokens projectRoot contents literate options (map mkToken) tokensMatching        
-        
-        
--- | Extract occurrences based on lexing  
+  in generateTokens projectRoot contents literate options (map mkToken) tokensMatching
+
+
+-- | Extract occurrences based on lexing
 occurrences' :: FilePath     -- ^ Project root or base directory for absolute path conversion
             -> String    -- ^ Contents to be parsed
             -> T.Text    -- ^ Token value to find
             -> Bool      -- ^ Literate source flag (True = literate, False = ordinary)
             -> Ghc (Either BWNote [TokenDef])
-occurrences' projectRoot contents query literate = 
-  let 
+occurrences' projectRoot contents query literate =
+  let
       qualif = isJust $ T.find (=='.') query
       -- Get the list of tokens matching the query for relevant token types
       tokensMatching :: [TokenDef] -> [TokenDef]
@@ -907,8 +907,8 @@ occurrences' projectRoot contents query literate =
       matchingVal :: TokenDef -> Bool
       matchingVal (TokenDef v _)=query==v
       mkToken (L sp t)=TokenDef (tokenValue qualif t) (ghcSpanToLocation sp)
-  in generateTokens' projectRoot contents literate (map mkToken) tokensMatching           
-        
+  in generateTokens' projectRoot contents literate (map mkToken) tokensMatching
+
 -- | Parse the current document, generating a TokenDef list, filtered by a function
 generateTokens :: FilePath                        -- ^ The project's root directory
                -> String                          -- ^ The current document contents, to be parsed
@@ -921,13 +921,13 @@ generateTokens projectRoot contents literate options  xform filterFunc =do
      let (ppTs, ppC) = preprocessSource contents literate
      -- putStrLn ppC
      result<-  ghctokensArbitrary projectRoot ppC options
-     case result of 
+     case result of
        Right toks ->do
          let filterResult = filterFunc $ List.sortBy (comparing tdLoc) (ppTs ++ xform toks)
          return $ Right filterResult
        Left n -> return $ Left n
-               
-        
+
+
 -- | Parse the current document, generating a TokenDef list, filtered by a function
 generateTokens' :: FilePath                        -- ^ The project's root directory
                -> String                          -- ^ The current document contents, to be parsed
@@ -939,19 +939,19 @@ generateTokens' projectRoot contents literate xform filterFunc =do
      let (ppTs, ppC) = preprocessSource contents literate
      -- GMU.liftIO $ putStrLn ppC
      result<-  ghctokensArbitrary' projectRoot ppC
-     case result of 
+     case result of
        Right toks ->do
          let filterResult = filterFunc $ List.sortBy (comparing tdLoc) (ppTs ++ xform toks)
          return $ Right filterResult
-       Left n -> return $ Left n     
-     
+       Left n -> return $ Left n
+
 -- | Preprocess some source, returning the literate and Haskell source as tuple.
 preprocessSource ::  String -- ^ the source contents
         -> Bool -- ^ is the source literate Haskell
         -> ([TokenDef],String) -- ^ the preprocessor tokens and the final valid Haskell source
 preprocessSource contents literate=
-        let 
-                (ts1,s2)=if literate then ppSF contents ppSLit else ([],contents) 
+        let
+                (ts1,s2)=if literate then ppSF contents ppSLit else ([],contents)
                 (ts2,s3)=ppSF s2 ppSCpp
         in (ts1++ts2,s3)
         where
@@ -960,25 +960,25 @@ preprocessSource contents literate=
                         (ts,nc,_)= List.foldl' p ([],[],Start) linesWithCount
                         in (reverse ts, unlines $ reverse nc)
                 ppSCpp :: ([TokenDef],[String],PPBehavior) -> (String,Int) -> ([TokenDef],[String],PPBehavior)
-                ppSCpp (ts2,l2,f) (l,c) 
+                ppSCpp (ts2,l2,f) (l,c)
                         | (Continue _)<-f = addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f)
                         | (ContinuePragma f2) <-f= addPPToken "P" (l,c) (ts2,"":l2,pragmaBehavior l f2)
-                        | ('#':_)<-l =addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f) 
+                        | ('#':_)<-l =addPPToken "PP" (l,c) (ts2,l2,lineBehavior l f)
                         | Just (l',s,e,f2)<-pragmaExtract l f=
                           (TokenDef "P" (mkFileSpan c s c e) : ts2 ,l':l2,f2)
-                        -- "{-# " `List.isPrefixOf` l=addPPToken "P" (l,c) (ts2,"":l2,pragmaBehavior l f) 
+                        -- "{-# " `List.isPrefixOf` l=addPPToken "P" (l,c) (ts2,"":l2,pragmaBehavior l f)
                         | (Indent n)<-f=(ts2,l:(replicate n (takeWhile (== ' ') l) ++ l2),Start)
                         | otherwise =(ts2,l:l2,Start)
                 ppSLit :: ([TokenDef],[String],PPBehavior) -> (String,Int) -> ([TokenDef],[String],PPBehavior)
-                ppSLit (ts2,l2,f) (l,c) 
+                ppSLit (ts2,l2,f) (l,c)
                         | "\\begin{code}" `List.isPrefixOf` l=addPPToken "DL" ("\\begin{code}",c) (ts2,"":l2,Continue 1)
                         | "\\end{code}" `List.isPrefixOf` l=addPPToken "DL" ("\\end{code}",c) (ts2,"":l2,Start)
                         | (Continue n)<-f = (ts2,l:l2,Continue (n+1))
                         | ('>':lCode)<-l=(ts2, (' ':lCode ):l2,f)
-                        | otherwise =addPPToken "DL" (l,c) (ts2,"":l2,f)  
+                        | otherwise =addPPToken "DL" (l,c) (ts2,"":l2,f)
                 addPPToken :: T.Text -> (String,Int) -> ([TokenDef],[String],PPBehavior) -> ([TokenDef],[String],PPBehavior)
                 addPPToken name (l,c) (ts2,l2,f) =(TokenDef name (mkFileSpan c 1 c (length l + 1)) : ts2 ,l2,f)
-                lineBehavior l f 
+                lineBehavior l f
                         | '\\' == last l = case f of
                                 Continue n->Continue (n+1)
                                 _ -> Continue 1
@@ -995,13 +995,13 @@ preprocessSource contents literate=
                   let
                     (spl1,spl2)=splitString "{-# " l
                   in if not $ null spl2
-                    then 
-                      let 
+                    then
+                      let
                         startIdx= length spl1
                         (spl3,spl4)=splitString "-}" spl2
                       in if not $ null spl4
-                        then 
-                          let 
+                        then
+                          let
                             endIdx= length spl3 + 2
                             len=endIdx
                           in Just (spl1++ replicate len ' ' ++ drop 2 spl4,startIdx+1,startIdx+len+1,f)
@@ -1035,19 +1035,19 @@ ghcMsgToNote df note_kind base_dir msg =
     loc | s <- errMsgSpan msg = s
 #else
     loc | (s:_) <- errMsgSpans msg = s
-#endif  
+#endif
         | otherwise                    = GHC.noSrcSpan
     unqual = errMsgContext msg
     show_msg = showSDUser unqual df
 
 -- | remove the initial status text from a message
 removeStatus :: BWNoteStatus -> String -> String
-removeStatus BWWarning s 
+removeStatus BWWarning s
         | "Warning:" `List.isPrefixOf` s = List.dropWhile isSpace $ drop 8 s
         | otherwise = s
-removeStatus BWError s 
+removeStatus BWError s
         | "Error:" `List.isPrefixOf` s = List.dropWhile isSpace $ drop 6 s
-        | otherwise = s        
+        | otherwise = s
 
 #if CABAL_VERSION == 106
 deriving instance Typeable StringBuffer
@@ -1131,10 +1131,10 @@ tokenType  ITusing= "EK"
 
         -- Pragmas
 tokenType  (ITinline_prag {})="P"          -- True <=> INLINE, False <=> NOINLINE
-#if __GLASGOW_HASKELL__ >= 612 && __GLASGOW_HASKELL__ < 700 
+#if __GLASGOW_HASKELL__ >= 612 && __GLASGOW_HASKELL__ < 700
 tokenType  (ITinline_conlike_prag {})="P"  -- same
 #endif
-tokenType  ITspec_prag="P"                 -- SPECIALISE   
+tokenType  ITspec_prag="P"                 -- SPECIALISE
 tokenType  (ITspec_inline_prag {})="P"     -- SPECIALISE INLINE (or NOINLINE)
 tokenType  ITsource_prag="P"
 tokenType  ITrules_prag="P"
@@ -1172,25 +1172,25 @@ tokenType  ITdot="S"
 tokenType  ITbiglam="ES"                    -- GHC-extension symbols
 
 tokenType  ITocurly="SS"                    -- special symbols
-tokenType  ITccurly="SS" 
-#if __GLASGOW_HASKELL__ < 706   
+tokenType  ITccurly="SS"
+#if __GLASGOW_HASKELL__ < 706
 tokenType  ITocurlybar="SS"                 -- "{|", for type applications
 tokenType  ITccurlybar="SS"                 -- "|}", for type applications
 #endif
-tokenType  ITvocurly="SS" 
-tokenType  ITvccurly="SS" 
-tokenType  ITobrack="SS" 
+tokenType  ITvocurly="SS"
+tokenType  ITvccurly="SS"
+tokenType  ITobrack="SS"
 tokenType  ITopabrack="SS"                   -- [:, for parallel arrays with -XParr
 tokenType  ITcpabrack="SS"                   -- :], for parallel arrays with -XParr
-tokenType  ITcbrack="SS" 
-tokenType  IToparen="SS" 
-tokenType  ITcparen="SS" 
-tokenType  IToubxparen="SS" 
-tokenType  ITcubxparen="SS" 
-tokenType  ITsemi="SS" 
-tokenType  ITcomma="SS" 
-tokenType  ITunderscore="SS" 
-tokenType  ITbackquote="SS" 
+tokenType  ITcbrack="SS"
+tokenType  IToparen="SS"
+tokenType  ITcparen="SS"
+tokenType  IToubxparen="SS"
+tokenType  ITcubxparen="SS"
+tokenType  ITsemi="SS"
+tokenType  ITcomma="SS"
+tokenType  ITunderscore="SS"
+tokenType  ITbackquote="SS"
 
 tokenType  (ITvarid {})="IV"        -- identifiers
 tokenType  (ITconid {})="IC"
@@ -1221,10 +1221,10 @@ tokenType  (ITprimdouble {})="LD"
 tokenType  ITopenExpQuote="TH"              --  [| or [e|
 tokenType  ITopenPatQuote="TH"              --  [p|
 tokenType  ITopenDecQuote="TH"              --  [d|
-tokenType  ITopenTypQuote="TH"              --  [t|         
+tokenType  ITopenTypQuote="TH"              --  [t|
 tokenType  ITcloseQuote="TH"                --tokenType ]
 tokenType  (ITidEscape {})="TH"    --  $x
-tokenType  ITparenEscape="TH"               --  $( 
+tokenType  ITparenEscape="TH"               --  $(
 #if __GLASGOW_HASKELL__ < 704
 tokenType  ITvarQuote="TH"                  --  '
 #endif
@@ -1259,7 +1259,7 @@ tokenType  (ITdocOptionsOld {})="D"     -- doc options declared "-- # ..."-style
 tokenType  (ITlineComment {})="C"     -- comment starting by "--"
 tokenType  (ITblockComment {})="C"     -- comment in {- -}
 
-  -- 7.2 new token types 
+  -- 7.2 new token types
 #if __GLASGOW_HASKELL__ >= 702
 tokenType  (ITinterruptible {})="EK"
 tokenType  (ITvect_prag {})="P"
@@ -1267,7 +1267,7 @@ tokenType  (ITvect_scalar_prag {})="P"
 tokenType  (ITnovect_prag {})="P"
 #endif
 
-  -- 7.4 new token types 
+  -- 7.4 new token types
 #if __GLASGOW_HASKELL__ >= 704
 tokenType ITcapiconv= "EK"
 tokenType ITnounpack_prag= "P"
@@ -1275,14 +1275,14 @@ tokenType ITtildehsh= "S"
 tokenType ITsimpleQuote="SS"
 #endif
 
--- 7.6 new token types 
+-- 7.6 new token types
 #if __GLASGOW_HASKELL__ >= 706
 tokenType ITctype= "P"
 tokenType ITlcase= "S"
 tokenType (ITqQuasiQuote {}) = "TH" -- [Qual.quoter| quote |]
 #endif
 
--- 7.8 new token types 
+-- 7.8 new token types
 #if __GLASGOW_HASKELL__ >= 708
 tokenType ITjavascriptcallconv = "EK" --  javascript
 tokenType ITrole               = "EK" --  role
@@ -1317,30 +1317,30 @@ tokenValue False (ITprefixqvarsym (_,a)) = mkUnqualTokenValue a
 tokenValue True (ITprefixqvarsym (q,a)) = mkQualifiedTokenValue q a
 tokenValue False (ITprefixqconsym (_,a)) = mkUnqualTokenValue a
 tokenValue True (ITprefixqconsym (q,a)) = mkQualifiedTokenValue q a
-tokenValue _ _= ""                       
-        
+tokenValue _ _= ""
+
 instance Monoid (Bag a) where
   mempty = emptyBag
   mappend = unionBags
-  mconcat = unionManyBags        
-  
+  mconcat = unionManyBags
 
-  
--- | extract start line and column from SrcSpan    
-start :: SrcSpan -> (Int,Int)   
--- | extract end line and column from SrcSpan    
-end :: SrcSpan -> (Int,Int)   
-#if __GLASGOW_HASKELL__ < 702   
+
+
+-- | extract start line and column from SrcSpan
+start :: SrcSpan -> (Int,Int)
+-- | extract end line and column from SrcSpan
+end :: SrcSpan -> (Int,Int)
+#if __GLASGOW_HASKELL__ < 702
 start ss= (srcSpanStartLine ss, srcSpanStartCol ss)
 end ss= (srcSpanEndLine ss, srcSpanEndCol ss)
-#else 
+#else
 start (RealSrcSpan ss)= (srcSpanStartLine ss, srcSpanStartCol ss)
 start (UnhelpfulSpan _)=error "UnhelpfulSpan in cmpOverlap start"
-end (RealSrcSpan ss)= (srcSpanEndLine ss, srcSpanEndCol ss)   
-end (UnhelpfulSpan _)=error "UnhelpfulSpan in cmpOverlap start"   
+end (RealSrcSpan ss)= (srcSpanEndLine ss, srcSpanEndCol ss)
+end (UnhelpfulSpan _)=error "UnhelpfulSpan in cmpOverlap start"
 #endif
 
--- | map of module aliases       
+-- | map of module aliases
 type AliasMap=DM.Map ModuleName [ModuleName]
 
 -- | get usages from GHC imports
@@ -1350,7 +1350,11 @@ ghcImportToUsage myPkg (L _ imp) (ls,moduMap)=(do
         pkg<-lookupModule modu (ideclPkgQual imp)
         df<-getSessionDynFlags
         let tmod=T.pack $ showSD True df $ ppr modu
+#if __GLASGOW_HASKELL__ >= 710
+            tpkg=T.pack $ showSD True df $ ppr $ modulePackageKey pkg
+#else
             tpkg=T.pack $ showSD True df $ ppr $ modulePackageId pkg
+#endif
             nomain=if tpkg=="main" then myPkg else tpkg
             subs=concatMap (ghcLIEToUsage df (Just nomain) tmod "import") $ maybe [] snd $ ideclHiding imp
             moduMap2=maybe moduMap (\alias->let
@@ -1366,25 +1370,29 @@ ghcImportToUsage myPkg (L _ imp) (ls,moduMap)=(do
                 GMU.liftIO $ print se
                 return ([],moduMap))
 
--- | get usages from GHC IE         
+-- | get usages from GHC IE
 ghcLIEToUsage :: DynFlags -> Maybe T.Text -> T.Text -> T.Text -> LIE Name -> [Usage]
 ghcLIEToUsage df tpkg tmod tsection (L src (IEVar nm))=[ghcNameToUsage df tpkg tmod tsection nm src False]
-ghcLIEToUsage df tpkg tmod tsection (L src (IEThingAbs nm))=[ghcNameToUsage df tpkg tmod tsection nm src True ] 
-ghcLIEToUsage df tpkg tmod tsection (L src (IEThingAll nm))=[ghcNameToUsage df tpkg tmod tsection nm src True] 
+ghcLIEToUsage df tpkg tmod tsection (L src (IEThingAbs nm))=[ghcNameToUsage df tpkg tmod tsection nm src True ]
+ghcLIEToUsage df tpkg tmod tsection (L src (IEThingAll nm))=[ghcNameToUsage df tpkg tmod tsection nm src True]
 ghcLIEToUsage df tpkg tmod tsection (L src (IEThingWith nm cons))=ghcNameToUsage df tpkg tmod tsection nm src True :
-        map (\ x -> ghcNameToUsage df tpkg tmod tsection x src False) cons 
-ghcLIEToUsage _ tpkg tmod tsection (L src (IEModuleContents _))= [Usage tpkg tmod "" tsection False (toJSON $ ghcSpanToLocation src) False]              
+        map (\ x -> ghcNameToUsage df tpkg tmod tsection x src False) cons
+ghcLIEToUsage _ tpkg tmod tsection (L src (IEModuleContents _))= [Usage tpkg tmod "" tsection False (toJSON $ ghcSpanToLocation src) False]
 ghcLIEToUsage _ _ _ _ _=[]
-   
--- | get usage from GHC exports     
-ghcExportToUsage :: DynFlags -> T.Text -> T.Text ->AliasMap -> LIE Name -> Ghc [Usage]        
+
+-- | get usage from GHC exports
+ghcExportToUsage :: DynFlags -> T.Text -> T.Text ->AliasMap -> LIE Name -> Ghc [Usage]
 ghcExportToUsage df myPkg myMod moduMap lie@(L _ name)=(do
         ls<-case name of
                 (IEModuleContents modu)-> do
                         let realModus=fromMaybe [modu] (DM.lookup modu moduMap)
                         mapM (\modu2->do
                                 pkg<-lookupModule modu2 Nothing
+#if __GLASGOW_HASKELL__ >= 710
+                                let tpkg=T.pack $ showSD True df $ ppr $ modulePackageKey pkg
+#else
                                 let tpkg=T.pack $ showSD True df $ ppr $ modulePackageId pkg
+#endif
                                 let tmod=T.pack $ showSD True df $ ppr modu2
                                 return (tpkg,tmod)
                                 ) realModus
@@ -1394,9 +1402,9 @@ ghcExportToUsage df myPkg myMod moduMap lie@(L _ name)=(do
         `gcatch` (\(se :: SourceError) -> do
                 GMU.liftIO $ print se
                 return [])
- 
--- | generate a usage for a name       
-ghcNameToUsage ::  DynFlags -> Maybe T.Text -> T.Text -> T.Text -> Name -> SrcSpan -> Bool -> Usage 
+
+-- | generate a usage for a name
+ghcNameToUsage ::  DynFlags -> Maybe T.Text -> T.Text -> T.Text -> Name -> SrcSpan -> Bool -> Usage
 ghcNameToUsage df tpkg tmod tsection nm src typ=Usage tpkg tmod (T.pack $ showSD False df $ ppr nm) tsection typ (toJSON $ ghcSpanToLocation src) False
 
 -- | map of imports
@@ -1427,8 +1435,8 @@ ghcImportMap l@(L _ imp)=(do
                                         let
                                                 expM=T.pack $ moduleNameString $ moduleName $ nameModule x
                                                 nT=T.pack $ showSD False df $ ppr x
-                                        in if nT `elem` hidden 
-                                                then  mmx 
+                                        in if nT `elem` hidden
+                                                then  mmx
                                                 else DM.insertWith (\(_,xs1) (_,xs2)->(l,xs1++xs2)) expM (l,[nT]) mmx
         return $ if ideclImplicit imp
                 then DM.insert "" (l, concatMap snd $ DM.elems fullM) fullM
@@ -1436,12 +1444,12 @@ ghcImportMap l@(L _ imp)=(do
         )
         `gcatch` (\(se :: SourceError) -> do
                 GMU.liftIO $ print se
-                return DM.empty)  
-       
+                return DM.empty)
+
 --getGHCOutline :: ParsedSource
 --        -> [OutlineDef]
 --getGHCOutline (L src mod)=concatMap ldeclOutline (hsmodDecls mod)
---        where 
+--        where
 --                ldeclOutline :: LHsDecl RdrName -> [OutlineDef]
 --                ldeclOutline  (L src1 (TyClD decl))=ltypeOutline decl
 --                ldeclOutline _ = []
@@ -1469,15 +1477,15 @@ type TypeMap=DM.Map T.Text (DM.Map T.Text (DS.Set T.Text))
 type FinalImportValue=(LImportDecl Name,DM.Map T.Text (DS.Set T.Text))
 -- | map from original text to needed names
 type FinalImportMap=DM.Map T.Text FinalImportValue
-     
-     
--- | clean imports 
+
+
+-- | clean imports
 ghcCleanImports  :: FilePath -- ^ source path
         -> FilePath -- ^ base directory
         -> String -- ^ module name
         -> [String] -- ^ build options
         -> Bool -- ^ format?
-        -> IO (OpResult [ImportClean])                 
+        -> IO (OpResult [ImportClean])
 ghcCleanImports f base_dir modul options doFormat  =  do
         (m,bwns)<-withASTNotes clean (base_dir </>) base_dir (SingleFile f modul) options
         return (if null m then [] else head m,bwns)
@@ -1502,13 +1510,13 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                         -- GMU.liftIO $ putStrLn $ show $ usgMapWithoutMe
                         --let ics=foldr (buildImportClean usgMapWithoutMe df) [] (DM.assocs impMap)
                         let ftm=foldr (buildImportCleanMap usgMapWithoutMe implicit) DM.empty allImps
-                        
+
                         let missingCleans=getRemovedImports allImps ftm
                         let formatF=if doFormat then formatImports  else map (dumpImportMap df)
                         -- GMU.liftIO $ putStrLn $ show $ DM.keys ftm
                         let allCleans=formatF (DM.elems ftm) ++ missingCleans
                         return allCleans
-                -- | all used names by module        
+                -- | all used names by module
                 ghcValToUsgMap :: Value -> TypeMap -> TypeMap
                 ghcValToUsgMap (Object m) um |
                         Just (String n)<-HM.lookup "Name" m,
@@ -1537,7 +1545,7 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                 buildImportCleanMap usgMap implicit (cmod,(l@(L _ imp),ns)) tm |
                           Just namesMap<-DM.lookup cmod usgMap, -- used names for module
                           namesMapFiltered<-foldr (keepKeys namesMap) DM.empty ns, -- only names really exported by the import name
-                          namesWithoutImplicit<-if ideclQualified imp 
+                          namesWithoutImplicit<-if ideclQualified imp
                                 then namesMapFiltered
                                 else DM.map (`DS.difference` implicit) $ foldr DM.delete namesMapFiltered $ DS.elems implicit,
                           not $ DM.null namesWithoutImplicit,
@@ -1545,16 +1553,16 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                                 L _ modu=ideclName imp
                                 moduS=T.pack $ moduleNameString modu
                                 in DM.insertWith mergeTypeMap moduS (l,namesWithoutImplicit) tm
-                buildImportCleanMap _ _ _ tm = tm      
+                buildImportCleanMap _ _ _ tm = tm
                 -- | copy the key and value from one map to the other
                 keepKeys :: Ord k => DM.Map k v -> k -> DM.Map k v -> DM.Map k v
                 keepKeys m1 k m2=case DM.lookup k m1 of
                         Nothing -> m2
-                        Just v1->DM.insert k v1 m2    
-                -- | merge the map containing the set of names         
+                        Just v1->DM.insert k v1 m2
+                -- | merge the map containing the set of names
                 mergeTypeMap :: FinalImportValue -> FinalImportValue -> FinalImportValue
-                mergeTypeMap (l1,m1) (_,m2)= (l1,DM.unionWith DS.union m1 m2)        
-                -- | generate final import string from names map    
+                mergeTypeMap (l1,m1) (_,m2)= (l1,DM.unionWith DS.union m1 m2)
+                -- | generate final import string from names map
                 dumpImportMap :: DynFlags -> FinalImportValue -> ImportClean
                 dumpImportMap df (L loc imp,ns)=let
                          txt= T.pack $ showSDDump df $ ppr (imp{ideclHiding=Nothing} :: ImportDecl Name)  -- rely on GHC for the initial bit of the import, without the names
@@ -1567,13 +1575,13 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                           | otherwise=T.concat ["(",n,")"]
                 -- build the name with the constructors list if any
                 buildName :: (T.Text,DS.Set T.Text)->T.Text
-                buildName (n,cs) 
+                buildName (n,cs)
                         | DS.null cs=pprName n
                         | otherwise =let
                                 nameList= T.intercalate ", " $ List.sortBy (comparing T.toLower) $ map pprName $ DS.toList cs
-                                in pprName n `mappend` " (" `mappend` nameList `mappend` ")" 
+                                in pprName n `mappend` " (" `mappend` nameList `mappend` ")"
                 getRemovedImports :: [(T.Text,(LImportDecl Name,[T.Text]))] -> FinalImportMap -> [ImportClean]
-                getRemovedImports allImps ftm= let 
+                getRemovedImports allImps ftm= let
                         cleanedLines=DS.fromList $ map (\(L l _,_)->iflLine $ifsStart $ ghcSpanToLocation l) $ DM.elems ftm
                         missingImps=filter (\(_,(L l imp,_))->not $ ideclImplicit imp || DS.member (iflLine $ifsStart $ ghcSpanToLocation l) cleanedLines) allImps
                         in nubOrd $ map (\(_,(L l _,_))-> ImportClean (ghcSpanToLocation l) "") missingImps
@@ -1602,5 +1610,3 @@ ghcCleanImports f base_dir modul options doFormat  =  do
                 formatImports fivs = let
                         formatInfo=foldr getFormatInfo (0,0,0,0,0) fivs
                         in map (formatImport formatInfo) fivs
-                        
-                       
